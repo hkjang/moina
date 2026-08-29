@@ -1,0 +1,28 @@
+name: moina
+
+services:
+  moina:
+    image: moina:v0.1.0
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      MOINA_POSTGRES_DSN: "${MOINA_POSTGRES_DSN:?MOINA_POSTGRES_DSN is required}"
+      MOINA_BOOTSTRAP_ADMIN: "${MOINA_BOOTSTRAP_ADMIN:?MOINA_BOOTSTRAP_ADMIN is required}"
+      MOINA_BOOTSTRAP_ADMIN_PASSWORD: "${MOINA_BOOTSTRAP_ADMIN_PASSWORD:?MOINA_BOOTSTRAP_ADMIN_PASSWORD is required}"
+      MOINA_ENCRYPTION_KEY: "${MOINA_ENCRYPTION_KEY:?MOINA_ENCRYPTION_KEY is required}"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

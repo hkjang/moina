@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Source tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      - name: Contract and documentation checks
+        run: make check
+
+      - name: Go formatting, tests and vet
+        run: |
+          set -Eeuo pipefail
+          make fmt
+          cd backend
+          go test -race ./...
+          go vet ./...
+
+      - name: Frontend tests and production build
+        run: |
+          set -Eeuo pipefail
+          npm ci --prefix frontend
+          npm test --prefix frontend
+          VITE_MOINA_VERSION="$(tr -d '[:space:]' < VERSION)" npm run build --prefix frontend
+
+  image:
+    name: Image and browser smoke
+    needs: source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve service version
+        run: printf 'MOINA_VERSION=%s\n' "$(tr -d '[:space:]' < VERSION)" >> "${GITHUB_ENV}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Build linux/amd64 service image
+        run: make image
+
+      - name: Start ephemeral PostgreSQL and moina
+        run: |
+          set -Eeuo pipefail
+          docker network create moina-ci >/dev/null
+          docker run -d --name moina-ci-postgres --network moina-ci \
+            -e POSTGRES_DB=moina \
+            -e POSTGRES_USER=moina \
+            -e POSTGRES_PASSWORD=moina-ci-password \
+            postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73 >/dev/null
+          for attempt in {1..45}; do
+            docker exec moina-ci-postgres pg_isready -U moina -d moina >/dev/null 2>&1 && break
+            if [[ "${attempt}" -eq 45 ]]; then docker logs moina-ci-postgres; exit 1; fi
+            sleep 1
+          done
+          docker run -d --name moina-ci-app --network moina-ci \
+            -p 127.0.0.1:18080:8080 \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            -e MOINA_POSTGRES_DSN='postgres://moina:moina-ci-password@moina-ci-postgres:5432/moina?sslmode=disable' \
+            -e MOINA_BOOTSTRAP_ADMIN=ci-admin \
+            -e MOINA_BOOTSTRAP_ADMIN_PASSWORD=ci-password-12345 \
+            -e MOINA_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
+            "moina:${MOINA_VERSION}" >/dev/null
+          for attempt in {1..60}; do
+            curl --fail --silent http://127.0.0.1:18080/readyz >/dev/null && break
+            if [[ "${attempt}" -eq 60 ]]; then docker logs moina-ci-app; exit 1; fi
+            sleep 1
+          done
+
+      - name: API and browser smoke
+        env:
+          MOINA_E2E_BASE_URL: http://127.0.0.1:18080
+          MOINA_E2E_USERNAME: ci-admin
+          MOINA_E2E_PASSWORD: ci-password-12345
+        run: |
+          set -Eeuo pipefail
+          bash scripts/qa-api-smoke.sh "${MOINA_E2E_BASE_URL}" "${MOINA_E2E_USERNAME}" "${MOINA_E2E_PASSWORD}" "${MOINA_VERSION}"
+          npm ci --prefix e2e
+          npm --prefix e2e exec -- playwright install --with-deps chromium
+          MOINA_E2E_VERSION="${MOINA_VERSION}" npm test --prefix e2e
+
+      - name: Verify offline package
+        run: |
+          set -Eeuo pipefail
+          make package
+          make verify-package
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: moina-ci-diagnostics
+          path: |
+            e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f moina-ci-app moina-ci-postgres >/dev/null 2>&1 || true
+          docker network rm moina-ci >/dev/null 2>&1 || true

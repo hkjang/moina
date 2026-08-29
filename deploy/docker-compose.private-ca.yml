@@ -1,0 +1,9 @@
+services:
+  moina:
+    volumes:
+      - type: bind
+        source: ./certs/ca-certificates.crt
+        target: /etc/ssl/certs/ca-certificates.crt
+        read_only: true
+        bind:
+          create_host_path: false

@@ -1,0 +1,148 @@
+name: Release offline image
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish moina image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Validate release provenance and version
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${RELEASE_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          test "${RELEASE_VERSION}" = "$(tr -d '[:space:]' < VERSION)"
+          test "$(git cat-file -t "refs/tags/${RELEASE_VERSION}")" = tag
+          git fetch --no-tags origin main
+          release_commit="$(git rev-parse "refs/tags/${RELEASE_VERSION}^{commit}")"
+          git merge-base --is-ancestor "${release_commit}" origin/main
+
+      - name: Source checks
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/*.sh
+          bash scripts/check-runtime-contract.sh
+          node scripts/check-app-routes.mjs
+          node scripts/check-openapi-routes.mjs
+          MOINA_REQUIRE_SCREENSHOTS=1 node scripts/qa-pages.mjs
+
+      - name: Build service image
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          docker build --platform linux/amd64 \
+            --build-arg VERSION="${RELEASE_VERSION}" \
+            --build-arg VCS_REF="$(git rev-parse "refs/tags/${RELEASE_VERSION}^{commit}")" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --tag "moina:${RELEASE_VERSION}" .
+
+      - name: Runtime smoke with PostgreSQL
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          cleanup() {
+            docker rm -f moina-release-app moina-release-postgres >/dev/null 2>&1 || true
+            docker network rm moina-release >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker network create moina-release >/dev/null
+          docker run -d --name moina-release-postgres --network moina-release \
+            -e POSTGRES_DB=moina -e POSTGRES_USER=moina -e POSTGRES_PASSWORD=release-password \
+            postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73 >/dev/null
+          for attempt in {1..45}; do
+            docker exec moina-release-postgres pg_isready -U moina -d moina >/dev/null 2>&1 && break
+            if [[ "${attempt}" -eq 45 ]]; then docker logs moina-release-postgres; exit 1; fi
+            sleep 1
+          done
+          docker run -d --name moina-release-app --network moina-release \
+            -p 127.0.0.1:18080:8080 \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --cap-drop ALL --security-opt no-new-privileges \
+            -e MOINA_POSTGRES_DSN='postgres://moina:release-password@moina-release-postgres:5432/moina?sslmode=disable' \
+            -e MOINA_BOOTSTRAP_ADMIN=release-admin \
+            -e MOINA_BOOTSTRAP_ADMIN_PASSWORD=release-password-12345 \
+            -e MOINA_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
+            "moina:${RELEASE_VERSION}" >/dev/null
+          for attempt in {1..60}; do
+            curl --fail --silent http://127.0.0.1:18080/readyz >/dev/null && break
+            if [[ "${attempt}" -eq 60 ]]; then docker logs moina-release-app; exit 1; fi
+            sleep 1
+          done
+          bash scripts/qa-api-smoke.sh http://127.0.0.1:18080 release-admin release-password-12345 "${RELEASE_VERSION}"
+          npm ci --prefix e2e
+          npm --prefix e2e exec -- playwright install --with-deps chromium
+          MOINA_E2E_BASE_URL=http://127.0.0.1:18080 \
+            MOINA_E2E_USERNAME=release-admin \
+            MOINA_E2E_PASSWORD=release-password-12345 \
+            MOINA_E2E_VERSION="${RELEASE_VERSION}" \
+            npm test --prefix e2e
+
+      - name: Package and verify offline image
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          bash scripts/package-image.sh "${RELEASE_VERSION}" dist
+          bash scripts/verify-image-package.sh "dist/moina-${RELEASE_VERSION}.tar.gz" "moina:${RELEASE_VERSION}"
+
+      - name: Create GitHub Release with one image asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          archive="dist/moina-${RELEASE_VERSION}.tar.gz"
+          sha256="$(sha256sum "${archive}" | cut -d ' ' -f 1)"
+          notes="$(mktemp)"
+          trap 'rm -f -- "${notes}"' EXIT
+          {
+            printf '## MOINA 오프라인 이미지\n\n'
+            printf -- '- 파일: `%s`\n' "$(basename "${archive}")"
+            printf -- '- 이미지: `moina:%s`\n' "${RELEASE_VERSION}"
+            printf -- '- 플랫폼: `linux/amd64`\n'
+            printf -- '- SHA256: `%s`\n\n' "${sha256}"
+            printf '폐쇄망 반입 전에 위 해시와 파일 해시를 대조하고 `docker load` 하세요. '
+            printf '릴리스 asset은 요청 범위에 따라 서비스 이미지 tar.gz 하나만 포함합니다.\n'
+          } > "${notes}"
+          if gh release view "${RELEASE_VERSION}" >/dev/null 2>&1; then
+            mapfile -t assets < <(gh release view "${RELEASE_VERSION}" --json assets --jq '.assets[].name')
+            for asset in "${assets[@]}"; do
+              [[ "${asset}" == "$(basename "${archive}")" ]] || { printf '오류: 허용되지 않은 기존 asset: %s\n' "${asset}" >&2; exit 1; }
+            done
+            gh release upload "${RELEASE_VERSION}" "${archive}" --clobber
+            gh release edit "${RELEASE_VERSION}" --title "moina ${RELEASE_VERSION}" --notes-file "${notes}"
+          else
+            gh release create "${RELEASE_VERSION}" "${archive}" --verify-tag \
+              --title "moina ${RELEASE_VERSION}" --notes-file "${notes}"
+          fi
+          mapfile -t published < <(gh release view "${RELEASE_VERSION}" --json assets --jq '.assets[].name')
+          [[ "${#published[@]}" -eq 1 && "${published[0]}" == "$(basename "${archive}")" ]]
+          remote_digest="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_VERSION}" --jq '.assets[0].digest // empty')"
+          [[ -z "${remote_digest}" || "${remote_digest}" == "sha256:${sha256}" ]]

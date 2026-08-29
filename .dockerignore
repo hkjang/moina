@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+docs
+deploy
+e2e
+scripts
+dist
+out
+**/.DS_Store
+**/node_modules
+frontend/dist
+backend/coverage.out

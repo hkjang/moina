@@ -1,0 +1,765 @@
+{
+  "schemaVersion": 1,
+  "product": "moina",
+  "version": "v0.1.0",
+  "generatedAt": "2026-08-29T02:36:37.949Z",
+  "source": "Playwright actual application capture",
+  "screenshots": [
+    {
+      "slug": "desktop-login",
+      "title": "데스크톱 로그인",
+      "route": "/login",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-login.webp"
+    },
+    {
+      "slug": "desktop-flow",
+      "title": "데스크톱 플로우",
+      "route": "/flow",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-flow.webp"
+    },
+    {
+      "slug": "desktop-explore",
+      "title": "데스크톱 탐색",
+      "route": "/explore",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-explore.webp"
+    },
+    {
+      "slug": "desktop-search",
+      "title": "데스크톱 검색",
+      "route": "/search",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-search.webp"
+    },
+    {
+      "slug": "desktop-pulse",
+      "title": "데스크톱 펄스",
+      "route": "/pulse",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-pulse.webp"
+    },
+    {
+      "slug": "desktop-notifications",
+      "title": "데스크톱 알림",
+      "route": "/notifications",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-notifications.webp"
+    },
+    {
+      "slug": "desktop-pocket",
+      "title": "데스크톱 포켓",
+      "route": "/pocket",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-pocket.webp"
+    },
+    {
+      "slug": "desktop-moims",
+      "title": "데스크톱 모임",
+      "route": "/moims",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-moims.webp"
+    },
+    {
+      "slug": "desktop-ai",
+      "title": "데스크톱 AI",
+      "route": "/ai",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-ai.webp"
+    },
+    {
+      "slug": "desktop-settings-profile",
+      "title": "데스크톱 프로필 설정",
+      "route": "/settings/profile",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-settings-profile.webp"
+    },
+    {
+      "slug": "desktop-settings-feed",
+      "title": "데스크톱 피드 개인화",
+      "route": "/settings/feed",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-settings-feed.webp"
+    },
+    {
+      "slug": "desktop-settings-accessibility",
+      "title": "데스크톱 화면 및 접근성",
+      "route": "/settings/accessibility",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-settings-accessibility.webp"
+    },
+    {
+      "slug": "desktop-settings-security",
+      "title": "데스크톱 로그인 보안",
+      "route": "/settings/security",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-settings-security.webp"
+    },
+    {
+      "slug": "desktop-settings-keys",
+      "title": "데스크톱 내 API·MCP 키",
+      "route": "/settings/keys",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-settings-keys.webp"
+    },
+    {
+      "slug": "desktop-admin-dashboard",
+      "title": "데스크톱 관리 대시보드",
+      "route": "/admin",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-dashboard.webp"
+    },
+    {
+      "slug": "desktop-admin-users",
+      "title": "데스크톱 사용자 관리",
+      "route": "/admin/users",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-users.webp"
+    },
+    {
+      "slug": "desktop-admin-content",
+      "title": "데스크톱 콘텐츠 관리",
+      "route": "/admin/content",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-content.webp"
+    },
+    {
+      "slug": "desktop-admin-reports",
+      "title": "데스크톱 신고·제재",
+      "route": "/admin/reports",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-reports.webp"
+    },
+    {
+      "slug": "desktop-admin-approvals",
+      "title": "데스크톱 검토·승인",
+      "route": "/admin/approvals",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-approvals.webp"
+    },
+    {
+      "slug": "desktop-admin-roles",
+      "title": "데스크톱 역할·권한",
+      "route": "/admin/roles",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-roles.webp"
+    },
+    {
+      "slug": "desktop-admin-oidc",
+      "title": "데스크톱 Keycloak OIDC",
+      "route": "/admin/oidc",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-oidc.webp"
+    },
+    {
+      "slug": "desktop-admin-ai",
+      "title": "데스크톱 AI 설정",
+      "route": "/admin/ai",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-ai.webp"
+    },
+    {
+      "slug": "desktop-admin-settings",
+      "title": "데스크톱 일반 설정",
+      "route": "/admin/settings",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-settings.webp"
+    },
+    {
+      "slug": "desktop-admin-audit",
+      "title": "데스크톱 감사 로그",
+      "route": "/admin/audit",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-admin-audit.webp"
+    },
+    {
+      "slug": "desktop-access-denied",
+      "title": "데스크톱 접근 권한이 없습니다",
+      "route": "/access-denied",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-access-denied.webp"
+    },
+    {
+      "slug": "desktop-not-found",
+      "title": "데스크톱 페이지를 찾을 수 없습니다",
+      "route": "/e2e-page-does-not-exist",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-not-found.webp"
+    },
+    {
+      "slug": "desktop-profile-bootstrap",
+      "title": "데스크톱 capture-admin 프로필",
+      "route": "/profile/capture-admin",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-profile-bootstrap.webp"
+    },
+    {
+      "slug": "desktop-moin-detail",
+      "title": "데스크톱 Moin 상세",
+      "route": "/moin/moin_HWAw2uFlKnIeDZ0BZZKHN-mX",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-moin-detail.webp"
+    },
+    {
+      "slug": "desktop-topic-moina",
+      "title": "데스크톱 #MOINA Topic",
+      "route": "/topics/moina",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-topic-moina.webp"
+    },
+    {
+      "slug": "desktop-moim-detail",
+      "title": "데스크톱 MOINA 연구소 Moim",
+      "route": "/moims/moina-capture",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-moim-detail.webp"
+    },
+    {
+      "slug": "desktop-profile-menu-version",
+      "title": "데스크톱 프로필 버전 메뉴",
+      "route": "/flow",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "fullPage": false,
+      "path": "assets/screenshots/desktop-profile-menu-version.webp"
+    },
+    {
+      "slug": "mobile-login",
+      "title": "모바일 로그인",
+      "route": "/login",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-login.webp"
+    },
+    {
+      "slug": "mobile-flow",
+      "title": "모바일 플로우",
+      "route": "/flow",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-flow.webp"
+    },
+    {
+      "slug": "mobile-explore",
+      "title": "모바일 탐색",
+      "route": "/explore",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-explore.webp"
+    },
+    {
+      "slug": "mobile-search",
+      "title": "모바일 검색",
+      "route": "/search",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-search.webp"
+    },
+    {
+      "slug": "mobile-pulse",
+      "title": "모바일 펄스",
+      "route": "/pulse",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-pulse.webp"
+    },
+    {
+      "slug": "mobile-notifications",
+      "title": "모바일 알림",
+      "route": "/notifications",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-notifications.webp"
+    },
+    {
+      "slug": "mobile-pocket",
+      "title": "모바일 포켓",
+      "route": "/pocket",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-pocket.webp"
+    },
+    {
+      "slug": "mobile-moims",
+      "title": "모바일 모임",
+      "route": "/moims",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-moims.webp"
+    },
+    {
+      "slug": "mobile-ai",
+      "title": "모바일 AI",
+      "route": "/ai",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-ai.webp"
+    },
+    {
+      "slug": "mobile-settings-profile",
+      "title": "모바일 프로필 설정",
+      "route": "/settings/profile",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-settings-profile.webp"
+    },
+    {
+      "slug": "mobile-settings-feed",
+      "title": "모바일 피드 개인화",
+      "route": "/settings/feed",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-settings-feed.webp"
+    },
+    {
+      "slug": "mobile-settings-accessibility",
+      "title": "모바일 화면 및 접근성",
+      "route": "/settings/accessibility",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-settings-accessibility.webp"
+    },
+    {
+      "slug": "mobile-settings-security",
+      "title": "모바일 로그인 보안",
+      "route": "/settings/security",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-settings-security.webp"
+    },
+    {
+      "slug": "mobile-settings-keys",
+      "title": "모바일 내 API·MCP 키",
+      "route": "/settings/keys",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-settings-keys.webp"
+    },
+    {
+      "slug": "mobile-admin-dashboard",
+      "title": "모바일 관리 대시보드",
+      "route": "/admin",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-dashboard.webp"
+    },
+    {
+      "slug": "mobile-admin-users",
+      "title": "모바일 사용자 관리",
+      "route": "/admin/users",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-users.webp"
+    },
+    {
+      "slug": "mobile-admin-content",
+      "title": "모바일 콘텐츠 관리",
+      "route": "/admin/content",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-content.webp"
+    },
+    {
+      "slug": "mobile-admin-reports",
+      "title": "모바일 신고·제재",
+      "route": "/admin/reports",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-reports.webp"
+    },
+    {
+      "slug": "mobile-admin-approvals",
+      "title": "모바일 검토·승인",
+      "route": "/admin/approvals",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-approvals.webp"
+    },
+    {
+      "slug": "mobile-admin-roles",
+      "title": "모바일 역할·권한",
+      "route": "/admin/roles",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-roles.webp"
+    },
+    {
+      "slug": "mobile-admin-oidc",
+      "title": "모바일 Keycloak OIDC",
+      "route": "/admin/oidc",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-oidc.webp"
+    },
+    {
+      "slug": "mobile-admin-ai",
+      "title": "모바일 AI 설정",
+      "route": "/admin/ai",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-ai.webp"
+    },
+    {
+      "slug": "mobile-admin-settings",
+      "title": "모바일 일반 설정",
+      "route": "/admin/settings",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-settings.webp"
+    },
+    {
+      "slug": "mobile-admin-audit",
+      "title": "모바일 감사 로그",
+      "route": "/admin/audit",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-admin-audit.webp"
+    },
+    {
+      "slug": "mobile-access-denied",
+      "title": "모바일 접근 권한이 없습니다",
+      "route": "/access-denied",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-access-denied.webp"
+    },
+    {
+      "slug": "mobile-not-found",
+      "title": "모바일 페이지를 찾을 수 없습니다",
+      "route": "/e2e-page-does-not-exist",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-not-found.webp"
+    },
+    {
+      "slug": "mobile-profile-bootstrap",
+      "title": "모바일 capture-admin 프로필",
+      "route": "/profile/capture-admin",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-profile-bootstrap.webp"
+    },
+    {
+      "slug": "mobile-moin-detail",
+      "title": "모바일 Moin 상세",
+      "route": "/moin/moin_HWAw2uFlKnIeDZ0BZZKHN-mX",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-moin-detail.webp"
+    },
+    {
+      "slug": "mobile-topic-moina",
+      "title": "모바일 #MOINA Topic",
+      "route": "/topics/moina",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-topic-moina.webp"
+    },
+    {
+      "slug": "mobile-moim-detail",
+      "title": "모바일 MOINA 연구소 Moim",
+      "route": "/moims/moina-capture",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-moim-detail.webp"
+    },
+    {
+      "slug": "mobile-profile-menu-version",
+      "title": "모바일 프로필 버전 메뉴",
+      "route": "/flow",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "fullPage": false,
+      "path": "assets/screenshots/mobile-profile-menu-version.webp"
+    }
+  ],
+  "skipped": [],
+  "runtimeFailures": {
+    "console": [],
+    "page": [],
+    "request": [],
+    "response": [],
+    "external": []
+  },
+  "ignoredExpectedConsoleMessages": [
+    "[login:desktop] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[login:mobile] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ]
+}

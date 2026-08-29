@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MOINA | 사람·관심사·지식·AI가 모이는 소셜 네트워크</title>
+  <meta name="description" content="MOINA는 사람, 관심사와 지식을 투명한 개인화 피드와 내부 AI 어시스턴트로 연결하고 폐쇄망에서도 운영할 수 있는 한국어 소셜 지식 네트워크입니다.">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <meta name="theme-color" content="#5b4ce8">
+  <link rel="canonical" href="https://hkjang.github.io/moina/">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="assets/site.css">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:site_name" content="MOINA">
+  <meta property="og:title" content="MOINA — AI Social Knowledge Network">
+  <meta property="og:description" content="사람·관심사·지식과 스트리밍 AI가 하나의 흐름으로 모이는 곳">
+  <meta property="og:url" content="https://hkjang.github.io/moina/">
+  <meta property="og:image" content="https://hkjang.github.io/moina/assets/og.webp">
+  <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="MOINA AI 소셜 지식 네트워크">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MOINA — AI Social Knowledge Network">
+  <meta name="twitter:description" content="폐쇄망에서도 운영 가능한 한국어 AI 소셜 지식 네트워크">
+  <meta name="twitter:image" content="https://hkjang.github.io/moina/assets/og.webp"><meta name="twitter:image:alt" content="MOINA AI 소셜 지식 네트워크">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://hkjang.github.io/moina/#website",
+        "url": "https://hkjang.github.io/moina/",
+        "name": "MOINA",
+        "inLanguage": "ko-KR",
+        "description": "사람·관심사·지식과 내부 AI 어시스턴트가 모이는 소셜 지식 네트워크"
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://hkjang.github.io/moina/#software",
+        "name": "MOINA",
+        "applicationCategory": "SocialNetworkingApplication",
+        "operatingSystem": "Linux, Web",
+        "softwareVersion": "0.1.0",
+        "isAccessibleForFree": true,
+        "license": "https://opensource.org/license/mit",
+        "downloadUrl": "https://github.com/hkjang/moina/releases/latest",
+        "codeRepository": "https://github.com/hkjang/moina",
+        "description": "Go와 React로 만든 오프라인 운영 가능한 AI 소셜 지식 네트워크"
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://hkjang.github.io/moina/#faq",
+        "mainEntity": [
+          {"@type":"Question","name":"MOINA는 인터넷 없이 운영할 수 있나요?","acceptedAnswer":{"@type":"Answer","text":"네. 외부 PostgreSQL과 내부 서비스만 준비하면 단일 linux/amd64 Docker 이미지로 운영할 수 있으며 CDN이나 package registry에 접속하지 않습니다."}},
+          {"@type":"Question","name":"Keycloak SSO는 어떻게 설정하나요?","acceptedAnswer":{"@type":"Answer","text":"최초 관리자가 로그인한 뒤 Keycloak/OIDC 설정 화면에서 issuer URL, client ID, client secret과 redirect URL을 저장하면 됩니다."}},
+          {"@type":"Question","name":"AI 기능도 폐쇄망에서 사용할 수 있나요?","acceptedAnswer":{"@type":"Answer","text":"폐쇄망 내부의 OpenAI-compatible endpoint를 관리자 화면에 등록하면 SSE 스트리밍으로 사용할 수 있습니다. AI를 끄면 일반 SNS 기능은 독립적으로 동작합니다."}},
+          {"@type":"Question","name":"승인 절차는 항상 필요한가요?","acceptedAnswer":{"@type":"Answer","text":"아닙니다. 관리자가 승인 정책을 켠 경우에만 지정 작업에 검토·승인·반려 절차와 메뉴가 나타납니다."}}
+        ]
+      }
+    ]
+  }
+  </script>
+  <script src="assets/site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">본문으로 건너뛰기</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="./" aria-label="MOINA 홈"><img src="assets/logo.svg" width="132" height="38" alt="MOINA"></a>
+      <nav class="nav-links" aria-label="주요 메뉴">
+        <a href="#difference">차별점</a><a href="#offline">오프라인 운영</a><a href="#screens">실제 화면</a><a href="#faq">질문</a>
+        <a href="user-guide.html">사용자 가이드</a><a href="admin-guide.html">관리자 가이드</a>
+        <a class="nav-cta" href="https://github.com/hkjang/moina/releases/latest">v0.1.0 받기</a>
+      </nav>
+      <button class="menu-button" type="button" data-menu-button aria-label="메뉴 열기" aria-expanded="false">☰</button>
+    </div>
+    <nav class="mobile-menu" data-mobile-menu aria-label="모바일 메뉴" hidden>
+      <a href="#difference">차별점</a><a href="#offline">오프라인 운영</a><a href="#screens">실제 화면</a><a href="#faq">자주 묻는 질문</a>
+      <a href="user-guide.html">사용자 가이드</a><a href="admin-guide.html">관리자 가이드</a><a href="https://github.com/hkjang/moina/releases/latest">릴리스 받기</a>
+    </nav>
+  </header>
+
+  <main id="content">
+    <section class="hero">
+      <div class="shell hero-grid">
+        <div>
+          <span class="eyebrow">AI Social Knowledge Network</span>
+          <h1>사람과 생각이<br><span class="gradient-text">지식으로 모이는 곳</span></h1>
+          <p class="hero-copy">팔로워 수보다 대화의 품질, 블랙박스 추천보다 내가 조절하는 Flow. MOINA는 사람과 Topic, Moim을 연결하고 내부 AI 어시스턴트를 더해 흩어진 대화를 다시 찾을 수 있는 지식으로 만듭니다.</p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/hkjang/moina/releases/latest">오프라인 이미지 받기</a>
+            <a class="button" href="user-guide.html">3분 만에 둘러보기</a>
+            <a class="button" href="https://github.com/hkjang/moina">GitHub 소스</a>
+          </div>
+          <div class="pill-row"><span class="pill">Go + React</span><span class="pill">PostgreSQL</span><span class="pill">Keycloak OIDC</span><span class="pill">MCP</span><span class="pill">SSE AI</span></div>
+        </div>
+        <aside class="hero-card" aria-label="MOINA 네트워크 개념도">
+          <div class="network" aria-hidden="true">
+            <span class="line a"></span><span class="line b"></span><span class="line c"></span><span class="line d"></span>
+            <span class="node a">사람</span><span class="node b">Topic</span><span class="node main">Moin</span><span class="node c">AI</span><span class="node d">Moim</span>
+          </div>
+          <footer><span>Follow가 아닌 Link</span><strong>Flow belongs to you.</strong></footer>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section alt" id="difference">
+      <div class="shell">
+        <header class="section-heading"><span class="eyebrow">Why MOINA</span><h2>SNS의 익숙함 위에<br>설명 가능한 지식을 더했습니다</h2><p>X나 Threads의 표면을 복제하지 않습니다. 관계 그래프, 검색, 운영 안전성과 AI가 실제 대화의 품질을 높이는 지점에 집중합니다.</p></header>
+        <div class="feature-grid">
+          <article class="feature-card"><span class="icon">M</span><h3>Moin · Echo · Remoin</h3><p>짧은 생각, 답글과 재공유를 한국어 중심의 명확한 흐름으로 연결합니다.</p></article>
+          <article class="feature-card"><span class="icon">%</span><h3>내가 소유하는 For Me</h3><p>관심 Topic, 최신성, 관계와 새로운 발견 비율을 사용자가 직접 조절합니다.</p></article>
+          <article class="feature-card"><span class="icon">?</span><h3>Why this Moin?</h3><p>추천 이유와 가중치를 보여줘 피드가 왜 구성됐는지 이해하고 바꿀 수 있습니다.</p></article>
+          <article class="feature-card"><span class="icon">#</span><h3>Topic 탐색과 Link</h3><p>사람을 Link하지 않아도 Topic을 따라가고 관련 Moin과 Moim을 탐색합니다.</p></article>
+          <article class="feature-card"><span class="icon">AI</span><h3>스트리밍 AI 어시스턴트</h3><p>관리자가 연결한 내부 OpenAI-compatible 모델과 범용 대화를 SSE로 실시간 처리합니다.</p></article>
+          <article class="feature-card"><span class="icon">✓</span><h3>운영 가능한 거버넌스</h3><p>신고·차단·감사, 변경 가능한 권한과 선택형 팀장 승인으로 조직 정책을 반영합니다.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="offline">
+      <div class="shell split">
+        <div>
+          <header class="section-heading"><span class="eyebrow">Offline first</span><h2>컨테이너 하나로<br>폐쇄망까지</h2><p>정적 React 앱과 Go API를 하나의 distroless 이미지에 담았습니다. 외부 PostgreSQL DSN과 bootstrap 정보, encryption key만 환경변수로 전달합니다.</p></header>
+          <div class="steps">
+            <div class="step"><strong>해시 검증</strong><span>릴리스 본문의 SHA256과 반입 파일을 대조합니다.</span></div>
+            <div class="step"><strong>이미지 로드</strong><span><code>docker load</code>로 moina:v0.1.0을 등록합니다.</span></div>
+            <div class="step"><strong>네 값으로 시작</strong><span>PostgreSQL DSN, 관리자 아이디·비밀번호, encryption key만 지정합니다.</span></div>
+            <div class="step"><strong>화면에서 연결</strong><span>Keycloak, AI, 승인과 권한은 관리자 페이지에서 설정합니다.</span></div>
+          </div>
+        </div>
+        <div class="code-card" aria-label="오프라인 설치 예시"><pre><code># 1. 무결성 확인
+sha256sum moina-v0.1.0.tar.gz
+
+# 2. registry 접속 없이 로드
+gzip -dc moina-v0.1.0.tar.gz |
+  docker image load
+
+# 3. 외부 PostgreSQL 연결
+cp .env.example .env
+docker compose --env-file .env \
+  -f deploy/docker-compose.offline.yml \
+  up -d --pull never
+
+# 4. 준비 상태 확인
+curl --fail 127.0.0.1:8080/readyz</code></pre></div>
+      </div>
+    </section>
+
+    <section class="section alt" id="screens">
+      <div class="shell">
+        <header class="section-heading"><span class="eyebrow">Actual product</span><h2>목업이 아닌 실제 화면</h2><p>릴리스 후보 이미지를 Playwright로 실행해 모든 정적·동적 route를 데스크톱과 모바일에서 캡처합니다. 콘솔 오류, 외부 요청, 개인정보 패턴이 있으면 게시되지 않습니다.</p></header>
+        <div class="gallery" data-screenshot-gallery aria-live="polite"><p class="gallery-empty">실제 서비스 화면을 불러오는 중입니다.</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="faq">
+      <div class="shell">
+        <header class="section-heading"><span class="eyebrow">Answers</span><h2>자주 묻는 질문</h2><p>도입 전에 가장 많이 확인하는 운영 조건을 짧게 정리했습니다.</p></header>
+        <div class="faq">
+          <details><summary>MOINA는 완전한 폐쇄망에서 운영할 수 있나요?</summary><p>핵심 SNS 기능은 외부 인터넷 없이 동작합니다. 외부 PostgreSQL과 내부 DNS/TLS만 필요합니다. Keycloak이나 AI를 쓰려면 폐쇄망 안에서 해당 endpoint가 도달 가능해야 합니다.</p></details>
+          <details><summary>PostgreSQL 이미지도 릴리스에 포함되나요?</summary><p>아닙니다. 기관이 운영·백업하는 외부 PostgreSQL을 DSN으로 연결합니다. GitHub Release에는 요청 범위대로 moina 서비스 이미지 tar.gz 하나만 포함됩니다.</p></details>
+          <details><summary>Keycloak 설정 때문에 환경변수가 늘어나나요?</summary><p>늘어나지 않습니다. issuer URL, client ID, client secret, redirect URL과 role mapping은 bootstrap 후 관리자 UI에서 저장합니다.</p></details>
+          <details><summary>AI가 없어도 SNS를 쓸 수 있나요?</summary><p>가능합니다. AI는 관리자가 켜는 선택 기능입니다. 끄면 Flow, Moin, Link, 검색, 알림과 운영 기능은 독립적으로 동작합니다.</p></details>
+          <details><summary>승인 메뉴가 필요 없는 조직은 어떻게 하나요?</summary><p>승인 정책을 끄면 검토·승인·반려 상태와 관련 메뉴가 사용자 흐름에서 제외됩니다. 켜면 지정 역할과 작업에만 적용됩니다.</p></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="shell footer-grid"><div><strong>MOINA</strong><br>AI Social Knowledge Network · v0.1.0<br>© <span data-current-year>2026</span> hkjang</div><nav class="footer-links" aria-label="하단 메뉴"><a href="user-guide.html">사용자 가이드</a><a href="admin-guide.html">관리자 가이드</a><a href="https://github.com/hkjang/moina/releases">릴리스</a><a href="https://github.com/hkjang/moina/issues">이슈</a></nav></div></footer>
+  <dialog data-lightbox-dialog aria-label="화면 크게 보기"><button class="lightbox-close" type="button" data-lightbox-close aria-label="닫기">×</button><img src="assets/og.svg" alt=""></dialog>
+</body>
+</html>

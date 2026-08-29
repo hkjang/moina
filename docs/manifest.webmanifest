@@ -1,0 +1,14 @@
+{
+  "name": "MOINA — AI Social Knowledge Network",
+  "short_name": "MOINA",
+  "description": "사람·관심사·지식과 스트리밍 AI가 모이는 소셜 지식 네트워크",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f8fc",
+  "theme_color": "#5b4ce8",
+  "icons": [
+    { "src": "assets/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
