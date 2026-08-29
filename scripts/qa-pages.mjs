@@ -75,7 +75,7 @@ for (const page of pages) {
   if (!/^<!doctype html>/i.test(source.trimStart())) fail(`${page.file}: HTML5 doctype이 없습니다.`);
   if (!/<html\b[^>]*\blang="ko"/i.test(source)) fail(`${page.file}: lang=ko가 없습니다.`);
   if (!/<meta\b[^>]*name="viewport"[^>]*width=device-width/i.test(source)) fail(`${page.file}: 반응형 viewport가 없습니다.`);
-  if (!/<meta\b[^>]*name="theme-color"[^>]*content="#5b4ce8"/i.test(source)) fail(`${page.file}: 브랜드 theme-color가 없습니다.`);
+  if (!/<meta\b[^>]*name="theme-color"[^>]*content="#e63e23"/i.test(source)) fail(`${page.file}: Orange-Red 브랜드 theme-color가 없습니다.`);
   if (!/<meta\b[^>]*name="application-name"[^>]*content="MOINA"/i.test(source)) fail(`${page.file}: application-name이 없습니다.`);
   if (!/<meta\b[^>]*name="apple-mobile-web-app-capable"[^>]*content="yes"/i.test(source)) fail(`${page.file}: Apple mobile web app 메타가 없습니다.`);
   if (!/<main\b/i.test(source)) fail(`${page.file}: main이 없습니다.`);
@@ -169,7 +169,7 @@ try {
   const webManifest = JSON.parse(await readFile(path.join(docs, 'manifest.webmanifest'), 'utf8'));
   if (webManifest.name !== 'MOINA — AI Social Knowledge Network' || webManifest.short_name !== 'MOINA' || webManifest.lang !== 'ko-KR') fail('manifest.webmanifest 브랜드 이름·언어가 올바르지 않습니다.');
   if (webManifest.id !== './' || webManifest.start_url !== './' || webManifest.scope !== './') fail('manifest.webmanifest의 Pages 상대 경로 범위가 올바르지 않습니다.');
-  if (webManifest.theme_color !== '#5b4ce8' || webManifest.background_color !== '#f7f8fc') fail('manifest.webmanifest 브랜드 색상이 올바르지 않습니다.');
+  if (webManifest.theme_color.toLowerCase() !== '#e63e23' || webManifest.background_color.toLowerCase() !== '#faf8f7') fail('manifest.webmanifest Orange-Red 브랜드 색상이 올바르지 않습니다.');
   const icons = Array.isArray(webManifest.icons) ? webManifest.icons : [];
   for (const size of [192, 512]) {
     const source = `assets/icon-${size}.png`;
@@ -192,15 +192,19 @@ try {
   const manifestPath = path.join(docs, 'assets/screenshots/manifest.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   if (manifest.product !== 'moina' || manifest.version !== version) fail('screenshot manifest 제품/버전이 일치하지 않습니다.');
+  if (manifest.schemaVersion !== 2 || JSON.stringify(manifest.themes) !== JSON.stringify(['light', 'dark'])) fail('screenshot manifest가 Light/Dark schema v2가 아닙니다.');
   for (const [kind, values] of Object.entries(manifest.runtimeFailures || {})) if (!Array.isArray(values) || values.length) fail(`runtimeFailures.${kind}가 비어 있지 않습니다.`);
   if (!Array.isArray(manifest.skipped) || manifest.skipped.length) fail('screenshot manifest에 생략된 화면이 있습니다.');
   const dynamic = ['profile-bootstrap', 'moin-detail', 'topic-moina', 'moim-detail'];
   const expected = new Set();
-  for (const viewport of ['desktop', 'mobile']) {
-    expected.add(`${viewport}-login`);
-    expected.add(`${viewport}-profile-menu-version`);
-    for (const route of captureRoutes) expected.add(`${viewport}-${route.slug}`);
-    for (const slug of dynamic) expected.add(`${viewport}-${slug}`);
+  for (const theme of ['light', 'dark']) {
+    const prefix = theme === 'light' ? '' : `${theme}-`;
+    for (const viewport of ['desktop', 'mobile']) {
+      expected.add(`${prefix}${viewport}-login`);
+      expected.add(`${prefix}${viewport}-profile-menu-version`);
+      for (const route of captureRoutes) expected.add(`${prefix}${viewport}-${route.slug}`);
+      for (const slug of dynamic) expected.add(`${prefix}${viewport}-${slug}`);
+    }
   }
   const screenshots = Array.isArray(manifest.screenshots) ? manifest.screenshots : [];
   if (requireScreenshots) {
@@ -210,6 +214,8 @@ try {
     for (const slug of actual) if (!expected.has(slug)) fail(`catalog 밖 screenshot이 있습니다: ${slug}`);
     if (actual.size !== expected.size) fail(`screenshot 개수가 다릅니다(예상 ${expected.size}, 실제 ${actual.size}).`);
     for (const screenshot of screenshots) {
+      const expectedTheme = screenshot.slug.startsWith('dark-') ? 'dark' : 'light';
+      if (screenshot.theme !== expectedTheme) fail(`${screenshot.slug}: theme metadata가 ${expectedTheme}가 아닙니다.`);
       if (screenshot.path !== `assets/screenshots/${screenshot.slug}.webp`) fail(`${screenshot.slug}: manifest path가 올바르지 않습니다.`);
       const target = path.join(docs, screenshot.path);
       if (!(await exists(target))) { fail(`${screenshot.slug}: WebP가 없습니다.`); continue; }

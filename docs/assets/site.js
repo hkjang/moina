@@ -28,7 +28,7 @@ if (gallery) {
     })
     .then((manifest) => {
       if (manifest.pending === true) {
-        gallery.innerHTML = '<p class="gallery-empty">v0.1.1 실제 화면은 최종 릴리스 후보 검증과 Playwright 재캡처 후 게시됩니다.</p>';
+        gallery.innerHTML = '<p class="gallery-empty">실제 화면은 최종 릴리스 후보 검증과 Playwright 재캡처 후 게시됩니다.</p>';
         return;
       }
       if (!Array.isArray(manifest.screenshots) || manifest.screenshots.length === 0) {
@@ -36,18 +36,36 @@ if (gallery) {
         return;
       }
       const mode = gallery.dataset.galleryFilter || 'featured';
-      const preferred = mode === 'admin'
+      const candidates = mode === 'admin'
         ? manifest.screenshots.filter((shot) => shot.slug.includes('-admin-'))
         : mode === 'user'
           ? manifest.screenshots.filter((shot) => !shot.slug.includes('-admin-'))
-          : manifest.screenshots.filter((shot) => shot.slug.startsWith('desktop-')).slice(0, 12);
-      gallery.innerHTML = preferred.map((shot) => `
-        <figure class="screen-card">
-          <button type="button" data-lightbox="${shot.path}" aria-label="${shot.title} 크게 보기">
-            <img src="${shot.path}" alt="MOINA ${shot.title} 실제 화면" loading="lazy" decoding="async">
-          </button>
-          <figcaption><strong>${shot.title}</strong><code>${shot.route}</code></figcaption>
-        </figure>`).join('');
+          : manifest.screenshots.filter((shot) => shot.viewport?.name === 'desktop');
+      const themeOf = (shot) => shot.theme || (shot.slug.startsWith('dark-') ? 'dark' : 'light');
+      const render = (theme) => {
+        const selected = candidates.filter((shot) => themeOf(shot) === theme);
+        const preferred = mode === 'featured' ? selected.slice(0, 12) : selected;
+        gallery.innerHTML = preferred.map((shot) => `
+          <figure class="screen-card">
+            <button type="button" data-lightbox="${shot.path}" aria-label="${shot.title} 크게 보기">
+              <img src="${shot.path}" alt="MOINA ${shot.title} 실제 화면" loading="lazy" decoding="async">
+            </button>
+            <figcaption><strong>${shot.title}</strong><code>${shot.route}</code></figcaption>
+          </figure>`).join('');
+      };
+      const filters = document.createElement('div');
+      filters.className = 'gallery-theme-filter';
+      filters.setAttribute('role', 'group');
+      filters.setAttribute('aria-label', '화면 테마 선택');
+      filters.innerHTML = '<button type="button" data-gallery-theme="light" aria-pressed="true">밝은 화면</button><button type="button" data-gallery-theme="dark" aria-pressed="false">어두운 화면</button>';
+      gallery.before(filters);
+      filters.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-gallery-theme]');
+        if (!button) return;
+        $$('[data-gallery-theme]', filters).forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        render(button.dataset.galleryTheme);
+      });
+      render('light');
     })
     .catch(() => { gallery.innerHTML = '<p class="gallery-empty">화면 manifest를 불러오지 못했습니다.</p>'; });
 }

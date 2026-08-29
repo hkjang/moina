@@ -1,0 +1,24 @@
+:root {
+  --brand-identity: var(--brand-500);
+  --brand-fill: var(--brand-600);
+  --brand-fill-hover: var(--brand-700);
+  --on-brand: var(--neutral-white);
+
+  --ai-identity: var(--ai-500);
+  --hero-bg-start: var(--brand-950);
+  --hero-bg-mid: var(--brand-800);
+  --hero-bg-end: var(--brand-500);
+  --hero-decoration-soft: var(--brand-300);
+  --hero-decoration-strong: var(--brand-700);
+  --hero-eyebrow: var(--brand-200);
+  --hero-ink: var(--neutral-white);
+  --hero-note-bg: var(--brand-950);
+  --hero-note-fg: var(--neutral-white);
+  --profile-cover-start: var(--brand-700);
+  --profile-cover-end: var(--brand-400);
+  --avatar-bg-start: var(--brand-fill);
+  --avatar-bg-end: var(--ai-identity);
+  --control-thumb: var(--neutral-white);
+
+  --radius: 16px;
+}

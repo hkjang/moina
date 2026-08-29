@@ -4,7 +4,7 @@
 
 ## 애플리케이션 smoke
 
-먼저 `moina:v0.1.1`과 테스트 PostgreSQL을 시작한 뒤 실행합니다.
+먼저 `moina:v0.1.2`와 테스트 PostgreSQL을 시작한 뒤 실행합니다.
 
 ```bash
 npm ci --prefix e2e
@@ -12,7 +12,7 @@ npm --prefix e2e exec -- playwright install chromium
 MOINA_E2E_BASE_URL=http://127.0.0.1:18080 \
 MOINA_E2E_USERNAME=e2e-admin \
 MOINA_E2E_PASSWORD='test-password-12345' \
-MOINA_E2E_VERSION=v0.1.1 \
+MOINA_E2E_VERSION=v0.1.2 \
 npm test --prefix e2e
 ```
 
@@ -26,11 +26,11 @@ npm test --prefix e2e
 MOINA_CAPTURE_BASE_URL=http://127.0.0.1:18080 \
 MOINA_CAPTURE_USERNAME=capture-admin \
 MOINA_CAPTURE_PASSWORD='capture-password-12345' \
-MOINA_CAPTURE_VERSION=v0.1.1 \
+MOINA_CAPTURE_VERSION=v0.1.2 \
 npm --prefix e2e run capture:web
 ```
 
-모든 route를 `1440×1000`과 `390×844`에서 캡처합니다. PNG는 `dist/screenshots-png`에 남고, 메타데이터를 제거한 WebP와 manifest가 `docs/assets/screenshots`에 생성됩니다. 자동 생성물을 홍보 페이지가 읽어 실제 화면 gallery로 사용합니다.
+모든 route를 Light·Dark 테마 각각 `1440×1000`과 `390×844`에서 캡처합니다. 로그인·프로필 컨텍스트를 포함한 총 124개 PNG는 `dist/screenshots-png`에 남고, 메타데이터를 제거한 WebP와 schema v2 manifest가 `docs/assets/screenshots`에 생성됩니다. 자동 생성물을 홍보 페이지가 읽어 테마를 전환할 수 있는 실제 화면 gallery로 사용합니다.
 
 ## Pages QA
 

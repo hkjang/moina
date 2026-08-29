@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="MOINA AI 소셜 지식 네트워크">
   <defs>
-    <linearGradient id="bg" x1="100" y1="40" x2="1080" y2="590" gradientUnits="userSpaceOnUse"><stop stop-color="#17152d"/><stop offset=".55" stop-color="#312a79"/><stop offset="1" stop-color="#0c6669"/></linearGradient>
-    <linearGradient id="mark" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#7568F5"/><stop offset=".52" stop-color="#514BD1"/><stop offset="1" stop-color="#0B8A8B"/></linearGradient>
-    <radialGradient id="orb"><stop stop-color="#c8c2ff" stop-opacity=".9"/><stop offset="1" stop-color="#7c6cff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="bg" x1="100" y1="40" x2="1080" y2="590" gradientUnits="userSpaceOnUse"><stop stop-color="#3D0E09"/><stop offset=".55" stop-color="#8F2417"/><stop offset="1" stop-color="#E63E23"/></linearGradient>
+    <linearGradient id="mark" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#F8745D"/><stop offset=".52" stop-color="#E63E23"/><stop offset="1" stop-color="#B72A17"/></linearGradient>
+    <radialGradient id="orb"><stop stop-color="#FFD1C8" stop-opacity=".9"/><stop offset="1" stop-color="#FFD1C8" stop-opacity="0"/></radialGradient>
   </defs>
   <rect width="1200" height="630" rx="36" fill="url(#bg)"/>
   <circle cx="1040" cy="80" r="330" fill="url(#orb)" opacity=".35"/>
   <g transform="translate(866 160) scale(3.05)">
     <rect width="64" height="64" rx="19" fill="url(#mark)"/>
     <path d="M14 46V26c0-6.7 3.2-10 8-10 3.2 0 5.4 1.7 7.2 4.5L32 25l2.8-4.5C36.6 17.7 38.8 16 42 16c4.8 0 8 3.3 8 10v20" fill="none" stroke="#FFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="22" cy="16" r="3.4" fill="#B7FFF2"/><circle cx="32" cy="25" r="3.4" fill="#B7FFF2"/><circle cx="42" cy="16" r="3.4" fill="#B7FFF2"/>
+    <circle cx="22" cy="16" r="3.4" fill="#FFF1ED"/><circle cx="32" cy="25" r="3.4" fill="#FFF1ED"/><circle cx="42" cy="16" r="3.4" fill="#FFF1ED"/>
   </g>
   <text x="92" y="222" fill="#fff" font-family="system-ui,sans-serif" font-size="98" font-weight="800" letter-spacing="6">MOINA</text>
-  <text x="98" y="300" fill="#dcd9ff" font-family="system-ui,sans-serif" font-size="34" font-weight="650">AI Social Knowledge Network</text>
+  <text x="98" y="300" fill="#FFF1ED" font-family="system-ui,sans-serif" font-size="34" font-weight="650">AI Social Knowledge Network</text>
   <text x="98" y="390" fill="#fff" font-family="system-ui,sans-serif" font-size="31">사람 · 관심사 · 지식 · 스트리밍 AI가</text>
   <text x="98" y="438" fill="#fff" font-family="system-ui,sans-serif" font-size="31">하나의 흐름으로 모이는 곳</text>
-  <rect x="98" y="495" width="225" height="58" rx="29" fill="#f5f4ff"/>
-  <text x="142" y="533" fill="#312a79" font-family="system-ui,sans-serif" font-size="24" font-weight="750">moina v0.1.1</text>
+  <rect x="98" y="495" width="225" height="58" rx="29" fill="#FFF4F1"/>
+  <text x="142" y="533" fill="#8F2417" font-family="system-ui,sans-serif" font-size="24" font-weight="750">moina v0.1.2</text>
 </svg>

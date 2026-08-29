@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="MOINA 연결 노드 심볼">
-  <defs><linearGradient id="tile" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#6557E8"/><stop offset=".52" stop-color="#4A45C7"/><stop offset="1" stop-color="#087E80"/></linearGradient><radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(49 10) rotate(128) scale(35)"><stop stop-color="#93F0E3" stop-opacity=".46"/><stop offset="1" stop-color="#93F0E3" stop-opacity="0"/></radialGradient></defs>
+  <defs><linearGradient id="tile" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse"><stop stop-color="#F8745D"/><stop offset=".52" stop-color="#E63E23"/><stop offset="1" stop-color="#B72A17"/></linearGradient><radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(49 10) rotate(128) scale(35)"><stop stop-color="#FFD1C8" stop-opacity=".46"/><stop offset="1" stop-color="#FFD1C8" stop-opacity="0"/></radialGradient></defs>
   <rect width="64" height="64" rx="19" fill="url(#tile)"/><rect width="64" height="64" rx="19" fill="url(#glow)"/>
   <path d="M14 46V26c0-6.7 3.2-10 8-10 3.2 0 5.4 1.7 7.2 4.5L32 25l2.8-4.5C36.6 17.7 38.8 16 42 16c4.8 0 8 3.3 8 10v20" fill="none" stroke="#FFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="22" cy="16" r="3.4" fill="#B7FFF2"/><circle cx="32" cy="25" r="3.4" fill="#B7FFF2"/><circle cx="42" cy="16" r="3.4" fill="#B7FFF2"/>
+  <circle cx="22" cy="16" r="3.4" fill="#FFF1ED"/><circle cx="32" cy="25" r="3.4" fill="#FFF1ED"/><circle cx="42" cy="16" r="3.4" fill="#FFF1ED"/>
 </svg>

@@ -36,6 +36,26 @@ try {
       assert.ok(width.scroll <= width.inner + 1, `${label}: 가로 overflow가 있습니다.`);
       const broken = await page.locator('img').evaluateAll((images) => images.filter((image) => image.complete && image.naturalWidth === 0).map((image) => image.src));
       assert.deepEqual(broken, [], `${label}: 깨진 이미지가 있습니다.`);
+      const gallery = page.locator('[data-screenshot-gallery]');
+      if (await gallery.count()) {
+        const lightTheme = page.locator('[data-gallery-theme="light"]');
+        const darkTheme = page.locator('[data-gallery-theme="dark"]');
+        await lightTheme.waitFor({ state: 'visible' });
+        assert.equal(await lightTheme.getAttribute('aria-pressed'), 'true', `${label}: 밝은 화면이 기본 선택이어야 합니다.`);
+        assert.equal(await darkTheme.getAttribute('aria-pressed'), 'false', `${label}: 어두운 화면은 기본 선택이 아니어야 합니다.`);
+        const firstImage = gallery.locator('img').first();
+        await firstImage.waitFor({ state: 'visible' });
+        const lightSource = await firstImage.getAttribute('src');
+        assert.ok(lightSource && !lightSource.includes('/dark-'), `${label}: 밝은 화면 이미지가 표시되어야 합니다.`);
+        await darkTheme.click();
+        assert.equal(await darkTheme.getAttribute('aria-pressed'), 'true', `${label}: 어두운 화면 선택 상태가 표시되어야 합니다.`);
+        assert.equal(await lightTheme.getAttribute('aria-pressed'), 'false', `${label}: 밝은 화면 선택 상태가 해제되어야 합니다.`);
+        const darkSource = await firstImage.getAttribute('src');
+        assert.ok(darkSource?.includes('/dark-'), `${label}: 어두운 화면 이미지로 교체되어야 합니다.`);
+        assert.notEqual(darkSource, lightSource, `${label}: 테마 전환 시 이미지가 변경되어야 합니다.`);
+        await lightTheme.click();
+        assert.equal(await firstImage.getAttribute('src'), lightSource, `${label}: 밝은 화면 이미지로 복원되어야 합니다.`);
+      }
       await page.screenshot({ path: `${output}/${viewport.name}-${route.path === '/' ? 'index' : route.path.replace(/\W+/g, '-')}.png`, fullPage: true, animations: 'disabled', caret: 'hide' });
       if (viewport.name === 'mobile') {
         const menu = page.getByRole('button', { name: '메뉴 열기', exact: true });

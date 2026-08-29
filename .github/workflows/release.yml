@@ -49,6 +49,7 @@ jobs:
           bash scripts/check-runtime-contract.sh
           node scripts/check-app-routes.mjs
           node scripts/check-openapi-routes.mjs
+          node scripts/check-brand-colors.mjs
           MOINA_REQUIRE_SCREENSHOTS=1 node scripts/qa-pages.mjs
 
       - name: Build service image

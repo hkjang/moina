@@ -7,6 +7,7 @@ on:
     paths:
       - "docs/**"
       - "scripts/qa-pages.mjs"
+      - "scripts/check-brand-colors.mjs"
       - "e2e/pages-*.mjs"
       - "e2e/package.json"
       - "e2e/package-lock.json"
@@ -41,8 +42,11 @@ jobs:
           cache: npm
           cache-dependency-path: e2e/package-lock.json
 
-      - name: Static SEO, AEO and link checks
-        run: MOINA_REQUIRE_SCREENSHOTS=1 node scripts/qa-pages.mjs
+      - name: Brand, contrast, SEO, AEO and link checks
+        run: |
+          set -Eeuo pipefail
+          node scripts/check-brand-colors.mjs
+          MOINA_REQUIRE_SCREENSHOTS=1 node scripts/qa-pages.mjs
 
       - name: Browser test desktop and mobile
         run: |

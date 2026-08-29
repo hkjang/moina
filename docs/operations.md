@@ -2,7 +2,7 @@
 
 ## 책임 경계
 
-GitHub Release에는 `linux/amd64`용 `moina:v0.1.1` 서비스 이미지 하나를 저장한 `moina-v0.1.1.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
+GitHub Release에는 `linux/amd64`용 `moina:v0.1.2` 서비스 이미지 하나를 저장한 `moina-v0.1.2.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
 
 ## 반입과 설치
 
@@ -13,10 +13,10 @@ GitHub Release에는 `linux/amd64`용 `moina:v0.1.1` 서비스 이미지 하나�
 5. `pull never`, read-only, dropped capabilities로 시작합니다.
 
 ```bash
-sha256sum moina-v0.1.1.tar.gz
-gzip -t moina-v0.1.1.tar.gz
-gzip -dc moina-v0.1.1.tar.gz | docker image load
-docker image inspect moina:v0.1.1
+sha256sum moina-v0.1.2.tar.gz
+gzip -t moina-v0.1.2.tar.gz
+gzip -dc moina-v0.1.2.tar.gz | docker image load
+docker image inspect moina:v0.1.2
 cp .env.example .env
 chmod 600 .env
 docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull never
@@ -48,7 +48,7 @@ docker compose -f deploy/docker-compose.offline.yml logs --since 15m moina
 
 ## Migration과 검색 준비
 
-`v0.1.1`은 시작 시 `pg_trgm` 확장을 만들고 trigram·전문 검색 index를 생성합니다. migration 계정이 extension 생성 권한이 없다면 DBA가 대상 database에 `CREATE EXTENSION IF NOT EXISTS pg_trgm`을 먼저 실행해야 합니다. 별도 OpenSearch나 인터넷 연결은 필요하지 않습니다.
+`v0.1.2`는 시작 시 `pg_trgm` 확장을 만들고 trigram·전문 검색 index를 생성합니다. migration 계정이 extension 생성 권한이 없다면 DBA가 대상 database에 `CREATE EXTENSION IF NOT EXISTS pg_trgm`을 먼저 실행해야 합니다. 별도 OpenSearch나 인터넷 연결은 필요하지 않습니다.
 
 적용한 migration에는 SHA-256 checksum을 저장합니다. 이미 기록된 SQL 파일이 바뀌어 checksum이 다르면 시작을 중단하므로, 운영 DB의 `schema_migrations`를 임의 수정하거나 적용 완료 migration 파일을 덮어쓰지 않습니다. **DB에 현재 binary가 알지 못하는 migration version이 하나라도 있으면 downgrade로 판단해 기동을 거부합니다.** 새 변경은 항상 다음 번호 migration으로 배포합니다. Migration에는 연결 단계와 분리된 최대 30분 제한이 적용되며 완료되기 전에는 readiness가 성공하지 않습니다. 대용량 index 생성 중 배포 관리자가 컨테이너를 조기 종료하지 않도록 startup/readiness 허용 시간을 30분 이상으로 잡고, 한도 초과 시 log와 PostgreSQL lock·I/O·권한을 확인합니다.
 
@@ -68,7 +68,7 @@ Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 
 
 ## 미디어 업로드 계약 확인
 
-인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.1` 관리자 설정이 아닙니다.
+인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.2` 관리자 설정이 아닙니다.
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/v1/media/config \
@@ -102,7 +102,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 
 ### v0.1.0 내부 OIDC·AI 사용자의 필수 조치
 
-`v0.1.1`은 사설 주소를 자동 허용하지 않습니다. `v0.1.0`에서 RFC1918/ULA로 해석되는 Keycloak/OIDC 또는 AI endpoint를 사용했다면 업그레이드 뒤 해당 연결은 `privateAllowedHosts`를 명시적으로 저장하기 전까지 실패합니다. 기존 host를 자동으로 사설 예외로 승격하지 않는 것은 SSRF 방어를 약화하지 않기 위한 의도된 변경입니다.
+`v0.1.2`는 사설 주소를 자동 허용하지 않습니다. `v0.1.0`에서 RFC1918/ULA로 해석되는 Keycloak/OIDC 또는 AI endpoint를 사용했다면 업그레이드 뒤 해당 연결은 `privateAllowedHosts`를 명시적으로 저장하기 전까지 실패합니다. 기존 host를 자동으로 사설 예외로 승격하지 않는 것은 SSRF 방어를 약화하지 않기 위한 의도된 변경입니다.
 
 1. OIDC에 의존하지 말고 검증해 둔 **로컬 bootstrap 최고 관리자**로 로그인합니다. Bootstrap 환경변수의 비밀번호를 바꿔도 이미 생성된 계정 비밀번호는 재설정되지 않습니다.
 2. Keycloak/OIDC와 AI 설정 각각의 `allowedHosts`에 endpoint의 정확한 authority가 있는지 확인합니다.
@@ -117,7 +117,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 
 - root encryption key는 application 관리자 계정과 분리해 vault/HSM 수준으로 보관합니다.
 - 개인 API/MCP key는 사용자 화면에서 회전하고 이전 token은 즉시 폐기합니다.
-- `v0.1.1`은 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
+- `v0.1.2`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
 - 유출이 의심되면 관련 key 폐기, session 종료, audit 조사와 downstream secret rotation을 함께 수행합니다.
 
 ## 장애 분류

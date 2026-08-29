@@ -1,0 +1,59 @@
+.app-shell { display: grid; grid-template-columns: 264px minmax(540px, 760px) minmax(280px, 340px); justify-content: center; min-height: 100vh; }
+.desktop-sidebar { position: sticky; z-index: 60; top: 0; display: flex; min-width: 0; height: 100vh; padding: 18px 14px 14px; flex-direction: column; background: var(--surface); border-right: 1px solid var(--line); }
+.brand-link { display: flex; align-items: center; min-height: 52px; padding: 4px 8px; gap: 11px; border-radius: 12px; }
+.brand-symbol { display: block; flex: 0 0 auto; width: 40px; height: 40px; border-radius: 13px; box-shadow: 0 8px 22px color-mix(in srgb, var(--brand-identity) 28%, transparent); }
+.brand-link > span:last-child { display: flex; min-width: 0; flex-direction: column; }
+.brand-link strong { font-size: 1.16rem; letter-spacing: .03em; }
+.brand-link small { color: var(--ink-soft); font-size: .67rem; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.sidebar-scroll { flex: 1; min-height: 0; margin: 14px -4px 8px 0; overflow: hidden; }
+.sidebar-viewport { width: 100%; height: 100%; padding-right: 7px; }
+.primary-nav { padding-bottom: 12px; }
+.nav-section { display: flex; flex-direction: column; gap: 3px; }
+.nav-section + .nav-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.nav-section > p { margin: 0 10px 7px; color: var(--ink-soft); font-size: .78rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.nav-link { display: flex; align-items: center; min-height: 46px; padding: 8px 11px; gap: 12px; color: var(--ink-muted); border-radius: 12px; font-weight: 650; transition: background .14s, color .14s; }
+.nav-link svg { width: 1.25rem; height: 1.25rem; }
+.nav-link:hover { color: var(--ink); background: var(--surface-soft); }
+.nav-link.active { color: var(--brand-fg); background: var(--brand-soft); font-weight: 760; }
+.admin-nav .nav-link.active { color: var(--ai-fg); background: var(--ai-soft); }
+.compose-button { width: 100%; min-height: 48px; }
+.sidebar-profile { margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--line); }
+.profile-trigger { display: flex; align-items: center; width: 100%; min-height: 54px; padding: 5px 7px; gap: 9px; color: var(--ink); background: transparent; border: 0; border-radius: 12px; text-align: left; }
+.profile-trigger:hover, .profile-trigger[data-state="open"] { background: var(--surface-soft); }
+.profile-trigger-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.profile-trigger-copy strong, .profile-trigger-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-trigger-copy strong { font-size: .93rem; }.profile-trigger-copy small { color: var(--ink-muted); font-size: .81rem; }
+.profile-popover { z-index: 300; width: min(310px, calc(100vw - 20px)); padding: 8px; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 15px; box-shadow: var(--shadow-lg); animation: fadeIn .12s; }
+.profile-summary { display: flex; align-items: center; padding: 10px; gap: 11px; border-bottom: 1px solid var(--line); }
+.profile-summary > span:last-child { display: flex; min-width: 0; flex-direction: column; }
+.profile-summary small { overflow: hidden; color: var(--ink-muted); font-size: .84rem; text-overflow: ellipsis; white-space: nowrap; }
+.profile-menu-scroll { max-height: min(48vh, 280px); margin: 5px 0; overflow: hidden; }
+.profile-menu-viewport { width: 100%; height: 100%; max-height: min(48vh,280px); }
+.profile-menu-item { display: flex; align-items: center; min-height: 43px; padding: 8px 10px; gap: 10px; border-radius: 9px; font-size: .92rem; font-weight: 620; }
+.profile-menu-item:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
+.profile-menu-item[data-highlighted] { color: var(--brand-fg); background: var(--brand-soft); }
+.profile-menu-item.danger { color: var(--danger); }
+.profile-version { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; color: var(--ink-muted); font-size: .82rem; border-top: 1px solid var(--line); }
+.profile-version strong { color: var(--ink); }
+.menu-separator { height: 1px; margin: 3px; background: var(--line); }
+.profile-arrow { fill: var(--surface-raised); }
+.app-content-column { min-width: 0; min-height: 100vh; background: var(--surface); border-right: 1px solid var(--line); }
+.main-content { min-height: 100vh; outline: 0; }
+.main-content > .page-stack, .main-content > .settings-page, .main-content > .ai-page { padding: 28px; }
+.mobile-topbar, .mobile-bottom-nav { display: none; }
+.context-rail { position: sticky; top: 0; height: 100vh; padding: 20px 18px; overflow-y: auto; }
+.rail-card { margin-bottom: 16px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+.rail-card > header { display: flex; align-items: center; padding: 16px 16px 10px; gap: 9px; }
+.rail-card > header svg { color: var(--brand-fg); }.rail-card h2 { margin: 0; font-size: 1.05rem; }
+.trend-item, .person-item { display: flex; align-items: center; min-height: 68px; padding: 10px 15px; gap: 10px; border-top: 1px solid var(--line); }
+.trend-item:hover, .person-item:hover { background: var(--surface-soft); }
+.trend-item > span, .person-item > span { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.trend-item small, .person-item small { color: var(--ink-muted); font-size: .8rem; }
+.trend-item strong { font-size: .95rem; }
+.rail-more { display: block; padding: 12px 15px; color: var(--brand-fg); border-top: 1px solid var(--line); font-size: .88rem; font-weight: 720; }
+.rail-empty { margin: 0; padding: 16px; color: var(--ink-muted); font-size: .88rem; border-top: 1px solid var(--line); }
+.rail-footnote { padding: 0 8px; color: var(--ink-soft); font-size: .78rem; }
+.admin-context { grid-template-columns: 264px minmax(0, 1120px); }
+.admin-context .app-content-column { border-right: 0; }
+.admin-context-badge { position: fixed; z-index: 30; right: 24px; bottom: 24px; display: flex; align-items: center; padding: 11px 14px; gap: 9px; color: var(--ai-fg); background: var(--surface-raised); border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow-lg); }
+.admin-context-badge > span { display: flex; flex-direction: column; }.admin-context-badge small { color: var(--ink-muted); font-size: .76rem; }

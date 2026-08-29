@@ -2,7 +2,7 @@
 
 ## 선택
 
-MOINA `v0.1.1`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
+MOINA `v0.1.2`는 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
 
 ```text
 Browser (React, REST/SSE/WebSocket)
@@ -67,7 +67,7 @@ WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 
 
 ## 검색
 
-`v0.1.1` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다.
+`v0.1.2` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다.
 
 ## 인증과 설정
 
@@ -94,7 +94,7 @@ Large Object read는 인스턴스당 최대 8개를 동시에 유지합니다. D
 ## 오프라인 runtime
 
 ```text
-moina:v0.1.1 (linux/amd64, distroless, non-root, read-only)
+moina:v0.1.2 (linux/amd64, distroless, non-root, read-only)
   ├─ /app/moina
   └─ /app/web/dist
 

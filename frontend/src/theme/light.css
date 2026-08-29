@@ -1,0 +1,42 @@
+:root,
+:root[data-theme="light"] {
+  --bg: #faf8f7;
+  --surface: #ffffff;
+  --surface-soft: #f8f2f0;
+  --surface-raised: #ffffff;
+  --ink: #261c1a;
+  --ink-muted: #6f5e59;
+  --ink-soft: #806b65;
+  --line: #e9ddd9;
+  --line-strong: #d8c8c3;
+  --control-border: #9b8179;
+
+  --brand-fg: #b72a17;
+  --brand-soft: #fff4f1;
+  --brand-soft-hover: #ffe5df;
+  --brand-border: #ffc9be;
+  --focus-ring: #e63e23;
+
+  --positive: #147a55;
+  --positive-soft: #e8f7f1;
+  --danger: #b42345;
+  --danger-soft: #fdecef;
+  --danger-fill: #b42345;
+  --danger-fill-hover: #8f1d38;
+  --warning: #94620c;
+  --warning-soft: #fff8e6;
+  --ai-fg: #7657d6;
+  --ai-soft: #f1eeff;
+
+  --hero-ink-muted: #ffe5df;
+  --hero-ink-soft: #ffc9be;
+  --hero-glass: rgb(255 255 255 / 9%);
+  --hero-glass-soft: rgb(255 255 255 / 4%);
+  --overlay: rgb(38 28 26 / 58%);
+  --media-backdrop: #17110f;
+  --media-caption: rgb(23 17 15 / 78%);
+  --shadow: 0 1px 2px rgb(61 14 9 / 4%), 0 10px 28px rgb(61 14 9 / 7%);
+  --shadow-lg: 0 24px 70px rgb(61 14 9 / 19%);
+
+  color-scheme: light;
+}

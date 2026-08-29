@@ -1,0 +1,18 @@
+:root {
+  --brand-50: #fff4f1;
+  --brand-100: #ffe5df;
+  --brand-200: #ffc9be;
+  --brand-300: #ffa18f;
+  --brand-400: #f8745d;
+  --brand-500: #e63e23;
+  --brand-600: #d4311a;
+  --brand-700: #b72a17;
+  --brand-800: #8f2417;
+  --brand-900: #6f2118;
+  --brand-950: #3d0e09;
+
+  --neutral-white: #ffffff;
+  --ai-50: #f1eeff;
+  --ai-400: #a98cf4;
+  --ai-500: #7657d6;
+}

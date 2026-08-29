@@ -7,7 +7,7 @@ OUTPUT_DIR ?= dist
 
 .DEFAULT_GOAL := help
 
-.PHONY: help version fmt backend frontend test check image package verify-package offline-up offline-down pages-test clean
+.PHONY: help version fmt backend frontend test check brand-assets image package verify-package offline-up offline-down pages-test clean
 
 help: ## 사용 가능한 명령을 표시합니다.
 	@awk 'BEGIN {FS = ":.*## "; printf "moina build targets\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -34,12 +34,17 @@ check: ## 버전·환경변수·셸·문서 계약을 검사합니다.
 	bash scripts/check-runtime-contract.sh
 	node scripts/check-app-routes.mjs
 	node scripts/check-openapi-routes.mjs
+	node scripts/check-brand-colors.mjs
 	node scripts/qa-pages.mjs
 	@[[ '$(VERSION)' =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$$ ]]
 	@test -f deploy/docker-compose.offline.yml
 	@test -f .github/workflows/ci.yml
 	@test -f .github/workflows/release.yml
 	@test -f .github/workflows/pages.yml
+
+brand-assets: ## SVG 원본에서 PWA 아이콘과 OG WebP를 재생성합니다.
+	npm ci --prefix e2e
+	node scripts/generate-brand-assets.mjs
 
 image: ## linux/amd64 단일 서비스 이미지를 빌드합니다.
 	docker build --platform linux/amd64 \

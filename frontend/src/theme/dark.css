@@ -1,0 +1,86 @@
+:root[data-theme="dark"] {
+  --bg: #17110f;
+  --surface: #211816;
+  --surface-soft: #2b1f1c;
+  --surface-raised: #32231f;
+  --ink: #fff3ef;
+  --ink-muted: #d2bbb4;
+  --ink-soft: #b0958d;
+  --line: #48342f;
+  --line-strong: #62463e;
+  --control-border: #8f6c62;
+
+  --brand-fg: #ff8a73;
+  --brand-soft: #3a1b16;
+  --brand-soft-hover: #4a211a;
+  --brand-border: #7b3428;
+  --focus-ring: #f8745d;
+
+  --positive: #65d4a8;
+  --positive-soft: #17372d;
+  --danger: #ff8da1;
+  --danger-soft: #44242a;
+  --danger-fill: #b42345;
+  --danger-fill-hover: #8f1d38;
+  --warning: #f0bd62;
+  --warning-soft: #40331e;
+  --ai-fg: #b29af8;
+  --ai-soft: #302747;
+
+  --hero-ink-muted: #ffe5df;
+  --hero-ink-soft: #ffc9be;
+  --hero-glass: rgb(255 255 255 / 10%);
+  --hero-glass-soft: rgb(255 255 255 / 5%);
+  --overlay: rgb(23 17 15 / 68%);
+  --media-backdrop: #0e0908;
+  --media-caption: rgb(14 9 8 / 82%);
+  --shadow: 0 10px 28px rgb(0 0 0 / 22%);
+  --shadow-lg: 0 24px 70px rgb(0 0 0 / 46%);
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]),
+  :root[data-theme="system"] {
+    --bg: #17110f;
+    --surface: #211816;
+    --surface-soft: #2b1f1c;
+    --surface-raised: #32231f;
+    --ink: #fff3ef;
+    --ink-muted: #d2bbb4;
+    --ink-soft: #b0958d;
+    --line: #48342f;
+    --line-strong: #62463e;
+    --control-border: #8f6c62;
+
+    --brand-fg: #ff8a73;
+    --brand-soft: #3a1b16;
+    --brand-soft-hover: #4a211a;
+    --brand-border: #7b3428;
+    --focus-ring: #f8745d;
+
+    --positive: #65d4a8;
+    --positive-soft: #17372d;
+    --danger: #ff8da1;
+    --danger-soft: #44242a;
+    --danger-fill: #b42345;
+    --danger-fill-hover: #8f1d38;
+    --warning: #f0bd62;
+    --warning-soft: #40331e;
+    --ai-fg: #b29af8;
+    --ai-soft: #302747;
+
+    --hero-ink-muted: #ffe5df;
+    --hero-ink-soft: #ffc9be;
+    --hero-glass: rgb(255 255 255 / 10%);
+    --hero-glass-soft: rgb(255 255 255 / 5%);
+    --overlay: rgb(23 17 15 / 68%);
+    --media-backdrop: #0e0908;
+    --media-caption: rgb(14 9 8 / 82%);
+    --shadow: 0 10px 28px rgb(0 0 0 / 22%);
+    --shadow-lg: 0 24px 70px rgb(0 0 0 / 46%);
+
+    color-scheme: dark;
+  }
+}

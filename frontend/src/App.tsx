@@ -23,16 +23,16 @@ const FeedSettingsPage = lazy(() => import('./pages/SettingsPages').then((module
 const KeySettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.KeySettingsPage })));
 const ProfileSettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.ProfileSettingsPage })));
 const SecuritySettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.SecuritySettingsPage })));
-const AdminAIPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminAIPage })));
-const AdminApprovalsPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminApprovalsPage })));
-const AdminAuditPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminAuditPage })));
-const AdminContentPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminContentPage })));
-const AdminOIDCPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminOIDCPage })));
-const AdminOverviewPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminOverviewPage })));
-const AdminReportsPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminReportsPage })));
-const AdminRolesPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminRolesPage })));
-const AdminSettingsPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminSettingsPage })));
-const AdminUsersPage = lazy(() => import('./pages/AdminPages').then((module) => ({ default: module.AdminUsersPage })));
+const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage').then((module) => ({ default: module.AdminAIPage })));
+const AdminApprovalsPage = lazy(() => import('./pages/admin/AdminApprovalsPage').then((module) => ({ default: module.AdminApprovalsPage })));
+const AdminAuditPage = lazy(() => import('./pages/admin/AdminAuditPage').then((module) => ({ default: module.AdminAuditPage })));
+const AdminContentPage = lazy(() => import('./pages/admin/AdminContentPage').then((module) => ({ default: module.AdminContentPage })));
+const AdminOIDCPage = lazy(() => import('./pages/admin/AdminOIDCPage').then((module) => ({ default: module.AdminOIDCPage })));
+const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage').then((module) => ({ default: module.AdminOverviewPage })));
+const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then((module) => ({ default: module.AdminReportsPage })));
+const AdminRolesPage = lazy(() => import('./pages/admin/AdminRolesPage').then((module) => ({ default: module.AdminRolesPage })));
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage').then((module) => ({ default: module.AdminUsersPage })));
 const AccessDeniedPage = lazy(() => import('./pages/StatePages').then((module) => ({ default: module.AccessDeniedPage })));
 const NotFoundPage = lazy(() => import('./pages/StatePages').then((module) => ({ default: module.NotFoundPage })));
 
