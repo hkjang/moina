@@ -12,7 +12,8 @@ import (
 )
 
 type notificationClient struct {
-	queue chan model.Notification
+	queue  chan model.Notification
+	cancel context.CancelFunc
 }
 
 type notificationHub struct {
@@ -49,7 +50,9 @@ func (h *notificationHub) publish(userID string, notification model.Notification
 		select {
 		case client.queue <- notification:
 		default:
-			// A slow tab must not block persistence or other connected sessions.
+			// Force a slow tab to reconnect. The reconnect path reloads the
+			// durable unread summary, so overflow cannot permanently lose state.
+			client.cancel()
 		}
 	}
 }
@@ -64,10 +67,12 @@ func (s *Server) notificationsWebSocket(w http.ResponseWriter, r *http.Request) 
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	client := &notificationClient{queue: make(chan model.Notification, 32)}
+	client := &notificationClient{queue: make(chan model.Notification, 32), cancel: cancel}
 	userID := getPrincipal(r).User.ID
 	s.hub.add(userID, client)
 	defer s.hub.remove(userID, client)
+	s.metrics.IncWebSocketConnections()
+	defer s.metrics.DecWebSocketConnections()
 
 	readDone := make(chan struct{})
 	go func() {

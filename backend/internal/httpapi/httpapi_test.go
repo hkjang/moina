@@ -72,6 +72,22 @@ func TestValidateAIEnforces256KCeiling(t *testing.T) {
 	}
 }
 
+func TestOutboundSettingsRequireExactAllowedHost(t *testing.T) {
+	ai := model.AIConfig{Enabled: true, BaseURL: "https://ai.internal/v1", AllowedHosts: []string{"other.internal"}, Model: "local-model", APIStyle: "responses", DefaultMaxTokens: 4096, MaxTokens: 262144, TimeoutSeconds: 300}
+	if err := validateAI(&ai); err == nil {
+		t.Fatal("허용 목록 밖 AI 호스트를 허용했습니다")
+	}
+	oidc := defaultOIDC()
+	oidc.Enabled = true
+	oidc.IssuerURL = "https://keycloak.internal/realms/moina"
+	oidc.ClientID = "moina"
+	oidc.AllowedHosts = []string{"other.internal"}
+	normalizeOIDC(&oidc)
+	if err := validateOIDC(oidc, true); err == nil {
+		t.Fatal("허용 목록 밖 OIDC 호스트를 허용했습니다")
+	}
+}
+
 func TestWorkflowDisabledSkipsApproval(t *testing.T) {
 	if workflowMatches(model.WorkflowConfig{Enabled: false, Actions: []string{"*"}}, "post.publish") {
 		t.Fatal("비활성 승인 정책이 작업을 가로챘습니다")

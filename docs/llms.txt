@@ -11,10 +11,23 @@
 
 ## 핵심 사실
 
-- 현재 버전: v0.1.0
-- 서비스 이미지: moina:v0.1.0
-- 오프라인 파일: moina-v0.1.0.tar.gz
+- 현재 버전: v0.1.1
+- 서비스 이미지: moina:v0.1.1
+- 오프라인 파일: moina-v0.1.1.tar.gz
 - 기술: Go, React, TypeScript, PostgreSQL, REST, SSE, WebSocket, MCP
 - 런타임 환경변수: MOINA_POSTGRES_DSN, MOINA_BOOTSTRAP_ADMIN, MOINA_BOOTSTRAP_ADMIN_PASSWORD, MOINA_ENCRYPTION_KEY
 - Keycloak/OIDC, AI, 승인, 권한은 관리자 화면에서 설정한다.
+- OIDC와 AI는 exact-authority allowedHosts를 사용한다. port 없는 항목은 scheme 기본 port만 허용하며 비기본 port는 host:port가 필요하다.
+- RFC1918/ULA를 쓰는 내부 endpoint는 정확한 DNS hostname을 privateAllowedHosts에도 등록한다. loopback, link-local, metadata, CGNAT, unspecified, multicast는 항상 차단한다.
+- Flow는 고정 SQL batch hydration과 versioned Base64 URL keyset cursor를 사용한다. For Me는 최근 후보 최대 200개의 개인화 설정과 score component를 동결한다.
+- 동일 사용자·랭킹 버전·설정 snapshot은 30초 bucket에서 재사용하고 사용자당 활성 최대 3개다. 시간 만료는 1시간이지만 반복 refresh로 조기 eviction될 수 있다.
+- 같은 사용자의 For Me snapshot 생성이 겹치면 HTTP 429, feed_snapshot_busy, Retry-After: 1을 반환한다.
+- 검색은 PostgreSQL pg_trgm과 전문 검색을 결합하며 외부 검색 서비스가 필요 없다.
+- Transactional Outbox 실패 이벤트 조회는 audit:read, 재처리는 outbox:manage 권한을 사용한다.
+- Prometheus 운영 지표는 /metrics에서 제공하고 미디어는 PostgreSQL Large Object로 streaming한다. GET /api/v1/media/config는 현재 maxUploadBytes, maxPerPost, acceptedTypes를 제공한다.
+- 사용자별 미첨부 media quota는 100개·512 MiB다. 동시 Large Object read는 최대 8개이며 작은 pool에서는 일반 API 연결 5개를 남긴다. Cleaner는 인스턴스당 한 시간에 최대 10,000개를 drain한다.
+- 알림은 LISTEN backpressure, slow socket 재연결과 client의 60초 REST unread reconcile을 사용한다.
+- Migration은 최대 30분 실행되며 그동안 readiness가 성공하지 않는다.
+- DB에 binary가 모르는 migration version이 있으면 downgrade guard가 기동을 거부한다.
+- v0.1.0의 사설 OIDC·AI 사용자는 업그레이드 후 로컬 bootstrap admin으로 privateAllowedHosts를 명시 저장해야 한다. 자동 사설 허용은 없다.
 - 브라우저와 컨테이너 런타임은 외부 CDN이나 package repository에 의존하지 않는다.

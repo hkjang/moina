@@ -25,3 +25,22 @@ func TestInitialMigrationContainsSecurityAndDomainInvariants(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchCursorMigrationContainsOfflineIndexesAndMediaAlt(t *testing.T) {
+	body, err := migrationFiles.ReadFile("migrations/002_search_cursor.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql := string(body)
+	required := []string{
+		"CREATE EXTENSION IF NOT EXISTS pg_trgm",
+		"users_username_trgm_idx", "topics_slug_trgm_idx", "posts_content_trgm_idx",
+		"posts_published_cursor_idx", "published_at DESC, id DESC",
+		"ADD COLUMN IF NOT EXISTS alt_text", "char_length(alt_text) <= 500",
+	}
+	for _, fragment := range required {
+		if !strings.Contains(sql, fragment) {
+			t.Errorf("002 migration invariant missing: %s", fragment)
+		}
+	}
+}

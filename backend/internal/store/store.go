@@ -3,12 +3,10 @@ package store
 import (
 	"context"
 	"crypto/x509"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -18,9 +16,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-//go:embed migrations/*.sql
-var migrationFiles embed.FS
 
 var (
 	ErrNotFound = pgx.ErrNoRows
@@ -35,10 +30,17 @@ const (
 )
 
 func Open(ctx context.Context, dsn string) (*Store, error) {
+	return OpenWithTracer(ctx, dsn, nil)
+}
+
+// OpenWithTracer allows the process-wide observability registry to count every
+// pgx Query/QueryRow/Exec without coupling Store to a metrics implementation.
+func OpenWithTracer(ctx context.Context, dsn string, tracer pgx.QueryTracer) (*Store, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("PostgreSQL DSN 해석 실패: %w", err)
 	}
+	cfg.ConnConfig.Tracer = tracer
 	if err := addPrivateCAToPostgres(cfg); err != nil {
 		return nil, err
 	}
@@ -54,7 +56,12 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		pool.Close()
 		return nil, err
 	}
-	if err := s.migrate(ctx); err != nil {
+	// Connection establishment keeps the caller's short startup deadline, while
+	// offline upgrades may need substantially longer to build search indexes on
+	// existing data. Do not inherit an already-near-expired connection deadline.
+	migrationContext, cancelMigration := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Minute)
+	defer cancelMigration()
+	if err := s.migrate(migrationContext); err != nil {
 		pool.Close()
 		return nil, err
 	}
@@ -102,48 +109,6 @@ func addPrivateCAToPostgres(cfg *pgxpool.Config) error {
 func (s *Store) Pool() *pgxpool.Pool            { return s.pool }
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 func (s *Store) Close()                         { s.pool.Close() }
-
-func (s *Store) migrate(ctx context.Context) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1297042026)`); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations(version text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
-		return err
-	}
-	entries, err := migrationFiles.ReadDir("migrations")
-	if err != nil {
-		return err
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
-			continue
-		}
-		var applied bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=$1)`, entry.Name()).Scan(&applied); err != nil {
-			return err
-		}
-		if applied {
-			continue
-		}
-		body, err := migrationFiles.ReadFile("migrations/" + entry.Name())
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, string(body), pgx.QueryExecModeSimpleProtocol); err != nil {
-			return fmt.Errorf("migration %s: %w", entry.Name(), err)
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES($1)`, entry.Name()); err != nil {
-			return err
-		}
-	}
-	return tx.Commit(ctx)
-}
 
 const userColumns = `id,username,display_name,email,bio,avatar_id,account_type,provider,roles,active,created_at,updated_at`
 

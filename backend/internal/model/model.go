@@ -70,31 +70,35 @@ type SettingRecord struct {
 }
 
 type OIDCConfig struct {
-	Enabled           bool                `json:"enabled"`
-	IssuerURL         string              `json:"issuerUrl"`
-	ClientID          string              `json:"clientId"`
-	ClientSecret      string              `json:"clientSecret,omitempty"`
-	ClearClientSecret bool                `json:"clearClientSecret,omitempty"`
-	RedirectURL       string              `json:"redirectUrl,omitempty"`
-	Scopes            []string            `json:"scopes"`
-	AutoProvision     bool                `json:"autoProvision"`
-	DefaultRoles      []string            `json:"defaultRoles"`
-	RoleClaim         string              `json:"roleClaim,omitempty"`
-	RoleMappings      map[string][]string `json:"roleMappings,omitempty"`
-	AllowInsecureHTTP bool                `json:"allowInsecureHttp,omitempty"`
+	Enabled             bool                `json:"enabled"`
+	IssuerURL           string              `json:"issuerUrl"`
+	ClientID            string              `json:"clientId"`
+	ClientSecret        string              `json:"clientSecret,omitempty"`
+	ClearClientSecret   bool                `json:"clearClientSecret,omitempty"`
+	RedirectURL         string              `json:"redirectUrl,omitempty"`
+	Scopes              []string            `json:"scopes"`
+	AutoProvision       bool                `json:"autoProvision"`
+	DefaultRoles        []string            `json:"defaultRoles"`
+	RoleClaim           string              `json:"roleClaim,omitempty"`
+	RoleMappings        map[string][]string `json:"roleMappings,omitempty"`
+	AllowedHosts        []string            `json:"allowedHosts,omitempty"`
+	PrivateAllowedHosts []string            `json:"privateAllowedHosts,omitempty"`
+	AllowInsecureHTTP   bool                `json:"allowInsecureHttp,omitempty"`
 }
 
 type AIConfig struct {
-	Enabled           bool   `json:"enabled"`
-	BaseURL           string `json:"baseUrl"`
-	APIKey            string `json:"apiKey,omitempty"`
-	ClearAPIKey       bool   `json:"clearApiKey,omitempty"`
-	Model             string `json:"model"`
-	APIStyle          string `json:"apiStyle"`
-	DefaultMaxTokens  int    `json:"defaultMaxTokens"`
-	MaxTokens         int    `json:"maxTokens"`
-	TimeoutSeconds    int    `json:"timeoutSeconds"`
-	AllowInsecureHTTP bool   `json:"allowInsecureHttp,omitempty"`
+	Enabled             bool     `json:"enabled"`
+	BaseURL             string   `json:"baseUrl"`
+	APIKey              string   `json:"apiKey,omitempty"`
+	ClearAPIKey         bool     `json:"clearApiKey,omitempty"`
+	Model               string   `json:"model"`
+	APIStyle            string   `json:"apiStyle"`
+	DefaultMaxTokens    int      `json:"defaultMaxTokens"`
+	MaxTokens           int      `json:"maxTokens"`
+	TimeoutSeconds      int      `json:"timeoutSeconds"`
+	AllowedHosts        []string `json:"allowedHosts,omitempty"`
+	PrivateAllowedHosts []string `json:"privateAllowedHosts,omitempty"`
+	AllowInsecureHTTP   bool     `json:"allowInsecureHttp,omitempty"`
 }
 
 type WorkflowConfig struct {
@@ -141,6 +145,7 @@ type Media struct {
 	ID        string    `json:"id"`
 	OwnerID   string    `json:"ownerId,omitempty"`
 	Filename  string    `json:"filename"`
+	AltText   string    `json:"altText,omitempty"`
 	MIMEType  string    `json:"mimeType"`
 	Type      string    `json:"type"`
 	URL       string    `json:"url"`

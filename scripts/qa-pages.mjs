@@ -75,6 +75,9 @@ for (const page of pages) {
   if (!/^<!doctype html>/i.test(source.trimStart())) fail(`${page.file}: HTML5 doctype이 없습니다.`);
   if (!/<html\b[^>]*\blang="ko"/i.test(source)) fail(`${page.file}: lang=ko가 없습니다.`);
   if (!/<meta\b[^>]*name="viewport"[^>]*width=device-width/i.test(source)) fail(`${page.file}: 반응형 viewport가 없습니다.`);
+  if (!/<meta\b[^>]*name="theme-color"[^>]*content="#5b4ce8"/i.test(source)) fail(`${page.file}: 브랜드 theme-color가 없습니다.`);
+  if (!/<meta\b[^>]*name="application-name"[^>]*content="MOINA"/i.test(source)) fail(`${page.file}: application-name이 없습니다.`);
+  if (!/<meta\b[^>]*name="apple-mobile-web-app-capable"[^>]*content="yes"/i.test(source)) fail(`${page.file}: Apple mobile web app 메타가 없습니다.`);
   if (!/<main\b/i.test(source)) fail(`${page.file}: main이 없습니다.`);
   if (matches(source, /<h1\b/gi).length !== 1) fail(`${page.file}: h1은 정확히 하나여야 합니다.`);
 
@@ -87,6 +90,10 @@ for (const page of pages) {
   if (!canonicalTag || attribute(canonicalTag, 'href') !== page.canonical) fail(`${page.file}: canonical이 올바르지 않습니다.`);
   const faviconTag = matches(source, /<link\b[^>]*rel="icon"[^>]*>/gi)[0]?.[0];
   if (!faviconTag || attribute(faviconTag, 'href') !== 'assets/favicon.svg' || attribute(faviconTag, 'type') !== 'image/svg+xml') fail(`${page.file}: 브랜드 SVG favicon 연결이 올바르지 않습니다.`);
+  const appleIconTag = matches(source, /<link\b[^>]*rel="apple-touch-icon"[^>]*>/gi)[0]?.[0];
+  if (!appleIconTag || attribute(appleIconTag, 'href') !== 'assets/icon-192.png' || attribute(appleIconTag, 'sizes') !== '192x192') fail(`${page.file}: Apple touch icon 연결이 올바르지 않습니다.`);
+  const manifestTag = matches(source, /<link\b[^>]*rel="manifest"[^>]*>/gi)[0]?.[0];
+  if (!manifestTag || attribute(manifestTag, 'href') !== 'manifest.webmanifest') fail(`${page.file}: web manifest 연결이 올바르지 않습니다.`);
   if (!/<img\b[^>]*src="assets\/logo\.svg"[^>]*alt="MOINA"/i.test(source)) fail(`${page.file}: MOINA wordmark 연결 또는 대체 텍스트가 없습니다.`);
   for (const property of ['og:title', 'og:description', 'og:url', 'og:image', 'og:image:width', 'og:image:height', 'og:image:alt']) {
     if (!new RegExp(`<meta\\b[^>]*property="${property.replace(':', '\\:')}"`, 'i').test(source)) fail(`${page.file}: ${property}가 없습니다.`);
@@ -160,6 +167,9 @@ try {
 
 try {
   const webManifest = JSON.parse(await readFile(path.join(docs, 'manifest.webmanifest'), 'utf8'));
+  if (webManifest.name !== 'MOINA — AI Social Knowledge Network' || webManifest.short_name !== 'MOINA' || webManifest.lang !== 'ko-KR') fail('manifest.webmanifest 브랜드 이름·언어가 올바르지 않습니다.');
+  if (webManifest.id !== './' || webManifest.start_url !== './' || webManifest.scope !== './') fail('manifest.webmanifest의 Pages 상대 경로 범위가 올바르지 않습니다.');
+  if (webManifest.theme_color !== '#5b4ce8' || webManifest.background_color !== '#f7f8fc') fail('manifest.webmanifest 브랜드 색상이 올바르지 않습니다.');
   const icons = Array.isArray(webManifest.icons) ? webManifest.icons : [];
   for (const size of [192, 512]) {
     const source = `assets/icon-${size}.png`;

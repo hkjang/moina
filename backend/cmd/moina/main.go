@@ -16,6 +16,7 @@ import (
 
 	"github.com/hkjang/moina/backend/internal/config"
 	"github.com/hkjang/moina/backend/internal/httpapi"
+	"github.com/hkjang/moina/backend/internal/observability"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
 	"golang.org/x/crypto/bcrypt"
@@ -30,6 +31,7 @@ const (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		if err := healthcheck(); err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, err)
@@ -48,8 +50,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	metrics := observability.NewRegistry()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	repo, err := store.Open(ctx, cfg.PostgresDSN)
+	repo, err := store.OpenWithTracer(ctx, cfg.PostgresDSN, observability.PGXTracer{Registry: metrics})
 	cancel()
 	if err != nil {
 		return fmt.Errorf("PostgreSQL 초기화 실패: %w", err)
@@ -70,11 +73,16 @@ func run() error {
 		return err
 	}
 	api := httpapi.New(repo, secrets, version)
+	api.SetObservability(metrics)
 	client, err := outboundHTTPClient()
 	if err != nil {
 		return err
 	}
 	api.SetHTTPClient(client)
+	runtimeContext, stopRuntime := context.WithCancel(context.Background())
+	defer stopRuntime()
+	backgroundErrors := make(chan error, 1)
+	go func() { backgroundErrors <- api.RunBackground(runtimeContext) }()
 
 	server := &http.Server{
 		Addr:              listenAddress,
@@ -92,18 +100,38 @@ func run() error {
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	backgroundFinished := false
+	var triggerErr error
 	select {
 	case received := <-signals:
 		slog.Info("종료 신호 수신", "signal", received.String())
 	case serveErr := <-serverErrors:
 		if !errors.Is(serveErr, http.ErrServerClosed) {
-			return serveErr
+			triggerErr = serveErr
 		}
-		return nil
+	case backgroundErr := <-backgroundErrors:
+		backgroundFinished = true
+		if backgroundErr != nil {
+			triggerErr = fmt.Errorf("백그라운드 서비스 종료: %w", backgroundErr)
+		} else {
+			triggerErr = errors.New("백그라운드 서비스가 예기치 않게 종료되었습니다")
+		}
 	}
+	stopRuntime()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer shutdownCancel()
-	return server.Shutdown(shutdownCtx)
+	shutdownErr := server.Shutdown(shutdownCtx)
+	if !backgroundFinished {
+		select {
+		case backgroundErr := <-backgroundErrors:
+			if backgroundErr != nil && !errors.Is(backgroundErr, context.Canceled) {
+				triggerErr = errors.Join(triggerErr, backgroundErr)
+			}
+		case <-shutdownCtx.Done():
+			triggerErr = errors.Join(triggerErr, errors.New("백그라운드 서비스 종료 시간 초과"))
+		}
+	}
+	return errors.Join(triggerErr, shutdownErr)
 }
 
 func outboundHTTPClient() (*http.Client, error) {

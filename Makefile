@@ -62,6 +62,17 @@ offline-down: ## 데이터 삭제 없이 서비스를 중지합니다.
 
 pages-test: ## 정적 홍보·가이드 페이지를 브라우저로 검사합니다.
 	npm ci --prefix e2e
+	@set -Eeuo pipefail; \
+	log="$$(mktemp)"; \
+	npm --prefix e2e run serve:pages >"$$log" 2>&1 & \
+	server_pid=$$!; \
+	cleanup() { kill "$$server_pid" >/dev/null 2>&1 || true; rm -f -- "$$log"; }; \
+	trap cleanup EXIT; \
+	for attempt in $$(seq 1 30); do \
+		if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then break; fi; \
+		if [ "$$attempt" -eq 30 ]; then cat "$$log"; exit 1; fi; \
+		sleep 1; \
+	done; \
 	npm --prefix e2e run test:pages
 
 clean: ## 생성 산출물을 삭제합니다.

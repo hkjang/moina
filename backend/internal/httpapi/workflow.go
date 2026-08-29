@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -156,31 +157,43 @@ func (s *Server) reviewApproval(w http.ResponseWriter, r *http.Request, approved
 		writeError(w, http.StatusConflict, "target_changed", "승인 대상 Moin 상태가 변경되어 결정을 적용하지 않았습니다")
 		return
 	}
+	if err := s.enqueueNotification(r.Context(), tx, item.RequesterID, p.User.ID, eventType, item.TargetID,
+		map[string]string{"postId": item.TargetID, "body": input.Comment},
+		fmt.Sprintf("notification:approval:%s:%s:%s", item.ID, status, item.RequesterID)); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "승인 결과를 적용할 수 없습니다")
+		return
+	}
+	if approved {
+		var authorID, content, kind, relatedAuthorID string
+		err = tx.QueryRow(r.Context(), `SELECT p.author_id,p.content,p.kind,COALESCE(related.author_id,'')
+			FROM posts p LEFT JOIN posts related ON related.id=COALESCE(p.reply_to_id,p.quote_post_id,p.remoin_post_id)
+			WHERE p.id=$1`, item.TargetID).Scan(&authorID, &content, &kind, &relatedAuthorID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "승인 대상 Moin을 불러올 수 없습니다")
+			return
+		}
+		if err := s.enqueueMentionNotifications(r.Context(), tx, authorID, item.TargetID, content); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "승인 알림을 저장할 수 없습니다")
+			return
+		}
+		if relatedAuthorID != "" && relatedAuthorID != authorID {
+			notificationType := "reply"
+			if kind == "quote" {
+				notificationType = "quote"
+			} else if kind == "remoin" {
+				notificationType = "remoin"
+			}
+			if err := s.enqueueNotification(r.Context(), tx, relatedAuthorID, authorID, notificationType, item.TargetID,
+				map[string]string{"postId": item.TargetID}, fmt.Sprintf("notification:post:%s:%s:%s", item.TargetID, notificationType, relatedAuthorID)); err != nil {
+				writeError(w, http.StatusInternalServerError, "storage_error", "승인 알림을 저장할 수 없습니다")
+				return
+			}
+		}
+	}
 	if tx.Commit(r.Context()) != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "승인 결과를 적용할 수 없습니다")
 		return
 	}
-	s.notify(r.Context(), item.RequesterID, p.User.ID, eventType, item.TargetID, map[string]string{"postId": item.TargetID, "body": input.Comment})
-	if approved {
-		var authorID, content string
-		if s.repo.Pool().QueryRow(r.Context(), `SELECT author_id,content FROM posts WHERE id=$1`, item.TargetID).Scan(&authorID, &content) == nil {
-			s.notifyMentions(r.Context(), authorID, item.TargetID, content)
-		}
-	}
 	s.audit(r, "approval."+status, "approval", item.ID, true, map[string]string{"targetId": item.TargetID, "comment": input.Comment})
 	writeData(w, http.StatusOK, map[string]any{"id": item.ID, "status": status, "targetId": item.TargetID, "reviewedAt": time.Now().UTC()})
-}
-
-func (s *Server) notifyApprovers(r *http.Request, approvalID, postID string, roles []string) {
-	rows, err := s.repo.Pool().Query(r.Context(), `SELECT id FROM users WHERE active AND roles && $1::text[]`, roles)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var userID string
-		if rows.Scan(&userID) == nil {
-			s.notify(r.Context(), userID, getPrincipal(r).User.ID, "approval_requested", approvalID, map[string]string{"postId": postID, "approvalId": approvalID})
-		}
-	}
 }

@@ -7,7 +7,7 @@ export interface SessionUser {
   email?: string;
   bio?: string;
   avatarUrl?: string;
-  provider?: 'local' | 'oidc' | string;
+  provider?: "local" | "oidc" | string;
   roles: string[];
   permissions: Permission[];
 }
@@ -15,7 +15,13 @@ export interface SessionUser {
 export interface PublicConfig {
   serviceName?: string;
   version?: string;
-  oidc?: { enabled?: boolean; label?: string; providerName?: string; allowRegistration?: boolean; registrationEnabled?: boolean };
+  oidc?: {
+    enabled?: boolean;
+    label?: string;
+    providerName?: string;
+    allowRegistration?: boolean;
+    registrationEnabled?: boolean;
+  };
   features?: Record<string, boolean>;
 }
 
@@ -43,24 +49,35 @@ export interface Profile {
   moinCount?: number;
   followed?: boolean;
   blocked?: boolean;
-  accountType?: 'human' | 'agent';
+  accountType?: "human" | "agent";
 }
 
-export type SignalType = 'like' | 'useful' | 'insight' | 'question' | 'verify';
+export type SignalType = "like" | "useful" | "insight" | "question" | "verify";
 
 export interface Moin {
   id: string;
   content: string;
-  kind?: 'moin' | 'echo' | 'quote' | 'remoin';
+  kind?: "moin" | "echo" | "quote" | "remoin";
   author: Profile;
   createdAt: string;
   updatedAt?: string;
-  visibility?: 'public' | 'followers' | 'moim';
+  visibility?: "public" | "followers" | "moim";
+  status?: "published" | "pending_approval" | "rejected" | "deleted";
   topics?: Topic[];
-  media?: Array<{ id: string; type: 'image' | 'video'; url: string; alt?: string }>;
+  media?: Array<{
+    id: string;
+    type: "image" | "video";
+    url: string;
+    alt?: string;
+  }>;
   replyToId?: string;
   quoteMoin?: Moin;
-  counts?: { echoes?: number; remoins?: number; bookmarks?: number; signals?: Partial<Record<SignalType, number>> };
+  counts?: {
+    echoes?: number;
+    remoins?: number;
+    bookmarks?: number;
+    signals?: Partial<Record<SignalType, number>>;
+  };
   viewer?: { bookmarked?: boolean; remoined?: boolean; signals?: SignalType[] };
   recommendation?: Array<{ label: string; score: number }>;
 }
@@ -73,7 +90,7 @@ export interface CursorPage<T> {
 
 export interface NotificationItem {
   id: string;
-  type: 'follow' | 'signal' | 'echo' | 'remoin' | 'mention' | 'system' | string;
+  type: "follow" | "signal" | "echo" | "remoin" | "mention" | "system" | string;
   title: string;
   body?: string;
   actor?: Profile;
@@ -96,9 +113,26 @@ export interface Moim {
 }
 
 export interface UserPreferences {
-  appearance?: { theme?: 'light' | 'dark' | 'system'; fontScale?: 100 | 112 | 125; reduceMotion?: boolean; density?: 'comfortable' | 'compact' };
-  feed?: { topicWeight?: number; linkWeight?: number; discoveryWeight?: number; recencyWeight?: number; excludedTopics?: string[]; showReasons?: boolean };
-  notifications?: { desktop?: boolean; mentions?: boolean; signals?: boolean; follows?: boolean };
+  appearance?: {
+    theme?: "light" | "dark" | "system";
+    fontScale?: 100 | 112 | 125;
+    reduceMotion?: boolean;
+    density?: "comfortable" | "compact";
+  };
+  feed?: {
+    topicWeight?: number;
+    linkWeight?: number;
+    discoveryWeight?: number;
+    recencyWeight?: number;
+    excludedTopics?: string[];
+    showReasons?: boolean;
+  };
+  notifications?: {
+    desktop?: boolean;
+    mentions?: boolean;
+    signals?: boolean;
+    follows?: boolean;
+  };
 }
 
 export interface PersonalKey {

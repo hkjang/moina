@@ -21,8 +21,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/hkjang/moina/backend/internal/event"
+	mediastore "github.com/hkjang/moina/backend/internal/media"
 	"github.com/hkjang/moina/backend/internal/model"
+	"github.com/hkjang/moina/backend/internal/observability"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
 )
@@ -57,15 +59,23 @@ type Server struct {
 	startedAt time.Time
 	client    *http.Client
 	hub       *notificationHub
+	metrics   *observability.Registry
+	outbox    *event.Repository
+	media     mediastore.MediaStore
 	rateMu    sync.Mutex
 	rates     map[string]*attempt
 }
 
 func New(repo *store.Store, secrets *secure.Manager, version string) *Server {
-	return &Server{
+	server := &Server{
 		repo: repo, secrets: secrets, version: version, startedAt: time.Now().UTC(),
-		client: &http.Client{}, hub: newNotificationHub(), rates: make(map[string]*attempt),
+		client: &http.Client{}, hub: newNotificationHub(), metrics: observability.NewRegistry(), rates: make(map[string]*attempt),
 	}
+	if repo != nil {
+		server.outbox = event.NewRepository(repo.Pool())
+		server.media = mediastore.NewPostgreSQLStore(repo.Pool(), 0)
+	}
+	return server
 }
 
 // SetHTTPClient installs the client used for OIDC discovery and AI provider
@@ -76,13 +86,23 @@ func (s *Server) SetHTTPClient(client *http.Client) {
 	}
 }
 
+// SetObservability installs the process-wide registry also used by the pgx
+// tracer. New supplies a private registry so tests and embedded callers remain
+// safe when this method is not called.
+func (s *Server) SetObservability(registry *observability.Registry) {
+	if registry != nil {
+		s.metrics = registry
+	}
+}
+
 func (s *Server) Handler() http.Handler {
 	router := chi.NewRouter()
-	router.Use(middleware.RequestID, s.recoverJSON, s.securityHeaders, s.verifyOrigin)
+	router.Use(observability.HTTPMiddleware(slog.Default()), s.recoverJSON, s.securityHeaders, s.verifyOrigin)
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeData(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	router.Get("/readyz", s.ready)
+	router.Get("/metrics", s.metricsEndpoint)
 	router.Route("/api/v1", func(api chi.Router) {
 		api.Get("/version", s.versionInfo)
 		api.Post("/auth/login", s.login)
@@ -95,7 +115,7 @@ func (s *Server) Handler() http.Handler {
 			auth.Get("/auth/me", s.me)
 			auth.Post("/auth/logout", s.logout)
 
-			auth.With(s.requirePermission("posts:read")).Get("/feed", s.feed)
+			auth.With(s.requirePermission("posts:read"), s.metrics.FlowMiddleware).Get("/feed", s.feed)
 			auth.With(s.requirePermission("posts:read")).Get("/posts", s.listPosts)
 			auth.With(s.requirePermission("posts:write")).Post("/posts", s.createPost)
 			auth.With(s.requirePermission("posts:read")).Get("/posts/{postID}", s.getPost)
@@ -133,7 +153,7 @@ func (s *Server) Handler() http.Handler {
 			auth.With(s.requirePermission("posts:read")).Get("/topics/{slug}", s.getTopic)
 			auth.With(s.requirePermission("social:write")).Post("/topics/{slug}/follow", s.followTopic)
 			auth.With(s.requirePermission("social:write")).Delete("/topics/{slug}/follow", s.unfollowTopic)
-			auth.With(s.requirePermission("posts:read")).Get("/search", s.search)
+			auth.With(s.requirePermission("posts:read"), s.metrics.SearchMiddleware).Get("/search", s.search)
 
 			auth.With(s.requireBrowserSession).Get("/notifications", s.listNotifications)
 			auth.With(s.requireBrowserSession).Post("/notifications/read", s.readNotifications)
@@ -148,6 +168,7 @@ func (s *Server) Handler() http.Handler {
 			auth.With(s.requirePermission("social:write")).Delete("/moims/{slug}/members", s.leaveMoim)
 
 			auth.With(s.requirePermission("posts:write")).Post("/media", s.uploadMedia)
+			auth.With(s.requirePermission("posts:write")).Get("/media/config", s.mediaConfigStatus)
 			auth.With(s.requirePermission("posts:read")).Get("/media/{mediaID}", s.getMedia)
 			auth.With(s.requirePermission("social:write")).Post("/reports", s.createReport)
 
@@ -162,7 +183,7 @@ func (s *Server) Handler() http.Handler {
 			auth.With(s.requirePermission("mcp:use")).Method(http.MethodGet, "/mcp", s.mcpHandler())
 
 			// Brand-language aliases remain intentionally thin and share handlers.
-			auth.With(s.requirePermission("posts:read")).Get("/flows/{mode}", s.feedAlias)
+			auth.With(s.requirePermission("posts:read"), s.metrics.FlowMiddleware).Get("/flows/{mode}", s.feedAlias)
 			auth.With(s.requirePermission("posts:read")).Get("/moins", s.listPosts)
 			auth.With(s.requirePermission("posts:write")).Post("/moins", s.createPost)
 			auth.With(s.requirePermission("posts:read")).Get("/moins/{postID}", s.getPost)
@@ -197,6 +218,8 @@ func (s *Server) Handler() http.Handler {
 				admin.With(s.requirePermission("settings:manage")).Get("/workflow", s.adminGetWorkflow)
 				admin.With(s.requirePermission("settings:manage")).Put("/workflow", s.adminPutWorkflow)
 				admin.With(s.requirePermission("audit:read")).Get("/audit", s.adminListAudit)
+				admin.With(s.requirePermission("audit:read")).Get("/outbox", s.adminListOutbox)
+				admin.With(s.requirePermission("outbox:manage")).Post("/outbox/{eventID}/retry", s.adminRetryOutbox)
 				admin.With(s.requirePermission("keys:manage")).Get("/keys", s.adminListKeys)
 				admin.With(s.requirePermission("keys:manage")).Patch("/keys/{keyID}", s.adminUpdateKey)
 				admin.With(s.requirePermission("keys:manage")).Delete("/keys/{keyID}", s.adminRevokeKey)
@@ -226,9 +249,16 @@ func (s *Server) versionInfo(w http.ResponseWriter, _ *http.Request) {
 	writeData(w, http.StatusOK, map[string]any{"name": "moina", "service": "moina", "version": s.version, "startedAt": s.startedAt})
 }
 
+func (s *Server) metricsEndpoint(w http.ResponseWriter, r *http.Request) {
+	if s.repo != nil {
+		s.metrics.ObserveDBPool(s.repo.Pool().Stat())
+	}
+	s.metrics.ServeHTTP(w, r)
+}
+
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Request-ID", middleware.GetReqID(r.Context()))
+		w.Header().Set("X-Request-ID", observability.RequestID(r.Context()))
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
@@ -242,7 +272,7 @@ func (s *Server) recoverJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if value := recover(); value != nil {
-				slog.Error("HTTP panic 복구", "requestId", middleware.GetReqID(r.Context()), "panic", value, "stack", string(debug.Stack()))
+				observability.Logger(r.Context()).ErrorContext(r.Context(), "HTTP panic 복구", "panic", value, "stack", string(debug.Stack()))
 				writeError(w, http.StatusInternalServerError, "internal_error", "요청 처리 중 내부 오류가 발생했습니다")
 			}
 		}()

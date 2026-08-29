@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly archive="${1:-dist/moina-v0.1.0.tar.gz}"
-readonly expected_image="${2:-moina:v0.1.0}"
+readonly archive="${1:-dist/moina-v0.1.1.tar.gz}"
+readonly expected_image="${2:-moina:v0.1.1}"
 readonly checksum_file="${archive}.sha256"
 readonly expected_name="${expected_image%%:*}-${expected_image#*:}.tar.gz"
 
@@ -23,11 +23,14 @@ gzip -t "${archive}"
 readonly manifest="$(gzip -dc "${archive}" | tar -xOf - manifest.json)"
 jq -e --arg image "${expected_image}" '
   length == 1 and .[0].RepoTags == [$image] and
-  (.[0].Config | type == "string" and startswith("blobs/sha256/"))
+  (.[0].Config | type == "string" and (
+    test("^blobs/sha256/[0-9a-f]{64}$") or
+    test("^[0-9a-f]{64}\\.json$")
+  ))
 ' <<<"${manifest}" >/dev/null || { printf '오류: archive에는 정확히 %s 이미지 하나만 있어야 합니다.\n' "${expected_image}" >&2; exit 4; }
 
 readonly config_path="$(jq -er '.[0].Config' <<<"${manifest}")"
-[[ "${config_path}" =~ ^blobs/sha256/[0-9a-f]{64}$ ]] || { printf '오류: 잘못된 image config 경로입니다.\n' >&2; exit 4; }
+[[ "${config_path}" =~ ^blobs/sha256/[0-9a-f]{64}$ || "${config_path}" =~ ^[0-9a-f]{64}\.json$ ]] || { printf '오류: 잘못된 image config 경로입니다.\n' >&2; exit 4; }
 readonly config="$(gzip -dc "${archive}" | tar -xOf - "${config_path}")"
 readonly expected_version="${expected_image#*:}"
 jq -e --arg version "${expected_version}" --arg source "https://github.com/hkjang/moina" '

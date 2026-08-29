@@ -4,7 +4,7 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.0`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.1`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
 ## 주요 기능
 
@@ -18,6 +18,14 @@ MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관�
 - OpenAI-compatible AI streaming과 최대 262,144 output token 정책
 - REST API, MCP JSON-RPC, WebSocket 알림
 - 한국어 기본 UI, 16px 이상 본문, 반응형 레이아웃과 전용 메뉴 스크롤바
+- 최근 후보 200개, 동결 점수·설정과 사용자당 활성 3개를 적용한 최대 1시간 For Me ranking snapshot
+- `pg_trgm`·PostgreSQL 전문 검색을 결합한 한국어 부분·관련도 검색
+- Transactional Outbox, 지수 백오프·Dead Letter와 관리자 재처리
+- Prometheus `/metrics`, 요청 ID·구조화 로그, DB pool·Flow SQL 수·Outbox·WebSocket 관측
+- OIDC·AI 목적지 exact-authority allowlist, 명시적 사설 hostname 예외와 DNS/IP·redirect 재검증
+- PostgreSQL Large Object 스트리밍 미디어, 미첨부 100개·512 MiB quota와 인스턴스당 시간당 최대 10,000개 orphan drain
+- 페이지별 Flow cache·ID 병합, optimistic update와 route lazy loading
+- 알림 LISTEN backpressure, slow WebSocket 재연결과 60초 REST 정합성 보완
 
 ## 기술 구성
 
@@ -68,7 +76,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.0
+moina:v0.1.1
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -86,20 +94,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.0.tar.gz
-dist/moina-v0.1.0.tar.gz.sha256
+dist/moina-v0.1.1.tar.gz
+dist/moina-v0.1.1.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.0.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.1.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.0.tar.gz
-gzip -dc moina-v0.1.0.tar.gz | docker image load
-docker image inspect moina:v0.1.0
+sha256sum moina-v0.1.1.tar.gz
+gzip -dc moina-v0.1.1.tar.gz | docker image load
+docker image inspect moina:v0.1.1
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -120,7 +128,14 @@ docker compose --env-file .env \
 curl --fail http://127.0.0.1:8080/healthz
 curl --fail http://127.0.0.1:8080/readyz
 curl --fail http://127.0.0.1:8080/api/v1/version
+curl --fail http://127.0.0.1:8080/metrics
 ```
+
+시작 migration은 대규모 검색 index 생성을 고려해 최대 30분까지 실행되며 완료 전에는 readiness가 성공하지 않습니다. DB에 현재 binary가 모르는 migration version이 있으면 안전하지 않은 downgrade로 판단해 기동을 거부합니다.
+
+### v0.1.0에서 업그레이드할 때
+
+사설 Keycloak/OIDC 또는 AI endpoint를 사용했다면 기존 host를 자동으로 사설망 허용 대상으로 승격하지 않습니다. 업그레이드 전에 로컬 bootstrap 최고 관리자 로그인을 확인하고, 업그레이드 후 그 계정으로 각 endpoint의 정확한 DNS hostname을 `allowedHosts`와 `privateAllowedHosts`에 명시 저장한 뒤 연결 테스트를 수행해야 합니다. 이미 생성된 bootstrap 계정의 비밀번호는 환경변수 변경만으로 재설정되지 않습니다. 자세한 절차는 [오프라인 운영 가이드](docs/operations.md#v010-내부-oidcai-사용자의-필수-조치)를 따르세요.
 
 ## 문서
 
@@ -139,16 +154,16 @@ curl --fail http://127.0.0.1:8080/api/v1/version
 `VERSION`과 동일한 annotated tag를 `main`의 검증된 commit에 push하면 GitHub Actions가 다시 빌드·테스트하고 단일 오프라인 asset을 게시합니다.
 
 ```bash
-git tag -a v0.1.0 -m "moina v0.1.0"
+git tag -a v0.1.1 -m "moina v0.1.1"
 git push origin main
-git push origin v0.1.0
+git push origin v0.1.1
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.0
-file:  moina-v버전.tar.gz  예: moina-v0.1.0.tar.gz
+image: moina:v버전          예: moina:v0.1.1
+file:  moina-v버전.tar.gz  예: moina-v0.1.1.tar.gz
 ```
 
 ## 라이선스

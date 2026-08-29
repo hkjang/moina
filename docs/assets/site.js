@@ -27,6 +27,10 @@ if (gallery) {
       return response.json();
     })
     .then((manifest) => {
+      if (manifest.pending === true) {
+        gallery.innerHTML = '<p class="gallery-empty">v0.1.1 실제 화면은 최종 릴리스 후보 검증과 Playwright 재캡처 후 게시됩니다.</p>';
+        return;
+      }
       if (!Array.isArray(manifest.screenshots) || manifest.screenshots.length === 0) {
         gallery.innerHTML = '<p class="gallery-empty">실제 서비스 화면은 릴리스 검증 후 게시됩니다.</p>';
         return;

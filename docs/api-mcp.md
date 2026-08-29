@@ -27,16 +27,22 @@ Authorization: Bearer mk_...
 
 | 영역 | 대표 endpoint |
 | --- | --- |
-| 상태 | `GET /healthz`, `GET /readyz`, `GET /api/v1/version` |
+| 상태 | `GET /healthz`, `GET /readyz`, `GET /api/v1/version`, `GET /metrics` |
 | 인증 | `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`, OIDC start/callback |
 | Moin | `GET/POST /posts`, `GET /posts/{id}`, reaction, Echo, Remoin |
 | 관계 | Link/unlink, follower/following 목록 |
-| Flow | For Me/Following `limit`/`offset` pagination과 추천 이유 |
-| 발견 | search, topics, pulse, moims |
+| Flow | For Me/Following `limit`/opaque `cursor` 키셋 pagination과 추천 이유 |
+| 발견 | trigram·전문 검색, topics, pulse, moims |
 | 개인 | profile, preferences, sessions, API/MCP keys와 rotation |
-| 운영 | users, roles, settings, OIDC, AI, approvals, reports, audit |
+| 운영 | users, roles, settings, OIDC, AI, approvals, reports, audit와 Outbox 복구 |
 
-Collection은 `limit`과 숫자 `offset`을 사용하고 일부 응답은 다음 offset을 문자열 `nextCursor`로 제공합니다. 오류는 HTTP status와 함께 다음 형태를 사용합니다.
+Flow 이외의 관리 collection은 `limit`과 숫자 `offset`을 사용합니다. Flow 응답의 `nextCursor`는 versioned Base64 URL로 인코딩한 opaque 값이며 client가 해석하거나 변경해서는 안 됩니다. Following cursor는 게시 시각·ID를 보존합니다. For Me cursor는 기준 시각·점수·ID·랭킹 버전과 사용자별 server ranking snapshot ID를 포함합니다.
+
+For Me 첫 페이지는 필터를 통과한 최근 후보 최대 200개의 합계·component 점수와 당시 개인화 설정을 동결합니다. 동일 사용자·랭킹 버전·설정은 같은 30초 bucket에서 snapshot을 재사용합니다. 시간 만료는 한 시간이지만 사용자당 활성 snapshot이 최대 3개이므로 반복 refresh 시 이전 값이 조기 제거될 수 있습니다. 잘못된 cursor는 `invalid_cursor`, 정책 버전이 달라진 cursor는 `ranking_version_mismatch`, 만료되거나 제거된 snapshot은 `feed_snapshot_expired` 오류가 됩니다. 이 경우 client는 저장한 페이지와 cursor를 버리고 첫 페이지부터 다시 조회합니다.
+
+같은 사용자의 For Me 첫 페이지 생성이 이미 진행 중이면 서버는 lock을 기다려 요청을 쌓지 않고 HTTP `429`, `feed_snapshot_busy`와 `Retry-After: 1`을 반환합니다. Client는 header의 초만큼 기다린 뒤 **첫 페이지 요청만 한 번 다시 시도**하며 기존 cursor를 붙이지 않습니다.
+
+오류는 HTTP status와 함께 다음 형태를 사용합니다.
 
 ```json
 {
@@ -44,6 +50,45 @@ Collection은 `limit`과 숫자 `offset`을 사용하고 일부 응답은 다음
   "message": "이 작업을 수행할 권한이 없습니다."
 }
 ```
+
+### Moin 미디어와 대체 텍스트
+
+`POST /api/v1/media`의 multipart `file`은 이미지·MP4·WebM을 streaming 업로드하며 선택적인 `altText` 또는 `alt` text를 함께 받을 수 있습니다. Moin 작성 시 이미 업로드한 media ID와 최종 대체 텍스트를 함께 확정합니다.
+
+작성 client는 `posts:write` 권한으로 업로드 전에 현재 서버 계약을 조회합니다.
+
+```http
+GET /api/v1/media/config
+Authorization: Bearer mk_...
+```
+
+```json
+{
+  "data": {
+    "maxUploadBytes": 10485760,
+    "maxPerPost": 4,
+    "acceptedTypes": [
+      "image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm"
+    ]
+  }
+}
+```
+
+Client는 이 값을 파일 선택 UI와 사전 검사에 사용하되 업로드 API의 서버 검증을 최종 기준으로 삼습니다. 미사용 업로드 보존 시간인 `orphanTtlHours`는 관리자 전용 설정이므로 이 응답에 포함되지 않습니다.
+
+사용자별 미첨부 media는 최대 100개·512 MiB입니다. `POST /api/v1/media`가 HTTP `429`를 반환하면 응답 code는 `media_quota_exceeded`이며, 기존 업로드를 Moin·프로필에 연결하거나 orphan TTL 정리를 기다린 뒤 재시도합니다. 이 고정 quota는 `/media/config` 응답이나 관리자 변경 항목이 아닙니다.
+
+```json
+{
+  "content": "폐쇄망 운영 화면입니다.",
+  "mediaIds": ["media_01"],
+  "mediaAltTexts": {
+    "media_01": "MOINA 운영 대시보드에서 데이터베이스와 알림 상태가 정상으로 표시된 화면"
+  }
+}
+```
+
+`mediaAltTexts` key는 같은 요청의 `mediaIds`에 포함돼야 하고 각 값은 최대 500자입니다. 조회 응답의 각 `media` 항목은 `altText`를 제공합니다.
 
 ## AI SSE
 
@@ -60,15 +105,38 @@ Content-Type: application/json
 
 `maxTokens`는 1~262,144 범위이면서 관리자가 설정한 상한과 실제 model 상한 이하여야 합니다. Client disconnect는 upstream 요청 취소로 전달합니다. MOINA는 upstream의 SSE byte stream을 buffering 없이 전달하므로 event 형식은 선택한 API style과 공급자 계약을 따릅니다.
 
+OIDC와 AI 관리 설정의 `allowedHosts`에는 정확한 DNS 이름/IP 또는 `host:port`를 넣습니다. port 없는 값은 URL scheme의 기본 port(HTTPS 443, HTTP 80)에만 일치합니다. RFC1918/ULA로 해석되는 내부 DNS hostname은 같은 authority를 `allowedHosts`와 `privateAllowedHosts` 양쪽에 등록합니다. `privateAllowedHosts`에는 IP literal을 넣을 수 없고, loopback·link-local·cloud metadata·CGNAT·unspecified·multicast는 어떤 설정으로도 허용되지 않습니다.
+
+`v0.1.0`의 기존 사설 OIDC·AI 설정은 업그레이드 후 자동으로 `privateAllowedHosts`를 얻지 않습니다. 로컬 bootstrap 최고 관리자로 로그인해 각 hostname을 명시 저장하고 관리 API 연결 테스트를 통과시켜야 합니다. Bootstrap 환경변수의 비밀번호 변경은 이미 생성된 로컬 계정을 재설정하지 않습니다.
+
 ## WebSocket 알림
 
-브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 연결이 끊긴 동안의 알림은 재연결 후 `GET /api/v1/notifications`로 다시 조회합니다. `v0.1.0` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
+브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. `v0.1.1` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
+
+## 운영 API
+
+Prometheus collector는 `GET /metrics`에서 `text/plain; version=0.0.4`를 읽습니다. 이 endpoint는 사용자별 label이나 SQL문을 제공하지 않지만 외부 공개를 전제로 하지 않으므로 reverse proxy에서 운영 수집망으로 제한합니다. 모든 HTTP 응답의 `X-Request-ID`는 같은 요청의 구조화 log `request_id`와 일치합니다.
+
+재시도 한도를 넘은 Transactional Outbox 이벤트는 감사 권한이 있는 관리자가 조회합니다.
+
+```http
+GET /api/v1/admin/outbox?status=dead_letter&limit=100
+```
+
+응답 항목에는 event ID·type·aggregate ID, 처리용 JSON payload, 시도/최대 시도 수, 마지막 오류·시각과 Dead Letter 시각이 포함됩니다. 관리자 UI는 payload 원문을 렌더링하지 않지만 조회 API는 `admin:access`와 `audit:read` 권한으로 보호되므로 해당 권한을 최소 인원에게만 부여합니다. 원인을 해결한 뒤 `admin:access`와 별도 `outbox:manage` 권한이 있는 관리자가 다음 API로 시도 수와 lease를 초기화하고 즉시 재처리 대기 상태로 돌립니다.
+
+```http
+POST /api/v1/admin/outbox/{eventID}/retry
+X-CSRF-Token: ...
+```
+
+재처리는 감사 로그에 기록됩니다. 동일 event의 업무 효과는 idempotency key와 대상 notification ID로 중복을 방지합니다. 조사만 하는 역할에는 `audit:read`만, 실제 복구 역할에는 `outbox:manage`를 추가해 최소 권한을 유지합니다.
 
 ## MCP
 
 MCP Streamable HTTP 요청은 JSON-RPC 2.0과 Bearer key를 사용합니다.
 
-`v0.1.0`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
+`v0.1.1`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
 
 ```bash
 curl --fail --silent http://127.0.0.1:8080/mcp \

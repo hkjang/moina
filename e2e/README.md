@@ -4,7 +4,7 @@
 
 ## 애플리케이션 smoke
 
-먼저 `moina:v0.1.0`과 테스트 PostgreSQL을 시작한 뒤 실행합니다.
+먼저 `moina:v0.1.1`과 테스트 PostgreSQL을 시작한 뒤 실행합니다.
 
 ```bash
 npm ci --prefix e2e
@@ -12,7 +12,7 @@ npm --prefix e2e exec -- playwright install chromium
 MOINA_E2E_BASE_URL=http://127.0.0.1:18080 \
 MOINA_E2E_USERNAME=e2e-admin \
 MOINA_E2E_PASSWORD='test-password-12345' \
-MOINA_E2E_VERSION=v0.1.0 \
+MOINA_E2E_VERSION=v0.1.1 \
 npm test --prefix e2e
 ```
 
@@ -26,7 +26,7 @@ npm test --prefix e2e
 MOINA_CAPTURE_BASE_URL=http://127.0.0.1:18080 \
 MOINA_CAPTURE_USERNAME=capture-admin \
 MOINA_CAPTURE_PASSWORD='capture-password-12345' \
-MOINA_CAPTURE_VERSION=v0.1.0 \
+MOINA_CAPTURE_VERSION=v0.1.1 \
 npm --prefix e2e run capture:web
 ```
 

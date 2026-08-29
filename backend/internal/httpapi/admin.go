@@ -24,7 +24,7 @@ var roleNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{1,49}$`)
 var permissionCatalog = []string{
 	"admin:access", "users:manage", "posts:manage", "moderation:manage", "approvals:review",
 	"roles:manage", "settings:manage", "audit:read", "keys:manage", "posts:read", "posts:write",
-	"social:write", "ai:use", "mcp:use",
+	"social:write", "ai:use", "mcp:use", "outbox:manage",
 }
 
 func (s *Server) adminStats(w http.ResponseWriter, r *http.Request) {

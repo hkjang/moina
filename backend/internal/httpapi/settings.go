@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hkjang/moina/backend/internal/model"
+	"github.com/hkjang/moina/backend/internal/outbound"
 	"github.com/hkjang/moina/backend/internal/store"
 )
 
@@ -42,6 +44,7 @@ type apiAccessConfig struct {
 type mediaConfig struct {
 	MaxUploadBytes int64 `json:"maxUploadBytes"`
 	MaxPerPost     int   `json:"maxPerPost"`
+	OrphanTTLHours int   `json:"orphanTtlHours"`
 }
 
 func defaultGeneral() generalConfig {
@@ -52,7 +55,9 @@ func defaultAPIAccess() apiAccessConfig {
 	return apiAccessConfig{Enabled: true, MCPEnabled: true, RateLimitPerMinute: 120}
 }
 
-func defaultMedia() mediaConfig { return mediaConfig{MaxUploadBytes: 10 << 20, MaxPerPost: 4} }
+func defaultMedia() mediaConfig {
+	return mediaConfig{MaxUploadBytes: 10 << 20, MaxPerPost: 4, OrphanTTLHours: 24}
+}
 
 func defaultOIDC() model.OIDCConfig {
 	return model.OIDCConfig{Enabled: false, Scopes: []string{"openid", "profile", "email"}, AutoProvision: true, DefaultRoles: []string{model.RoleMember}, RoleClaim: "realm_access.roles", RoleMappings: map[string][]string{}}
@@ -67,7 +72,11 @@ func defaultWorkflow() model.WorkflowConfig {
 }
 
 func (s *Server) loadSetting(r *http.Request, key string, destination any) error {
-	record, err := s.repo.GetSetting(r.Context(), key)
+	return s.loadSettingContext(r.Context(), key, destination)
+}
+
+func (s *Server) loadSettingContext(ctx context.Context, key string, destination any) error {
+	record, err := s.repo.GetSetting(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -117,6 +126,7 @@ func (s *Server) aiConfig(r *http.Request) (model.AIConfig, error) {
 	if err := s.loadSetting(r, settingAI, &cfg); err != nil && !store.IsNotFound(err) {
 		return model.AIConfig{}, err
 	}
+	normalizeAI(&cfg)
 	return cfg, nil
 }
 
@@ -168,7 +178,7 @@ func validateAPI(cfg apiAccessConfig) error {
 }
 
 func validateMedia(cfg mediaConfig) error {
-	if cfg.MaxUploadBytes < 64*1024 || cfg.MaxUploadBytes > 50<<20 || cfg.MaxPerPost < 1 || cfg.MaxPerPost > 12 {
+	if cfg.MaxUploadBytes < 64*1024 || cfg.MaxUploadBytes > 50<<20 || cfg.MaxPerPost < 1 || cfg.MaxPerPost > 12 || cfg.OrphanTTLHours < 1 || cfg.OrphanTTLHours > 720 {
 		return errors.New("미디어 설정이 올바르지 않습니다")
 	}
 	return nil
@@ -244,7 +254,7 @@ func (s *Server) adminPutSetting(w http.ResponseWriter, r *http.Request) {
 		}
 		value, sensitive = cfg, false
 	case settingMedia:
-		var cfg mediaConfig
+		cfg := defaultMedia()
 		if strictUnmarshal(input.Value, &cfg) != nil || validateMedia(cfg) != nil {
 			writeError(w, http.StatusBadRequest, "invalid_value", "미디어 설정이 올바르지 않습니다")
 			return
@@ -285,7 +295,7 @@ func (s *Server) adminGetOIDC(w http.ResponseWriter, r *http.Request) {
 }
 
 func oidcView(cfg model.OIDCConfig) map[string]any {
-	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
+	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
 }
 
 func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
@@ -328,6 +338,13 @@ func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
 
 func normalizeOIDC(cfg *model.OIDCConfig) {
 	cfg.IssuerURL = strings.TrimRight(strings.TrimSpace(cfg.IssuerURL), "/")
+	cfg.AllowedHosts = outbound.EnsureEndpointHost(cfg.AllowedHosts, cfg.IssuerURL)
+	if normalized, err := outbound.NormalizeHosts(cfg.AllowedHosts); err == nil {
+		cfg.AllowedHosts = normalized
+	}
+	if normalized, err := outbound.NormalizePrivateHosts(cfg.PrivateAllowedHosts); err == nil {
+		cfg.PrivateAllowedHosts = normalized
+	}
 	cfg.ClientID = strings.TrimSpace(cfg.ClientID)
 	cfg.RedirectURL = strings.TrimSpace(cfg.RedirectURL)
 	if len(cfg.Scopes) == 0 {
@@ -355,6 +372,9 @@ func validateOIDC(cfg model.OIDCConfig, allowAutomaticRedirect bool) error {
 		return errors.New("활성화하려면 issuerUrl과 clientId가 필요합니다")
 	}
 	if err := validateServiceURL(cfg.IssuerURL, cfg.AllowInsecureHTTP); err != nil {
+		return fmt.Errorf("issuerUrl: %w", err)
+	}
+	if err := validateOutboundEndpoint(cfg.IssuerURL, cfg.AllowedHosts, cfg.PrivateAllowedHosts, cfg.AllowInsecureHTTP); err != nil {
 		return fmt.Errorf("issuerUrl: %w", err)
 	}
 	if cfg.RedirectURL != "" {
@@ -444,7 +464,47 @@ func (s *Server) adminGetAI(w http.ResponseWriter, r *http.Request) {
 }
 
 func aiView(cfg model.AIConfig) map[string]any {
-	return map[string]any{"enabled": cfg.Enabled, "baseUrl": cfg.BaseURL, "model": cfg.Model, "apiStyle": cfg.APIStyle, "defaultMaxTokens": cfg.DefaultMaxTokens, "maxTokens": cfg.MaxTokens, "timeoutSeconds": cfg.TimeoutSeconds, "allowInsecureHttp": cfg.AllowInsecureHTTP, "apiKeyConfigured": cfg.APIKey != ""}
+	return map[string]any{"enabled": cfg.Enabled, "baseUrl": cfg.BaseURL, "model": cfg.Model, "apiStyle": cfg.APIStyle, "defaultMaxTokens": cfg.DefaultMaxTokens, "maxTokens": cfg.MaxTokens, "timeoutSeconds": cfg.TimeoutSeconds, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "apiKeyConfigured": cfg.APIKey != ""}
+}
+
+func normalizeAI(cfg *model.AIConfig) {
+	cfg.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	cfg.AllowedHosts = outbound.EnsureEndpointHost(cfg.AllowedHosts, cfg.BaseURL)
+	if normalized, err := outbound.NormalizeHosts(cfg.AllowedHosts); err == nil {
+		cfg.AllowedHosts = normalized
+	}
+	if normalized, err := outbound.NormalizePrivateHosts(cfg.PrivateAllowedHosts); err == nil {
+		cfg.PrivateAllowedHosts = normalized
+	}
+}
+
+func validateOutboundEndpoint(raw string, hosts, privateHosts []string, allowHTTP bool) error {
+	normalized, err := outbound.NormalizeHosts(hosts)
+	if err != nil {
+		return err
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return errors.New("URL 형식이 올바르지 않습니다")
+	}
+	privateNormalized, err := outbound.NormalizePrivateHosts(privateHosts)
+	if err != nil {
+		return err
+	}
+	return (outbound.Policy{AllowedHosts: normalized, PrivateAllowedHosts: privateNormalized, AllowHTTP: allowHTTP}).ValidateURL(parsed)
+}
+
+func (s *Server) mediaConfigStatus(w http.ResponseWriter, r *http.Request) {
+	cfg, err := s.mediaSettings(r)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "settings_unavailable", "미디어 설정을 확인할 수 없습니다")
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{
+		"maxUploadBytes": cfg.MaxUploadBytes,
+		"maxPerPost":     cfg.MaxPerPost,
+		"acceptedTypes":  []string{"image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm"},
+	})
 }
 
 func (s *Server) adminPutAI(w http.ResponseWriter, r *http.Request) {

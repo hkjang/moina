@@ -1,0 +1,57 @@
+[
+  {
+    "id": "exact-username",
+    "description": "정확한 사용자명은 표시 이름의 부분 일치보다 우선한다",
+    "query": "hkjang",
+    "kind": "users",
+    "candidates": [
+      {"id": "user-exact", "text": "hkjang"},
+      {"id": "user-display", "text": "hkjang 기술 모임"}
+    ],
+    "expectedTopId": "user-exact"
+  },
+  {
+    "id": "topic-hashtag",
+    "description": "해시태그 검색은 같은 이름의 Topic을 우선한다",
+    "query": "#PostgreSQL",
+    "kind": "topics",
+    "candidates": [
+      {"id": "topic-postgresql", "text": "PostgreSQL"},
+      {"id": "topic-performance", "text": "Database Performance"}
+    ],
+    "expectedTopId": "topic-postgresql"
+  },
+  {
+    "id": "korean-typo-trigram",
+    "description": "한글 오탈자는 trigram 유사도로 관련 Topic을 찾는다",
+    "query": "쿠버네티쓰",
+    "kind": "topics",
+    "candidates": [
+      {"id": "topic-kubernetes", "text": "쿠버네티스"},
+      {"id": "topic-go", "text": "Go 언어"}
+    ],
+    "expectedTopId": "topic-kubernetes"
+  },
+  {
+    "id": "partial-topic",
+    "description": "부분어 검색은 대응하는 Topic을 찾는다",
+    "query": "포스트그레",
+    "kind": "topics",
+    "candidates": [
+      {"id": "topic-postgresql-ko", "text": "포스트그레스큐엘"},
+      {"id": "topic-opensearch", "text": "오픈서치"}
+    ],
+    "expectedTopId": "topic-postgresql-ko"
+  },
+  {
+    "id": "post-body-fts",
+    "description": "여러 단어 본문 검색은 FTS 일치 게시물을 우선한다",
+    "query": "오프라인 AI 운영",
+    "kind": "posts",
+    "candidates": [
+      {"id": "post-offline-ai", "text": "폐쇄망에서 오프라인 AI 모델을 안전하게 운영하는 방법"},
+      {"id": "post-general-ai", "text": "오늘의 AI 뉴스"}
+    ],
+    "expectedTopId": "post-offline-ai"
+  }
+]

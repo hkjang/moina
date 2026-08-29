@@ -2,7 +2,7 @@
 
 ## 선택
 
-MOINA `v0.1.0`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
+MOINA `v0.1.1`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
 
 ```text
 Browser (React, REST/SSE/WebSocket)
@@ -12,6 +12,7 @@ Browser (React, REST/SSE/WebSocket)
  auth  users  posts  social  feed
  topics  moims  search  notify  ai
  keys  mcp  moderation  approval
+ outbox worker  media  metrics
  settings  audit
  └───────────────┼────────────────┘
              PostgreSQL
@@ -34,29 +35,39 @@ Report ─targets→ User / Post / Moim
 Approval ─guards→ configured action snapshot
 ```
 
-ID는 CSPRNG로 만든 prefix 포함 opaque 문자열을 사용합니다. collection은 `limit`과 숫자 `offset`을 사용하며 일부 응답의 `nextCursor`도 다음 offset을 문자열로 표현합니다. timestamp는 PostgreSQL `timestamptz`와 UTC 시각을 사용하고 UI는 브라우저 locale로 표시합니다.
+ID는 CSPRNG로 만든 prefix 포함 opaque 문자열을 사용합니다. 일반 관리 collection은 `limit`과 숫자 `offset`을 유지하지만 Flow는 버전형 Base64 URL 키셋 `cursor`를 사용합니다. Following은 `(published_at, id)`, For Me는 `(asOf, score, id, rankingVersion, snapshotID)`를 보존합니다. timestamp는 PostgreSQL `timestamptz`와 UTC 시각을 사용하고 UI는 브라우저 locale로 표시합니다.
 
 ## Feed
 
-초기 Following Flow는 PostgreSQL query로 fan-out on read를 수행합니다. For Me는 최근 후보 최대 200개를 가져와 사용자 설정으로 점수를 계산합니다.
+Following Flow는 PostgreSQL query로 fan-out on read를 수행합니다. For Me는 `asOf` 시점에 공개 범위와 제외 Topic 정책을 통과한 Moin을 최신 게시 순으로 최대 200개 선택한 뒤 설명 가능한 점수를 계산합니다. 첫 페이지는 사용자·`rankingVersion`·개인화 설정 hash에 결합된 server ranking snapshot을 만들고, 후보 ID·합계 점수·Link/Topic/발견/최신성 component·팔로우 Topic 수와 당시 preference JSON을 PostgreSQL에 고정합니다.
 
 ```text
-후보: 공개 범위가 허용된 최근 Moin
-  → permission/차단/삭제 filter
-  → Link·팔로우 Topic·Signal·최신성 score
-  → 제외 Topic filter
+후보: asOf 시점에 공개 범위가 허용된 Moin
+  → permission/차단/삭제/제외 Topic filter
+  → published_at 최신순 최대 200개
+  → Link·팔로우 Topic·Signal·최신성 score와 component
+  → preference·score component ranking snapshot
+  → (score, id) keyset
   → item + Why this Moin 설명
 ```
 
-점수와 화면의 추천 이유는 같은 Moin 관계·Topic·Signal 정보를 사용합니다. 사용자가 설정한 네 가중치와 제외 Topic, 이유 표시 여부는 개인 preference JSON에 저장됩니다. 규모가 커지면 별도 timeline worker와 hybrid fan-out을 도입할 수 있습니다.
+점수와 화면의 추천 이유는 snapshot에 저장된 같은 component를 사용하므로 스크롤 중 Signal·Link·개인화 설정이 바뀌어도 이미 열린 Flow의 정렬과 설명이 섞이지 않습니다. 동일 사용자·랭킹 버전·설정은 30초 bucket 안에서 같은 snapshot을 재사용합니다. 사용자별 활성 snapshot은 최대 3개이고 생성 시 오래된 값을 제거합니다. 각 snapshot의 시간 만료는 생성 기준 한 시간이지만 반복 refresh로 3개를 넘기면 이전 cursor가 더 일찍 `feed_snapshot_expired`가 될 수 있습니다.
+
+Snapshot 생성은 사용자 단위 `pg_try_advisory_xact_lock`으로 직렬화합니다. 같은 사용자의 첫 페이지 생성이 겹치면 DB connection을 잠금 대기로 점유하지 않고 `feed_snapshot_busy`, HTTP 429와 `Retry-After: 1`로 빠르게 반환합니다.
+
+이후 페이지는 cursor의 `snapshotID`가 현재 사용자와 랭킹 버전에 속하고 남아 있는지 확인한 뒤 고정된 `(score, id)`를 읽습니다. 랭킹 공식이 바뀌면 `rankingVersion`이 다른 cursor도 거부합니다. 두 오류 모두 client가 첫 페이지부터 다시 조회해야 합니다. Cursor는 opaque 운반 형식이지 인증 credential이 아니며 server-side snapshot binding이 다른 사용자의 재사용을 막습니다.
+
+각 Flow 페이지는 root 후보, 보이는 Quote/Remoin, 미디어·Topic·Signal·카운트·viewer 상태를 일괄 조회하는 **고정 3회 SQL**로 hydration합니다. 반환 Moin 수에 따라 query 수가 증가하지 않으며 관련 Moin도 같은 batch에 포함합니다. 프런트엔드는 cursor별 페이지 Map과 Moin ID 병합을 사용하고 Signal·Pocket·Remoin을 optimistic update해 전체 Flow를 다시 읽지 않습니다.
 
 ## 실시간과 비동기
 
-WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 source of truth입니다. 연결이 끊기면 REST 알림 목록을 `limit`/`offset`으로 다시 읽습니다. `v0.1.0`은 별도 message broker나 outbox worker를 실행하지 않습니다.
+게시·Signal·Link·승인과 알림 이벤트는 업무 데이터와 같은 transaction에서 `outbox_events`에 기록합니다. 단일 Go binary 안의 worker가 `FOR UPDATE SKIP LOCKED`로 claim하고 지수 백오프, idempotency key와 Dead Letter를 적용합니다. PostgreSQL `LISTEN/NOTIFY`는 여러 인스턴스를 즉시 깨우고 polling은 연결 장애 시 복구 경로가 됩니다.
+
+WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 source of truth입니다. 각 인스턴스의 LISTEN consumer는 bounded channel이 가득 차면 다음 signal 전달을 기다리는 backpressure를 적용하고, durable notification row를 읽은 뒤 자신의 Hub로 전파합니다. Browser별 queue가 가득 찬 느린 socket은 연결을 취소해 client의 지수 backoff 재연결 경로로 보냅니다. Client는 연결 시 즉시, 연결 중에도 60초마다 REST unread summary를 다시 읽어 signal·socket 공백을 보완합니다. Dead Letter는 관리자 감사 화면에서 원인을 확인하고 재처리할 수 있습니다.
 
 ## 검색
 
-`v0.1.0` 검색은 PostgreSQL의 case-insensitive `LIKE` 조건으로 사용자, Moin, Topic과 Moim을 찾으며 별도 OpenSearch나 확장을 요구하지 않습니다. 대규모 데이터에서는 full-text/trigram 또는 전용 검색 index를 후속 도입해야 합니다.
+`v0.1.1` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다.
 
 ## 인증과 설정
 
@@ -64,14 +75,26 @@ WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 
 
 ## AI와 MCP
 
-AI adapter는 OpenAI-compatible Responses/Chat Completions 요청 차이를 흡수하고 upstream SSE를 그대로 streaming합니다. HTTPS URL을 기본으로 검증하지만 `v0.1.0`에는 DNS/IP 재검증과 redirect 제한이 없으므로 운영망의 outbound allowlist가 필요합니다. API key는 요청 시에만 복호화합니다.
+AI adapter는 OpenAI-compatible Responses/Chat Completions 요청 차이를 흡수하고 upstream SSE를 그대로 streaming합니다. OIDC와 AI는 관리자별 exact-authority `allowedHosts`, 사설 주소 예외용 `privateAllowedHosts`, HTTPS 정책, 연결 시 DNS/IP pinning과 매 redirect 재검증을 공유합니다. port 없는 허용 항목은 scheme 기본 port에만 일치합니다. 정확한 hostname을 두 목록에 함께 등록한 경우에만 RFC1918/ULA를 허용하며 loopback·link-local·metadata·CGNAT·unspecified·multicast는 항상 거부합니다. Process proxy는 우회 경로를 만들지 않도록 비활성화합니다. API key는 요청 시에만 복호화합니다.
 
-REST, UI와 MCP는 별도 business logic을 복제하지 않고 동일 service method와 authorization policy를 호출합니다. 승인 대상 action은 어느 진입점에서도 같은 snapshot/검토 규칙을 적용합니다.
+`v0.1.0`의 기존 설정에서 endpoint host를 알 수 있더라도 사설 주소 접근 권한은 추론하거나 자동 이관하지 않습니다. 업그레이드 후 로컬 bootstrap 최고 관리자가 `privateAllowedHosts`를 명시 저장해야 새 정책에 포함됩니다. 이는 schema migration이 egress 권한을 조용히 확대하지 않도록 하는 보안 경계입니다.
+
+REST, UI와 MCP는 동일한 DB source of truth와 authorization policy를 사용합니다. 승인 대상 action은 어느 진입점에서도 같은 snapshot/검토 규칙을 적용합니다.
+
+## 미디어
+
+HTTP 업로드·다운로드 경계는 `io.Reader`/`io.ReadCloser` 기반 `MediaStore`로 분리합니다. PostgreSQL adapter는 새 payload를 Large Object에 64 KiB copy buffer로 streaming하고 metadata·SHA-256·OID만 일반 table에 둡니다. 기존 `bytea` payload는 호환 읽기를 유지합니다. 사용자별 미첨부 media는 100개·512 MiB로 고정 제한하며 사용자 advisory lock 안에서 검사해 동시 업로드 우회를 막습니다.
+
+Large Object read는 인스턴스당 최대 8개를 동시에 유지합니다. DB pool이 작으면 일반 API용 연결 5개를 남기도록 read slot을 더 줄이며 최소 1개는 허용합니다. 참조되지 않은 업로드는 설정형 TTL과 `SKIP LOCKED` batch 정리로 여러 인스턴스에서도 안전하게 삭제됩니다. Cleaner는 매시간 500개 batch를 최대 20회 실행해 인스턴스당 한 주기에 최대 10,000개를 drain합니다. 인증된 작성 client는 `GET /api/v1/media/config`에서 현재 `maxUploadBytes`, `maxPerPost`와 여섯 개 허용 MIME type을 읽고, 업로드 API는 같은 계약과 고정 quota를 최종 검증합니다. 관리자 전용 orphan TTL과 고정 quota는 이 응답에서 제외합니다.
+
+## 관측
+
+모든 요청은 검증된 `X-Request-ID`를 응답과 구조화 log에 연결합니다. 내장 `/metrics`는 Prometheus text 형식으로 Flow·검색 지연, Flow 요청당 SQL 수, 전체 SQL 수, Outbox 지연·실패, DB pool과 WebSocket 연결 수를 제공합니다. SQL문·인자·사용자 ID를 label로 수집하지 않습니다. 적용한 migration의 SHA-256 checksum은 `schema_migrations`에 저장해 과거 SQL의 사후 변경을 탐지합니다.
 
 ## 오프라인 runtime
 
 ```text
-moina:v0.1.0 (linux/amd64, distroless, non-root, read-only)
+moina:v0.1.1 (linux/amd64, distroless, non-root, read-only)
   ├─ /app/moina
   └─ /app/web/dist
 
@@ -79,13 +102,12 @@ moina:v0.1.0 (linux/amd64, distroless, non-root, read-only)
 인터넷 연결: 없음
 ```
 
-Migration은 binary에 embed하고 시작 시 PostgreSQL advisory lock 아래 순서대로 적용합니다. readiness는 migration과 DB ping이 끝난 뒤에만 성공합니다.
+Migration은 binary에 embed하고 시작 시 PostgreSQL advisory lock 아래 순서대로 적용합니다. 기존 checksum을 검증하고 새 migration과 checksum을 함께 기록하며, 불일치하면 임의 변경으로 판단해 시작을 중단합니다. DB 이력에 binary가 모르는 version이 있으면 안전하지 않은 downgrade로 판단해 기동을 거부합니다. 연결 단계의 짧은 startup deadline과 분리된 최대 30분 migration context를 사용하고, 완료 또는 실패 전에는 readiness를 성공시키지 않습니다.
 
 ## 확장 경계
 
 다음은 트래픽이나 제품 검증 뒤 분리할 후보입니다.
 
-- notification/outbox worker
 - media object storage와 image/video processor
 - dedicated search/embedding index
 - recommendation batch/online ranker

@@ -2,7 +2,7 @@
 
 ## 책임 경계
 
-GitHub Release에는 `linux/amd64`용 `moina:v0.1.0` 서비스 이미지 하나를 저장한 `moina-v0.1.0.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
+GitHub Release에는 `linux/amd64`용 `moina:v0.1.1` 서비스 이미지 하나를 저장한 `moina-v0.1.1.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
 
 ## 반입과 설치
 
@@ -13,10 +13,10 @@ GitHub Release에는 `linux/amd64`용 `moina:v0.1.0` 서비스 이미지 하나�
 5. `pull never`, read-only, dropped capabilities로 시작합니다.
 
 ```bash
-sha256sum moina-v0.1.0.tar.gz
-gzip -t moina-v0.1.0.tar.gz
-gzip -dc moina-v0.1.0.tar.gz | docker image load
-docker image inspect moina:v0.1.0
+sha256sum moina-v0.1.1.tar.gz
+gzip -t moina-v0.1.1.tar.gz
+gzip -dc moina-v0.1.1.tar.gz | docker image load
+docker image inspect moina:v0.1.1
 cp .env.example .env
 chmod 600 .env
 docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull never
@@ -31,16 +31,53 @@ docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull
 | `/healthz` | 프로세스가 요청을 받을 수 있음 |
 | `/readyz` | PostgreSQL migration과 필수 의존성이 준비됨 |
 | `/api/v1/version` | service name, version과 프로세스 시작 시각 |
+| `/metrics` | Prometheus text 형식 운영 지표 |
 
 ```bash
 curl --fail http://127.0.0.1:8080/healthz
 curl --fail http://127.0.0.1:8080/readyz
 curl --fail http://127.0.0.1:8080/api/v1/version
+curl --fail http://127.0.0.1:8080/metrics
 docker compose -f deploy/docker-compose.offline.yml ps
 docker compose -f deploy/docker-compose.offline.yml logs --since 15m moina
 ```
 
-로그에 DSN, password, session cookie, CSRF token, OIDC/AI secret, 개인 key 원문과 Moin 비공개 본문을 남기지 않습니다. 오류 code·발생 시각과 관리자 화면의 감사 event ID를 함께 사용해 추적합니다.
+`/metrics`에는 Flow·검색 지연, Flow 요청당 SQL 수, 전체 SQL 수, Outbox 지연·실패, PostgreSQL pool과 현재 WebSocket 연결 수가 포함됩니다. 사용자·본문·SQL문·인자 같은 고카디널리티 또는 민감 label은 만들지 않습니다. endpoint 자체에는 공개 인터넷용 인증이 없으므로 loopback/운영망에서만 수집하고 reverse proxy에서 접근 대역을 제한합니다.
+
+모든 HTTP 응답의 `X-Request-ID`와 JSON 구조화 access log의 `request_id`를 함께 사용하면 API 요청을 연결해 추적할 수 있습니다. 외부에서 전달한 ID는 안전한 문자와 길이를 만족할 때만 사용합니다. 로그에 DSN, password, session cookie, CSRF token, OIDC/AI secret, 개인 key 원문과 Moin 비공개 본문을 남기지 않습니다. 오류 code·발생 시각과 관리자 화면의 감사 event ID를 함께 사용합니다.
+
+## Migration과 검색 준비
+
+`v0.1.1`은 시작 시 `pg_trgm` 확장을 만들고 trigram·전문 검색 index를 생성합니다. migration 계정이 extension 생성 권한이 없다면 DBA가 대상 database에 `CREATE EXTENSION IF NOT EXISTS pg_trgm`을 먼저 실행해야 합니다. 별도 OpenSearch나 인터넷 연결은 필요하지 않습니다.
+
+적용한 migration에는 SHA-256 checksum을 저장합니다. 이미 기록된 SQL 파일이 바뀌어 checksum이 다르면 시작을 중단하므로, 운영 DB의 `schema_migrations`를 임의 수정하거나 적용 완료 migration 파일을 덮어쓰지 않습니다. **DB에 현재 binary가 알지 못하는 migration version이 하나라도 있으면 downgrade로 판단해 기동을 거부합니다.** 새 변경은 항상 다음 번호 migration으로 배포합니다. Migration에는 연결 단계와 분리된 최대 30분 제한이 적용되며 완료되기 전에는 readiness가 성공하지 않습니다. 대용량 index 생성 중 배포 관리자가 컨테이너를 조기 종료하지 않도록 startup/readiness 허용 시간을 30분 이상으로 잡고, 한도 초과 시 log와 PostgreSQL lock·I/O·권한을 확인합니다.
+
+Flow cursor는 서명 없는 versioned Base64 URL opaque 데이터이지만 서버가 내부 값을 검증합니다. Following은 게시 시각·ID를, For Me는 기준 시각·점수·ID·랭킹 버전과 사용자별 server ranking snapshot ID를 포함합니다. For Me는 필터를 통과한 최근 후보 최대 200개의 합계·component 점수와 당시 개인화 설정을 고정합니다. 동일 사용자·랭킹 버전·설정은 같은 30초 bucket에서 snapshot을 재사용합니다.
+
+Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 값은 최대 3개입니다. 반복 refresh로 새 snapshot을 계속 만들면 오래된 값이 한 시간 전에 제거될 수 있습니다. `ranking_version_mismatch` 또는 `feed_snapshot_expired`를 받은 client는 저장한 cursor를 버리고 첫 페이지부터 다시 조회합니다. 생성 시 사용자별 오래된/만료 snapshot을, background cleanup은 시간 만료 snapshot을 정리하므로 `feed_snapshots`와 `feed_snapshot_items`의 증가량도 DB 용량 지표로 관찰합니다.
+
+동일 사용자의 For Me 첫 페이지 생성이 겹치면 서버는 대기열을 쌓는 대신 `feed_snapshot_busy`와 HTTP `429`, `Retry-After: 1`을 반환합니다. Browser는 1초 뒤 첫 페이지를 다시 요청합니다. 이 오류가 지속되면 같은 계정의 반복 refresh·자동화 client를 중지하고 Flow latency와 PostgreSQL lock을 확인합니다.
+
+## Outbox와 실패 이벤트
+
+게시·Signal·Link·승인과 알림 이벤트는 업무 데이터와 같은 PostgreSQL transaction에서 Outbox에 저장됩니다. 내장 worker는 `FOR UPDATE SKIP LOCKED`로 여러 인스턴스 사이에 일을 나누고, `LISTEN/NOTIFY`로 즉시 깨우며 polling을 복구 경로로 유지합니다. 실패는 지수 백오프로 재시도되고 한도를 넘으면 Dead Letter가 됩니다.
+
+`서비스 관리자 → 감사 로그 → 실패 이벤트 복구`에서 마지막 오류와 시도 횟수를 확인하고 원인을 먼저 해결한 뒤 **재처리**합니다. 목록 조회는 `admin:access`와 `audit:read`, 상태를 바꾸는 재처리는 `admin:access`와 `outbox:manage`가 필요합니다. 조사 전용 역할과 복구 역할을 분리하고, 재처리 동작이 감사 로그에 남는지 확인합니다. 대기 지연은 `moina_outbox_lag_seconds`, 처리 실패 누계는 `moina_outbox_failures_total`로 경보를 구성합니다.
+
+알림은 commit된 PostgreSQL row가 source of truth이고 `LISTEN/NOTIFY`는 실시간 fanout hint입니다. Listener의 bounded channel이 가득 차면 signal을 버리지 않고 consumer가 따라올 때까지 backpressure를 적용합니다. Browser별 queue가 가득 찬 느린 WebSocket은 연결을 종료하고 client가 최대 30초 지수 backoff로 재연결합니다. 재연결 직후와 연결 중 매 60초마다 REST unread summary를 다시 읽으므로 일시적인 LISTEN·socket 공백은 지속적인 알림 유실이 되지 않습니다.
+
+## 미디어 업로드 계약 확인
+
+인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.1` 관리자 설정이 아닙니다.
+
+```bash
+curl --fail http://127.0.0.1:8080/api/v1/media/config \
+  -H 'Authorization: Bearer mk_REDACTED'
+```
+
+관리자가 업로드 제한을 바꾼 직후에는 작성 화면의 이전 값과 서버 값이 잠시 다를 수 있습니다. HTTP `413`, `415` 또는 설정 오류를 받으면 client가 설정을 다시 조회하도록 안내하고, 서버 검증을 우회하지 않습니다. HTTP `429`와 `media_quota_exceeded`는 기존 업로드를 Moin·프로필에 연결하거나 orphan TTL 정리를 기다린 뒤 재시도합니다.
+
+Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, PostgreSQL pool이 작으면 일반 API용 연결 5개를 남기도록 media read slot을 줄입니다. 느린 다운로드가 slot을 오래 점유하면 새 read가 요청 context 안에서 대기하므로 reverse proxy timeout과 DB pool 사용량을 함께 봅니다. Cleaner는 매시간 500개씩 최대 20 batch, 즉 인스턴스당 한 주기에 최대 10,000개를 정리합니다. 여러 인스턴스는 `SKIP LOCKED`로 대상 충돌을 피합니다.
 
 ## PostgreSQL backup과 복구
 
@@ -49,18 +86,30 @@ docker compose -f deploy/docker-compose.offline.yml logs --since 15m moina
 - PostgreSQL backup과 WAL(사용 시)
 - backup 시점의 `MOINA_ENCRYPTION_KEY`
 - 배포한 `moina-vX.Y.Z.tar.gz`와 SHA256
-- `schema_migrations`를 포함한 schema/version 정보
+- `schema_migrations`와 `outbox_attempts`를 포함한 schema/version·재시도 정보
+- PostgreSQL Large Object를 포함한 전체 database dump
 
-복구 훈련은 격리된 PostgreSQL에 복원한 뒤 같은 encryption key로 로그인, OIDC/AI secret 복호화 여부, Moin/Link/키 목록과 audit 연속성을 확인합니다.
+새 미디어는 PostgreSQL Large Object로 streaming 저장됩니다. 논리 backup은 blob/Large Object가 포함되는 전체 database dump(`pg_dump -b` 또는 사용 중인 PostgreSQL 버전의 동등 옵션)를 사용합니다. 복구 훈련은 격리된 PostgreSQL에 복원한 뒤 같은 encryption key로 로그인, 미디어 조회, OIDC/AI secret 복호화 여부, Moin/Link/키 목록과 audit·Outbox 연속성을 확인합니다.
 
 ## 업그레이드
 
 1. release notes와 migration의 forward/backward 호환성을 검토합니다.
-2. DB와 encryption key를 backup합니다.
+2. DB와 encryption key를 backup하고, 서비스 중단 전에 기존 로컬 bootstrap 최고 관리자 로그인이 되는지 확인합니다.
 3. 새 tar.gz를 검증하고 load합니다.
-4. staging에서 migration과 Playwright smoke를 수행합니다.
+4. staging에서 최대 30분 migration 시간, 로그인과 Playwright smoke를 검증합니다.
 5. compose image tag를 바꾸고 서비스를 재시작합니다.
 6. readiness, 버전, 로그인, Flow, 검색, 알림, 관리자 설정을 확인합니다.
+
+### v0.1.0 내부 OIDC·AI 사용자의 필수 조치
+
+`v0.1.1`은 사설 주소를 자동 허용하지 않습니다. `v0.1.0`에서 RFC1918/ULA로 해석되는 Keycloak/OIDC 또는 AI endpoint를 사용했다면 업그레이드 뒤 해당 연결은 `privateAllowedHosts`를 명시적으로 저장하기 전까지 실패합니다. 기존 host를 자동으로 사설 예외로 승격하지 않는 것은 SSRF 방어를 약화하지 않기 위한 의도된 변경입니다.
+
+1. OIDC에 의존하지 말고 검증해 둔 **로컬 bootstrap 최고 관리자**로 로그인합니다. Bootstrap 환경변수의 비밀번호를 바꿔도 이미 생성된 계정 비밀번호는 재설정되지 않습니다.
+2. Keycloak/OIDC와 AI 설정 각각의 `allowedHosts`에 endpoint의 정확한 authority가 있는지 확인합니다.
+3. 사설 주소를 반환하는 정확한 DNS hostname을 `privateAllowedHosts`에도 저장합니다. 비기본 port는 두 목록 모두 같은 `host:port`로 입력하고 IP literal은 사용하지 않습니다.
+4. 연결 테스트를 통과한 뒤 OIDC 로그인과 AI streaming을 확인합니다.
+
+공인 IP만 반환하는 endpoint에는 `privateAllowedHosts`가 필요하지 않습니다. 로컬 관리자 credential을 확인하지 못했다면 OIDC 전용 운영 중단 위험이 있으므로 업그레이드를 시작하지 말고 먼저 복구 절차를 승인합니다.
 
 새 schema를 이전 binary가 읽지 못하면 앱 image만 되돌리는 rollback은 안전하지 않습니다. migration별 rollback 계획을 별도로 승인합니다.
 
@@ -68,7 +117,7 @@ docker compose -f deploy/docker-compose.offline.yml logs --since 15m moina
 
 - root encryption key는 application 관리자 계정과 분리해 vault/HSM 수준으로 보관합니다.
 - 개인 API/MCP key는 사용자 화면에서 회전하고 이전 token은 즉시 폐기합니다.
-- `v0.1.0`은 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
+- `v0.1.1`은 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
 - 유출이 의심되면 관련 key 폐기, session 종료, audit 조사와 downstream secret rotation을 함께 수행합니다.
 
 ## 장애 분류
@@ -76,10 +125,16 @@ docker compose -f deploy/docker-compose.offline.yml logs --since 15m moina
 | 현상 | 확인 순서 |
 | --- | --- |
 | 컨테이너 반복 종료 | 필수 env 형식 → PostgreSQL DNS/TLS → migration log |
-| readiness만 실패 | DB pool/권한/용량과 migration lock |
-| OIDC 실패 | issuer discovery → CA → redirect URI → clock skew |
-| AI streaming 지연 | endpoint 상태 → reverse proxy buffering/timeout |
-| WebSocket 끊김 | upgrade header → idle timeout → origin 정책 |
+| readiness만 실패 | 최대 30분 migration 진행 여부 → DB pool/권한/용량과 migration lock |
+| migration checksum 불일치 | 적용 SQL 임의 변경 여부 확인 → 원본 release migration 복원 |
+| binary보다 새로운 migration 감지 | 잘못된 image downgrade 여부 확인 → DB schema와 일치하는 정식 release image로 복구 |
+| Flow 새로고침 429 | `feed_snapshot_busy` 확인 → `Retry-After: 1` 준수 → 같은 계정의 반복 refresh/자동화 중지 |
+| OIDC 실패 | issuer → `allowedHosts`/`privateAllowedHosts`와 port → DNS 결과·차단 주소 → CA → redirect URI → clock skew |
+| AI streaming 지연 | endpoint → `allowedHosts`/`privateAllowedHosts`와 port → DNS/CA → reverse proxy buffering/timeout |
+| WebSocket 끊김 | upgrade header → idle timeout → origin 정책 → slow-client 재연결과 60초 REST reconcile |
+| Outbox 지연·Dead Letter 증가 | `/metrics` → 관리자 실패 이벤트 → PostgreSQL lock/오류 → 원인 해결 뒤 재처리 |
+| 미디어 업로드 거부 | 오류 code 확인 → `media_quota_exceeded`면 미첨부 100개/512 MiB → MIME/파일 byte·개수 → 설정 cache |
+| 미디어 용량 증가 | orphan TTL 설정 → 인스턴스당 시간당 최대 10,000개 drain log → Moin/프로필 참조와 Large Object backup 확인 |
 | 복호화 실패 | 올바른 root key와 backup 시점 확인, 쓰기 작업 중단 |
 
 ## 제거

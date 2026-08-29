@@ -3,9 +3,8 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -22,7 +21,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
+	feedservice "github.com/hkjang/moina/backend/internal/feed"
+	mediastore "github.com/hkjang/moina/backend/internal/media"
 	"github.com/hkjang/moina/backend/internal/model"
+	searchservice "github.com/hkjang/moina/backend/internal/search"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
 )
@@ -83,13 +85,27 @@ func (s *Server) followUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "Link할 사용자를 찾을 수 없습니다")
 		return
 	}
-	tag, err := s.repo.Pool().Exec(r.Context(), `INSERT INTO follows(follower_id,followee_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, p.User.ID, targetID)
+	tx, err := s.repo.Pool().Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "Link를 저장할 수 없습니다")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	tag, err := tx.Exec(r.Context(), `INSERT INTO follows(follower_id,followee_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, p.User.ID, targetID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Link를 저장할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() > 0 {
-		s.notify(r.Context(), targetID, p.User.ID, "follow", p.User.ID, map[string]string{"userId": p.User.ID})
+		if err := s.enqueueNotification(r.Context(), tx, targetID, p.User.ID, "follow", p.User.ID,
+			map[string]string{"userId": p.User.ID}, "notification:follow:"+secure.NewID("op")); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "Link를 저장할 수 없습니다")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "Link를 저장할 수 없습니다")
+		return
 	}
 	s.audit(r, "social.follow", "user", targetID, true, nil)
 	writeData(w, http.StatusOK, map[string]bool{"following": true, "followed": true})
@@ -229,16 +245,25 @@ func (s *Server) unfollowTopic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) search(w http.ResponseWriter, r *http.Request) {
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	recommended := r.URL.Query().Get("recommended") == "true"
-	if !utf8.ValidString(query) || (!recommended && utf8.RuneCountInString(query) < 1) || utf8.RuneCountInString(query) > 100 {
+	query, err := searchservice.Parse(r.URL.Query().Get("q"), recommended)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_query", "검색어는 1~100자로 입력해 주세요")
 		return
 	}
 	limit, _ := pagination(r)
-	pattern := "%" + escapeLike(strings.ToLower(query)) + "%"
 	viewer := getPrincipal(r).User.ID
-	usersRows, err := s.repo.Pool().Query(r.Context(), `SELECT `+userSelectColumns+` FROM users WHERE active AND id<>$2 AND (lower(username) LIKE $1 ESCAPE E'\\' OR lower(display_name) LIKE $1 ESCAPE E'\\' OR lower(bio) LIKE $1 ESCAPE E'\\') AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$2 AND b.blocked_id=users.id) OR (b.blocker_id=users.id AND b.blocked_id=$2)) ORDER BY CASE WHEN $4 THEN (SELECT count(*) FROM follows f WHERE f.followee_id=users.id) END DESC,username LIMIT $3`, pattern, viewer, limit, recommended)
+	usersRows, err := s.repo.Pool().Query(r.Context(), `SELECT `+userSelectColumns+` FROM users
+		WHERE active AND id<>$4
+		AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$4 AND b.blocked_id=users.id) OR (b.blocker_id=users.id AND b.blocked_id=$4))
+		AND ($6 OR lower(username) LIKE $3 ESCAPE E'\\' OR lower(display_name) LIKE $3 ESCAPE E'\\' OR lower(bio) LIKE $3 ESCAPE E'\\' OR lower(username) % $2 OR lower(display_name) % $2 OR word_similarity($2,lower(bio)) >= 0.3 OR to_tsvector('simple',username||' '||display_name||' '||bio) @@ websearch_to_tsquery('simple',$1))
+		ORDER BY (
+			CASE WHEN $2<>'' AND lower(username)=$2 THEN 1000 ELSE 0 END +
+			CASE WHEN $2<>'' AND lower(username) LIKE $2||'%%' THEN 250 ELSE 0 END +
+			ts_rank_cd(to_tsvector('simple',username||' '||display_name||' '||bio),websearch_to_tsquery('simple',$1))*100 +
+			greatest(similarity(lower(username),$2)*80,similarity(lower(display_name),$2)*40,word_similarity($2,lower(bio))*25)
+		) DESC, CASE WHEN $6 THEN (SELECT count(*) FROM follows rf WHERE rf.followee_id=users.id) ELSE 0 END DESC,username
+		LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 		return
@@ -254,44 +279,74 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		users = append(users, publicUserView(user))
 	}
 	usersRows.Close()
-	postRows, err := s.repo.Pool().Query(r.Context(), `SELECT p.id FROM posts p WHERE p.status='published' AND lower(p.content) LIKE $1 ESCAPE E'\\' AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$2 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$2)) AND (p.visibility='public' OR p.author_id=$2 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$2 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$2)) ORDER BY p.created_at DESC LIMIT $3`, pattern, viewer, limit)
+	postWhere := []string{
+		"p.status='published'",
+		`NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))`,
+		`(p.visibility='public' OR p.author_id=$1 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$1))`,
+		`($5 OR lower(p.content) LIKE $4 ESCAPE E'\\' OR lower(p.content) % $3 OR word_similarity($3,lower(p.content)) >= 0.3 OR to_tsvector('simple',p.content) @@ websearch_to_tsquery('simple',$2))`,
+	}
+	postOrder := `(CASE WHEN $3<>'' AND lower(p.content)=$3 THEN 500 ELSE 0 END + ts_rank_cd(to_tsvector('simple',p.content),websearch_to_tsquery('simple',$2))*100 + greatest(similarity(lower(p.content),$3),word_similarity($3,lower(p.content)))*40) DESC,p.published_at DESC,p.id DESC`
+	posts, err := feedservice.QueryPosts(r.Context(), s.repo.Pool(), postWhere, []any{viewer, query.Raw, query.Folded, query.Pattern, recommended}, postOrder, limit, 0, viewer)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 		return
 	}
-	posts := make([]model.Moin, 0)
-	for postRows.Next() {
-		var id string
-		if postRows.Scan(&id) == nil {
-			if post, loadErr := s.loadMoin(r.Context(), id, viewer); loadErr == nil {
-				posts = append(posts, post)
-			}
-		}
+	decorateRecommendations(posts)
+	topicRows, err := s.repo.Pool().Query(r.Context(), `SELECT t.id,t.slug,t.name,t.description,t.created_at,
+		(SELECT count(*) FROM user_topic_follows WHERE topic_id=t.id),
+		(SELECT count(*) FROM post_topics pt JOIN posts p ON p.id=pt.post_id WHERE pt.topic_id=t.id AND p.status='published'),
+		EXISTS(SELECT 1 FROM user_topic_follows WHERE topic_id=t.id AND user_id=$4)
+		FROM topics t
+		WHERE $6 OR lower(t.name) LIKE $3 ESCAPE E'\\' OR lower(t.slug) LIKE $3 ESCAPE E'\\' OR lower(t.name) % $2 OR lower(t.slug) % $2 OR word_similarity($2,lower(t.description)) >= 0.3 OR to_tsvector('simple',t.name||' '||t.description) @@ websearch_to_tsquery('simple',$1)
+		ORDER BY (
+			CASE WHEN $2<>'' AND (lower(t.slug)=$2 OR lower(t.name)=$2) THEN 1000 ELSE 0 END +
+			CASE WHEN $2<>'' AND (lower(t.slug) LIKE $2||'%%' OR lower(t.name) LIKE $2||'%%') THEN 250 ELSE 0 END +
+			ts_rank_cd(to_tsvector('simple',t.name||' '||t.description),websearch_to_tsquery('simple',$1))*100 +
+			greatest(similarity(lower(t.slug),$2)*100,similarity(lower(t.name),$2)*80,word_similarity($2,lower(t.description))*30)
+		) DESC,t.name LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+		return
 	}
-	postRows.Close()
-	topicRows, _ := s.repo.Pool().Query(r.Context(), `SELECT id,slug,name,description,created_at FROM topics WHERE lower(name) LIKE $1 ESCAPE E'\\' OR lower(slug) LIKE $1 ESCAPE E'\\' ORDER BY name LIMIT $2`, pattern, limit)
 	topics := make([]model.Topic, 0)
-	if topicRows != nil {
-		for topicRows.Next() {
-			var topic model.Topic
-			if topicRows.Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt) == nil {
-				topics = append(topics, topic)
-			}
+	for topicRows.Next() {
+		var topic model.Topic
+		if err := topicRows.Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following); err != nil {
+			topicRows.Close()
+			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+			return
 		}
-		topicRows.Close()
+		topics = append(topics, topic)
 	}
+	topicRows.Close()
 	moims := make([]model.Moim, 0)
-	moimRows, _ := s.repo.Pool().Query(r.Context(), `SELECT m.id,m.slug,m.name,m.description,m.owner_id,m.visibility,m.created_at,(SELECT count(*) FROM moim_members WHERE moim_id=m.id),(SELECT count(*) FROM posts WHERE moim_id=m.id AND status='published'),EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$2) FROM moims m WHERE (m.visibility='public' OR EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$2)) AND (lower(m.name) LIKE $1 ESCAPE E'\\' OR lower(m.slug) LIKE $1 ESCAPE E'\\' OR lower(m.description) LIKE $1 ESCAPE E'\\') ORDER BY m.created_at DESC LIMIT $3`, pattern, viewer, limit)
-	if moimRows != nil {
-		for moimRows.Next() {
-			var item model.Moim
-			if moimRows.Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.OwnerID, &item.Visibility, &item.CreatedAt, &item.MemberCount, &item.MoinCount, &item.Joined) == nil {
-				moims = append(moims, item)
-			}
-		}
-		moimRows.Close()
+	moimRows, err := s.repo.Pool().Query(r.Context(), `SELECT m.id,m.slug,m.name,m.description,m.owner_id,m.visibility,m.created_at,
+		(SELECT count(*) FROM moim_members WHERE moim_id=m.id),(SELECT count(*) FROM posts WHERE moim_id=m.id AND status='published'),
+		EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$4)
+		FROM moims m
+		WHERE (m.visibility='public' OR EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$4))
+		AND ($6 OR lower(m.name) LIKE $3 ESCAPE E'\\' OR lower(m.slug) LIKE $3 ESCAPE E'\\' OR lower(m.description) LIKE $3 ESCAPE E'\\' OR lower(m.name) % $2 OR lower(m.slug) % $2 OR word_similarity($2,lower(m.description)) >= 0.3 OR to_tsvector('simple',m.name||' '||m.description) @@ websearch_to_tsquery('simple',$1))
+		ORDER BY (
+			CASE WHEN $2<>'' AND (lower(m.slug)=$2 OR lower(m.name)=$2) THEN 1000 ELSE 0 END +
+			CASE WHEN $2<>'' AND (lower(m.slug) LIKE $2||'%%' OR lower(m.name) LIKE $2||'%%') THEN 250 ELSE 0 END +
+			ts_rank_cd(to_tsvector('simple',m.name||' '||m.description),websearch_to_tsquery('simple',$1))*100 +
+			greatest(similarity(lower(m.slug),$2)*100,similarity(lower(m.name),$2)*80,word_similarity($2,lower(m.description))*30)
+		) DESC,m.created_at DESC LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+		return
 	}
-	writeData(w, http.StatusOK, map[string]any{"query": query, "users": users, "posts": posts, "topics": topics, "moims": moims})
+	for moimRows.Next() {
+		var item model.Moim
+		if err := moimRows.Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.OwnerID, &item.Visibility, &item.CreatedAt, &item.MemberCount, &item.MoinCount, &item.Joined); err != nil {
+			moimRows.Close()
+			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+			return
+		}
+		moims = append(moims, item)
+	}
+	moimRows.Close()
+	writeData(w, http.StatusOK, map[string]any{"query": query.Raw, "users": users, "posts": posts, "topics": topics, "moims": moims})
 }
 
 func publicUserView(user model.User) map[string]any {
@@ -300,19 +355,6 @@ func publicUserView(user model.User) map[string]any {
 		avatarURL = "/api/v1/media/" + user.AvatarID
 	}
 	return map[string]any{"id": user.ID, "username": user.Username, "displayName": user.DisplayName, "bio": user.Bio, "avatarId": user.AvatarID, "avatarUrl": avatarURL, "accountType": user.AccountType, "createdAt": user.CreatedAt}
-}
-
-func (s *Server) notify(ctx context.Context, userID, actorID, kind, targetID string, payload any) {
-	if userID == "" || userID == actorID {
-		return
-	}
-	raw, _ := json.Marshal(payload)
-	notification := model.Notification{ID: secure.NewID("noti"), UserID: userID, ActorID: actorID, Type: kind, TargetID: targetID, Payload: raw, CreatedAt: time.Now().UTC()}
-	_, err := s.repo.Pool().Exec(ctx, `INSERT INTO notifications(id,user_id,actor_id,type,target_id,payload,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, notification.ID, notification.UserID, nullableString(notification.ActorID), notification.Type, notification.TargetID, notification.Payload, notification.CreatedAt)
-	if err == nil {
-		s.decorateNotification(ctx, &notification)
-		s.hub.publish(userID, notification)
-	}
 }
 
 func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
@@ -533,13 +575,23 @@ func (s *Server) uploadMedia(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "settings_unavailable", "미디어 설정을 확인할 수 없습니다")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, cfg.MaxUploadBytes+1<<20)
-	if err := r.ParseMultipartForm(cfg.MaxUploadBytes); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, cfg.MaxUploadBytes+(1<<20))
+	// Keep only a small prefix in memory. net/http transparently spills larger
+	// file parts to a temporary file, which is then streamed into PostgreSQL.
+	if err := r.ParseMultipartForm(64 << 10); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_media", "업로드 파일을 읽을 수 없습니다")
 		return
 	}
 	if r.MultipartForm != nil {
 		defer r.MultipartForm.RemoveAll()
+	}
+	altText := strings.TrimSpace(r.FormValue("altText"))
+	if altText == "" {
+		altText = strings.TrimSpace(r.FormValue("alt"))
+	}
+	if !utf8.ValidString(altText) || utf8.RuneCountInString(altText) > 500 || strings.ContainsRune(altText, '\x00') {
+		writeError(w, http.StatusBadRequest, "invalid_alt_text", "대체 텍스트는 500자 이하로 입력해 주세요")
+		return
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -547,26 +599,54 @@ func (s *Server) uploadMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, cfg.MaxUploadBytes+1))
-	if err != nil || int64(len(data)) > cfg.MaxUploadBytes || len(data) == 0 {
+	if header.Size <= 0 || header.Size > cfg.MaxUploadBytes {
 		writeError(w, http.StatusRequestEntityTooLarge, "media_too_large", "파일이 비어 있거나 업로드 한도를 넘었습니다")
 		return
 	}
-	mimeType := detectMediaType(data)
+	sniff := make([]byte, min(header.Size, int64(4096)))
+	n, readErr := io.ReadFull(file, sniff)
+	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+		writeError(w, http.StatusBadRequest, "invalid_media", "업로드 파일을 읽을 수 없습니다")
+		return
+	}
+	sniff = sniff[:n]
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_media", "업로드 파일을 읽을 수 없습니다")
+		return
+	}
+	mimeType := detectMediaType(sniff)
 	if !slicesContains([]string{"image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm"}, mimeType) {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media", "JPEG, PNG, GIF, WebP 이미지 또는 MP4, WebM 동영상만 업로드할 수 있습니다")
 		return
 	}
-	width, height := imageDimensions(data)
-	sum := sha256.Sum256(data)
+	width, height := imageDimensionsFrom(file)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_media", "업로드 파일을 읽을 수 없습니다")
+		return
+	}
 	mediaType := "image"
 	if strings.HasPrefix(mimeType, "video/") {
 		mediaType = "video"
 	}
-	media := model.Media{ID: secure.NewID("media"), OwnerID: getPrincipal(r).User.ID, Filename: safeFilename(header), MIMEType: mimeType, Type: mediaType, Size: int64(len(data)), Width: width, Height: height, CreatedAt: time.Now().UTC()}
+	media := model.Media{ID: secure.NewID("media"), OwnerID: getPrincipal(r).User.ID, Filename: safeFilename(header), AltText: altText, MIMEType: mimeType, Type: mediaType, Size: header.Size, Width: width, Height: height, CreatedAt: time.Now().UTC()}
 	media.URL = "/api/v1/media/" + media.ID
-	_, err = s.repo.Pool().Exec(r.Context(), `INSERT INTO media_assets(id,owner_id,filename,mime_type,size_bytes,sha256,width,height,data,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, media.ID, media.OwnerID, media.Filename, media.MIMEType, media.Size, hex.EncodeToString(sum[:]), media.Width, media.Height, data, media.CreatedAt)
+	_, err = s.media.Put(r.Context(), mediastore.PutObject{Metadata: mediastore.Metadata{
+		ID: media.ID, OwnerID: media.OwnerID, Filename: media.Filename, AltText: media.AltText, MIMEType: media.MIMEType,
+		Size: media.Size, Width: media.Width, Height: media.Height, CreatedAt: media.CreatedAt,
+	}, Body: file})
 	if err != nil {
+		if errors.Is(err, mediastore.ErrUploadBusy) {
+			writeError(w, http.StatusTooManyRequests, "media_upload_busy", "같은 사용자의 다른 미디어 업로드가 진행 중입니다. 잠시 후 다시 시도해 주세요")
+			return
+		}
+		if errors.Is(err, mediastore.ErrQuotaExceeded) {
+			writeError(w, http.StatusTooManyRequests, "media_quota_exceeded", "게시물에 연결하지 않은 미디어가 너무 많습니다. 기존 업로드를 게시물에 첨부하거나 정리 후 다시 시도해 주세요")
+			return
+		}
+		if errors.Is(err, mediastore.ErrTooLarge) || errors.Is(err, mediastore.ErrSizeMismatch) {
+			writeError(w, http.StatusRequestEntityTooLarge, "media_too_large", "파일이 비어 있거나 업로드 한도를 넘었습니다")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "storage_error", "미디어를 저장할 수 없습니다")
 		return
 	}
@@ -602,8 +682,8 @@ func safeFilename(header *multipart.FileHeader) string {
 	return name
 }
 
-func imageDimensions(data []byte) (int, int) {
-	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+func imageDimensionsFrom(file multipart.File) (int, int) {
+	config, _, err := image.DecodeConfig(file)
 	if err != nil {
 		return 0, 0
 	}
@@ -613,20 +693,16 @@ func imageDimensions(data []byte) (int, int) {
 func (s *Server) getMedia(w http.ResponseWriter, r *http.Request) {
 	viewer := getPrincipal(r).User.ID
 	id := chi.URLParam(r, "mediaID")
-	var filename, mimeType string
-	var data []byte
-	var size int64
-	err := s.repo.Pool().QueryRow(r.Context(), `SELECT m.filename,m.mime_type,m.size_bytes,m.data FROM media_assets m WHERE m.id=$1 AND (m.owner_id=$2 OR EXISTS(SELECT 1 FROM users au WHERE au.avatar_id=m.id AND au.active AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$2 AND b.blocked_id=au.id) OR (b.blocker_id=au.id AND b.blocked_id=$2))) OR EXISTS(SELECT 1 FROM post_media pm JOIN posts p ON p.id=pm.post_id WHERE pm.media_id=m.id AND p.status='published' AND (p.visibility='public' OR p.author_id=$2 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$2 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$2))))`, id, viewer).Scan(&filename, &mimeType, &size, &data)
+	object, err := s.media.Open(r.Context(), id, viewer)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "미디어를 찾을 수 없습니다")
 		return
 	}
-	w.Header().Set("Content-Type", mimeType)
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", strings.ReplaceAll(filename, `"`, "")))
+	defer object.Body.Close()
+	w.Header().Set("Content-Type", object.Metadata.MIMEType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", strings.ReplaceAll(object.Metadata.Filename, `"`, "")))
 	w.Header().Set("Cache-Control", "private, max-age=3600")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	http.ServeContent(w, r, object.Metadata.Filename, object.Metadata.CreatedAt, object.Body)
 }
 
 func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {

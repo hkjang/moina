@@ -2,43 +2,40 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
+	feedservice "github.com/hkjang/moina/backend/internal/feed"
 	"github.com/hkjang/moina/backend/internal/model"
+	cursorpage "github.com/hkjang/moina/backend/internal/pagination"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
 	"github.com/jackc/pgx/v5"
 )
 
-const postAndAuthorColumns = `p.id,p.author_id,p.content,p.kind,p.visibility,p.status,COALESCE(p.reply_to_id,''),COALESCE(p.quote_post_id,''),COALESCE(p.remoin_post_id,''),COALESCE(p.moim_id,''),p.approval_required,p.created_at,p.updated_at,u.id,u.username,u.display_name,u.email,u.bio,u.avatar_id,u.account_type,u.provider,u.roles,u.active,u.created_at,u.updated_at`
+const postAndAuthorColumns = feedservice.PostAndAuthorColumns
 
 type postInput struct {
-	Content    string   `json:"content"`
-	Visibility string   `json:"visibility"`
-	MediaIDs   []string `json:"mediaIds"`
-	ReplyToID  string   `json:"replyToId"`
-	QuoteID    string   `json:"quoteMoinId"`
-	MoimID     string   `json:"moimId"`
+	Content       string            `json:"content"`
+	Visibility    string            `json:"visibility"`
+	MediaIDs      []string          `json:"mediaIds"`
+	MediaAltTexts map[string]string `json:"mediaAltTexts"`
+	ReplyToID     string            `json:"replyToId"`
+	QuoteID       string            `json:"quoteMoinId"`
+	MoimID        string            `json:"moimId"`
 }
 
 func scanMoin(row rowScanner) (model.Moin, error) {
-	var post model.Moin
-	err := row.Scan(
-		&post.ID, &post.AuthorID, &post.Content, &post.Kind, &post.Visibility, &post.Status,
-		&post.ReplyToID, &post.QuoteMoinID, &post.RemoinMoinID, &post.MoimID, &post.ApprovalRequired, &post.CreatedAt, &post.UpdatedAt,
-		&post.Author.ID, &post.Author.Username, &post.Author.DisplayName, &post.Author.Email, &post.Author.Bio, &post.Author.AvatarID,
-		&post.Author.AccountType, &post.Author.Provider, &post.Author.Roles, &post.Author.Active, &post.Author.CreatedAt, &post.Author.UpdatedAt,
-	)
-	return post, err
+	return feedservice.ScanMoin(row)
 }
 
 func (s *Server) createPost(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +115,16 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 	if len(input.MediaIDs) > mediaCfg.MaxPerPost || duplicateStrings(input.MediaIDs) {
 		return model.Moin{}, &publicError{400, "invalid_media", "첨부 미디어 수가 한도를 넘었거나 중복되었습니다"}
 	}
+	attachedMedia := make(map[string]bool, len(input.MediaIDs))
+	for _, mediaID := range input.MediaIDs {
+		attachedMedia[mediaID] = true
+	}
+	for mediaID, altText := range input.MediaAltTexts {
+		if !attachedMedia[mediaID] || !utf8.ValidString(altText) || utf8.RuneCountInString(strings.TrimSpace(altText)) > 500 || strings.ContainsRune(altText, '\x00') {
+			return model.Moin{}, &publicError{400, "invalid_media_alt_text", "첨부 미디어의 대체 텍스트는 500자 이하여야 합니다"}
+		}
+		input.MediaAltTexts[mediaID] = strings.TrimSpace(altText)
+	}
 	var related *model.Moin
 	relatedID := input.ReplyToID
 	if kind == "quote" || kind == "remoin" {
@@ -164,6 +171,18 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 			return model.Moin{}, &publicError{400, "invalid_media", "본인이 업로드한 미디어만 첨부할 수 있습니다"}
 		}
 	}
+	if len(input.MediaAltTexts) > 0 {
+		mediaIDs := make([]string, 0, len(input.MediaAltTexts))
+		altTexts := make([]string, 0, len(input.MediaAltTexts))
+		for mediaID, altText := range input.MediaAltTexts {
+			mediaIDs = append(mediaIDs, mediaID)
+			altTexts = append(altTexts, altText)
+		}
+		tag, updateErr := tx.Exec(r.Context(), `UPDATE media_assets m SET alt_text=v.alt_text FROM unnest($1::text[],$2::text[]) AS v(id,alt_text) WHERE m.id=v.id AND m.owner_id=$3`, mediaIDs, altTexts, p.User.ID)
+		if updateErr != nil || tag.RowsAffected() != int64(len(mediaIDs)) {
+			return model.Moin{}, &publicError{400, "invalid_media_alt_text", "첨부 미디어의 대체 텍스트를 저장할 수 없습니다"}
+		}
+	}
 	var replyID, quoteID, remoinID any
 	if input.ReplyToID != "" {
 		replyID = input.ReplyToID
@@ -201,12 +220,9 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 		if _, err := tx.Exec(r.Context(), `INSERT INTO approval_requests(id,action,target_type,target_id,requester_id,status,snapshot) VALUES($1,'post.publish','post',$2,$3,'pending',$4)`, approvalID, postID, p.User.ID, snapshot); err != nil {
 			return model.Moin{}, err
 		}
-	}
-	if err := tx.Commit(r.Context()); err != nil {
-		return model.Moin{}, err
-	}
-	if requiresApproval {
-		s.notifyApprovers(r, approvalID, postID, workflow.ApproverRoles)
+		if err := s.enqueueApproverNotifications(r.Context(), tx, p.User.ID, approvalID, postID, workflow.ApproverRoles); err != nil {
+			return model.Moin{}, err
+		}
 	}
 	if related != nil && related.AuthorID != p.User.ID && status == "published" {
 		notificationType := "reply"
@@ -215,10 +231,18 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 		} else if kind == "remoin" {
 			notificationType = "remoin"
 		}
-		s.notify(r.Context(), related.AuthorID, p.User.ID, notificationType, postID, map[string]string{"postId": postID})
+		if err := s.enqueueNotification(r.Context(), tx, related.AuthorID, p.User.ID, notificationType, postID,
+			map[string]string{"postId": postID}, fmt.Sprintf("notification:post:%s:%s:%s", postID, notificationType, related.AuthorID)); err != nil {
+			return model.Moin{}, err
+		}
 	}
 	if status == "published" {
-		s.notifyMentions(r.Context(), p.User.ID, postID, input.Content)
+		if err := s.enqueueMentionNotifications(r.Context(), tx, p.User.ID, postID, input.Content); err != nil {
+			return model.Moin{}, err
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		return model.Moin{}, err
 	}
 	return s.loadMoin(r.Context(), postID, p.User.ID)
 }
@@ -266,24 +290,6 @@ func extractMentions(content string) []string {
 	return result
 }
 
-func (s *Server) notifyMentions(ctx context.Context, actorID, postID, content string) {
-	usernames := extractMentions(content)
-	if len(usernames) == 0 {
-		return
-	}
-	rows, err := s.repo.Pool().Query(ctx, `SELECT id FROM users WHERE active AND lower(username)=ANY($1)`, usernames)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var userID string
-		if rows.Scan(&userID) == nil {
-			s.notify(ctx, userID, actorID, "mention", postID, map[string]string{"postId": postID})
-		}
-	}
-}
-
 func (s *Server) getPost(w http.ResponseWriter, r *http.Request) {
 	post, err := s.loadMoin(r.Context(), chi.URLParam(r, "postID"), getPrincipal(r).User.ID)
 	if store.IsNotFound(err) {
@@ -303,75 +309,27 @@ func (s *Server) loadMoin(ctx context.Context, postID, viewerID string) (model.M
 	if err != nil {
 		return model.Moin{}, err
 	}
-	if err := s.enrichMoin(ctx, &post, viewerID); err != nil {
+	items := []model.Moin{post}
+	if err := feedservice.Hydrate(ctx, s.repo.Pool(), items, viewerID); err != nil {
 		return model.Moin{}, err
 	}
-	return post, nil
+	decorateRecommendations(items)
+	return items[0], nil
 }
 
-func (s *Server) enrichMoin(ctx context.Context, post *model.Moin, viewerID string) error {
-	return s.enrichMoinDepth(ctx, post, viewerID, 0)
-}
-
-func (s *Server) enrichMoinDepth(ctx context.Context, post *model.Moin, viewerID string, depth int) error {
-	var mediaRaw, topicsRaw, signalsRaw, viewerSignalsRaw []byte
-	query := `SELECT
-		COALESCE((SELECT jsonb_agg(jsonb_build_object('id',m.id,'filename',m.filename,'mimeType',m.mime_type,'size',m.size_bytes,'width',m.width,'height',m.height,'createdAt',m.created_at) ORDER BY pm.position) FROM post_media pm JOIN media_assets m ON m.id=pm.media_id WHERE pm.post_id=$1),'[]'::jsonb),
-		COALESCE((SELECT jsonb_agg(jsonb_build_object('id',t.id,'slug',t.slug,'name',t.name,'description',t.description,'createdAt',t.created_at,'following',EXISTS(SELECT 1 FROM user_topic_follows utf WHERE utf.topic_id=t.id AND utf.user_id=$2)) ORDER BY t.name) FROM post_topics pt JOIN topics t ON t.id=pt.topic_id WHERE pt.post_id=$1),'[]'::jsonb),
-		COALESCE((SELECT jsonb_object_agg(kind,count) FROM (SELECT kind,count(*) AS count FROM reactions WHERE post_id=$1 GROUP BY kind) counts),'{}'::jsonb),
-		COALESCE((SELECT jsonb_agg(kind ORDER BY kind) FROM reactions WHERE post_id=$1 AND user_id=$2),'[]'::jsonb),
-		(SELECT count(*) FROM posts WHERE reply_to_id=$1 AND status='published'),
-		(SELECT count(*) FROM posts WHERE remoin_post_id=$1 AND status='published'),
-		EXISTS(SELECT 1 FROM bookmarks WHERE post_id=$1 AND user_id=$2),
-		EXISTS(SELECT 1 FROM follows WHERE follower_id=$2 AND followee_id=$3),
-		EXISTS(SELECT 1 FROM posts rp WHERE rp.author_id=$2 AND rp.remoin_post_id=$1 AND rp.status<>'deleted')`
-	if err := s.repo.Pool().QueryRow(ctx, query, post.ID, viewerID, post.AuthorID).Scan(&mediaRaw, &topicsRaw, &signalsRaw, &viewerSignalsRaw, &post.ReplyCount, &post.RemoinCount, &post.Bookmarked, &post.Author.Following, &post.ViewerRemoined); err != nil {
-		return err
-	}
-	_ = json.Unmarshal(mediaRaw, &post.Media)
-	_ = json.Unmarshal(topicsRaw, &post.Topics)
-	_ = json.Unmarshal(signalsRaw, &post.Signals)
-	_ = json.Unmarshal(viewerSignalsRaw, &post.ViewerSignals)
-	if post.Media == nil {
-		post.Media = []model.Media{}
-	}
-	if post.Topics == nil {
-		post.Topics = []model.Topic{}
-	}
-	if post.Signals == nil {
-		post.Signals = map[string]int64{}
-	}
-	if post.ViewerSignals == nil {
-		post.ViewerSignals = []string{}
-	}
-	for index := range post.Media {
-		post.Media[index].URL = "/api/v1/media/" + post.Media[index].ID
-		if strings.HasPrefix(post.Media[index].MIMEType, "video/") {
-			post.Media[index].Type = "video"
-		} else {
-			post.Media[index].Type = "image"
+func decorateRecommendations(items []model.Moin) {
+	for index := range items {
+		items[index].Why, _ = recommendationComponents(items[index], defaultFeedPreferences())
+		items[index].Recommendation = items[index].Why
+		if items[index].QuoteMoin != nil {
+			items[index].QuoteMoin.Why, _ = recommendationComponents(*items[index].QuoteMoin, defaultFeedPreferences())
+			items[index].QuoteMoin.Recommendation = items[index].QuoteMoin.Why
+		}
+		if items[index].RemoinMoin != nil {
+			items[index].RemoinMoin.Why, _ = recommendationComponents(*items[index].RemoinMoin, defaultFeedPreferences())
+			items[index].RemoinMoin.Recommendation = items[index].RemoinMoin.Why
 		}
 	}
-	post.Author.Email, post.Author.Provider, post.Author.Roles = "", "", nil
-	post.Why, _ = recommendationComponents(*post, defaultFeedPreferences())
-	post.Recommendation = post.Why
-	if depth == 0 {
-		relatedID := post.QuoteMoinID
-		if post.RemoinMoinID != "" {
-			relatedID = post.RemoinMoinID
-		}
-		if relatedID != "" {
-			related, err := scanMoin(s.repo.Pool().QueryRow(ctx, `SELECT `+postAndAuthorColumns+` FROM posts p JOIN users u ON u.id=p.author_id WHERE p.id=$1 AND p.status='published' AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$2 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$2)) AND (p.visibility='public' OR p.author_id=$2 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$2 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$2))`, relatedID, viewerID))
-			if err == nil && s.enrichMoinDepth(ctx, &related, viewerID, depth+1) == nil {
-				if post.RemoinMoinID != "" {
-					post.RemoinMoin = &related
-				} else {
-					post.QuoteMoin = &related
-				}
-			}
-		}
-	}
-	return nil
 }
 
 func (s *Server) listPosts(w http.ResponseWriter, r *http.Request) {
@@ -428,82 +386,205 @@ func (s *Server) feedAlias(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) writeFeed(w http.ResponseWriter, r *http.Request, mode string) {
+	if mode != "for_me" && mode != "following" {
+		writeError(w, http.StatusBadRequest, "invalid_mode", "피드 mode는 for_me 또는 following이어야 합니다")
+		return
+	}
 	viewer := getPrincipal(r).User.ID
-	limit, offset := pagination(r)
+	limit, legacyOffset := pagination(r)
+	if legacyOffset != 0 {
+		writeError(w, http.StatusBadRequest, "invalid_cursor", "Flow는 offset 대신 서버가 발급한 Cursor를 사용해야 합니다")
+		return
+	}
 	where := []string{"p.status='published'", `NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))`, `NOT EXISTS(SELECT 1 FROM mutes m WHERE m.muter_id=$1 AND m.muted_id=p.author_id)`, `(p.visibility='public' OR p.author_id=$1 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$1))`}
 	if mode == "following" {
 		where = append(where, `(p.author_id=$1 OR EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id))`)
+		s.writeFollowingFeed(w, r, where, limit, legacyOffset, viewer)
+		return
 	}
-	fetchLimit := limit
-	fetchOffset := offset
-	prefs := defaultFeedPreferences()
-	if loaded, prefErr := s.loadFeedPreferences(r.Context(), viewer); prefErr == nil {
-		prefs = loaded
-	}
-	if mode == "for_me" && len(prefs.ExcludedTopics) > 0 {
-		where = append(where, `NOT EXISTS(SELECT 1 FROM post_topics xpt JOIN topics xt ON xt.id=xpt.topic_id WHERE xpt.post_id=p.id AND xt.slug=ANY($2))`)
-	}
+	s.writeForMeFeed(w, r, where, limit, legacyOffset, viewer)
+}
+
+func (s *Server) writeFollowingFeed(w http.ResponseWriter, r *http.Request, where []string, limit, legacyOffset int, viewer string) {
 	args := []any{viewer}
-	if mode == "for_me" && len(prefs.ExcludedTopics) > 0 {
-		args = append(args, prefs.ExcludedTopics)
+	where = append(where, "p.published_at IS NOT NULL")
+	rawCursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	if rawCursor != "" {
+		cursor, err := cursorpage.DecodeFollowing(rawCursor)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_cursor", "Following Flow 커서가 올바르지 않습니다")
+			return
+		}
+		legacyOffset = 0
+		args = append(args, cursor.PublishedAt, cursor.ID)
+		where = append(where, fmt.Sprintf("(p.published_at,p.id)<($%d,$%d)", len(args)-1, len(args)))
 	}
-	if mode == "for_me" {
-		fetchLimit = 200
-		fetchOffset = 0
-	}
-	items, err := s.queryPosts(r.Context(), where, args, "COALESCE(p.published_at,p.created_at) DESC,p.id DESC", fetchLimit, fetchOffset, viewer)
+	page, err := feedservice.QueryPublishedPosts(r.Context(), s.repo.Pool(), where, args, limit+1, legacyOffset, viewer)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Flow를 불러올 수 없습니다")
 		return
 	}
-	if mode == "for_me" {
-		rankingNow := time.Now()
-		scores := make(map[string]float64, len(items))
-		for index := range items {
-			items[index].Why, scores[items[index].ID] = recommendationComponentsAt(items[index], prefs, rankingNow)
-			items[index].Recommendation = items[index].Why
-		}
-		sort.SliceStable(items, func(i, j int) bool {
-			iScore, jScore := scores[items[i].ID], scores[items[j].ID]
-			if iScore == jScore {
-				return items[i].CreatedAt.After(items[j].CreatedAt)
-			}
-			return iScore > jScore
-		})
-		if !prefs.ShowReasons {
-			for index := range items {
-				items[index].Why, items[index].Recommendation = nil, nil
-			}
-		}
-		start := min(offset, len(items))
-		end := min(start+limit, len(items))
-		items = items[start:end]
+	hasMore := len(page) > limit
+	if hasMore {
+		page = page[:limit]
 	}
-	response := listEnvelope(items, limit, offset)
-	response["mode"] = mode
-	writeData(w, http.StatusOK, response)
+	items := make([]model.Moin, len(page))
+	for index := range page {
+		items[index] = page[index].Moin
+	}
+	decorateRecommendations(items)
+	nextCursor := ""
+	if hasMore && len(page) > 0 {
+		nextCursor, err = cursorpage.EncodeFollowing(cursorpage.Following{PublishedAt: page[len(page)-1].PublishedAt, ID: page[len(page)-1].Moin.ID})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "cursor_error", "Flow 커서를 만들 수 없습니다")
+			return
+		}
+	}
+	writeData(w, http.StatusOK, feedEnvelope(items, limit, legacyOffset, "following", nextCursor))
+}
+
+func (s *Server) writeForMeFeed(w http.ResponseWriter, r *http.Request, where []string, limit, legacyOffset int, viewer string) {
+	rankingAsOf := time.Now().UTC()
+	var after *feedservice.After
+	snapshotID := ""
+	rawCursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	if rawCursor != "" {
+		cursor, err := cursorpage.DecodeForMe(rawCursor, feedservice.RankingVersion)
+		if err != nil {
+			if errors.Is(err, cursorpage.ErrRankingVersionMismatch) {
+				writeError(w, http.StatusBadRequest, "ranking_version_mismatch", "추천 기준이 변경되어 Flow를 처음부터 다시 불러와야 합니다")
+			} else {
+				writeError(w, http.StatusBadRequest, "invalid_cursor", "For Me Flow 커서가 올바르지 않습니다")
+			}
+			return
+		}
+		rankingAsOf = cursor.AsOf
+		after = &feedservice.After{Score: cursor.Score, ID: cursor.ID}
+		snapshotID = cursor.SnapshotID
+		legacyOffset = 0
+	}
+	prefs := defaultFeedPreferences()
+	baseWhere := append([]string(nil), where...)
+	if snapshotID == "" {
+		if loaded, prefErr := s.loadFeedPreferences(r.Context(), viewer); prefErr == nil {
+			prefs = loaded
+		}
+		preferenceJSON, marshalErr := json.Marshal(prefs)
+		if marshalErr != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 추천 설정을 처리할 수 없습니다")
+			return
+		}
+		preferenceDigest := sha256.Sum256(preferenceJSON)
+		preferredSnapshotID := secure.NewID("feed")
+		snapshotWhere := append([]string(nil), baseWhere...)
+		snapshotArgs := []any{viewer}
+		if len(prefs.ExcludedTopics) > 0 {
+			snapshotArgs = append(snapshotArgs, prefs.ExcludedTopics)
+			snapshotWhere = append(snapshotWhere, fmt.Sprintf(`NOT EXISTS(SELECT 1 FROM post_topics xpt JOIN topics xt ON xt.id=xpt.topic_id WHERE xpt.post_id=p.id AND xt.slug=ANY($%d))`, len(snapshotArgs)))
+		}
+		snapshotWhere = append(snapshotWhere, "p.published_at IS NOT NULL", fmt.Sprintf("p.published_at<=$%d", len(snapshotArgs)+1))
+		metadata, err := feedservice.CreateOrReuseRankedSnapshot(r.Context(), s.repo.Pool(), preferredSnapshotID, viewer, feedservice.RankingVersion, hex.EncodeToString(preferenceDigest[:]), preferenceJSON,
+			snapshotWhere, snapshotArgs,
+			feedservice.RankingWeights{Topic: prefs.TopicWeight, Link: prefs.LinkWeight, Discovery: prefs.DiscoveryWeight, Recency: prefs.RecencyWeight},
+			rankingAsOf, rankingAsOf.Add(time.Hour))
+		if err != nil {
+			if errors.Is(err, feedservice.ErrSnapshotBusy) {
+				w.Header().Set("Retry-After", "1")
+				writeError(w, http.StatusTooManyRequests, "feed_snapshot_busy", "다른 Flow 새로고침을 처리 중입니다. 잠시 후 다시 시도해 주세요")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 스냅샷을 만들 수 없습니다")
+			return
+		}
+		snapshotID, rankingAsOf = metadata.ID, metadata.AsOf
+		if err := json.Unmarshal(metadata.Preferences, &prefs); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 스냅샷 설정을 읽을 수 없습니다")
+			return
+		}
+	} else {
+		metadata, available, err := feedservice.Snapshot(r.Context(), s.repo.Pool(), snapshotID, viewer, feedservice.RankingVersion)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 스냅샷을 확인할 수 없습니다")
+			return
+		}
+		if !available {
+			writeError(w, http.StatusBadRequest, "feed_snapshot_expired", "Flow Cursor가 만료되어 처음부터 다시 불러와야 합니다")
+			return
+		}
+		if !metadata.AsOf.Equal(rankingAsOf) {
+			writeError(w, http.StatusBadRequest, "invalid_cursor", "For Me Flow 커서와 스냅샷 기준 시각이 일치하지 않습니다")
+			return
+		}
+		rankingAsOf = metadata.AsOf
+		if err := json.Unmarshal(metadata.Preferences, &prefs); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 스냅샷 설정을 읽을 수 없습니다")
+			return
+		}
+	}
+	baseWhere = append(baseWhere, "p.published_at IS NOT NULL")
+	ranked, hasMore, err := feedservice.QueryRankedSnapshot(r.Context(), s.repo.Pool(), snapshotID, feedservice.RankingVersion, baseWhere, []any{viewer}, after, limit, viewer)
+	if err != nil {
+		if errors.Is(err, feedservice.ErrSnapshotUnavailable) {
+			writeError(w, http.StatusBadRequest, "feed_snapshot_expired", "Flow Cursor가 만료되어 처음부터 다시 불러와야 합니다")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "storage_error", "Flow를 불러올 수 없습니다")
+		return
+	}
+	items := make([]model.Moin, len(ranked))
+	for index := range ranked {
+		items[index] = ranked[index].Moin
+		items[index].Why = snapshotRecommendation(ranked[index])
+		items[index].Recommendation = items[index].Why
+		if !prefs.ShowReasons {
+			items[index].Why, items[index].Recommendation = nil, nil
+		}
+	}
+	nextCursor := ""
+	if hasMore && len(ranked) > 0 {
+		last := ranked[len(ranked)-1]
+		nextCursor, err = cursorpage.EncodeForMe(cursorpage.ForMe{AsOf: rankingAsOf, Score: last.Score, ID: last.Moin.ID, RankingVersion: feedservice.RankingVersion, SnapshotID: snapshotID})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "cursor_error", "Flow 커서를 만들 수 없습니다")
+			return
+		}
+	}
+	writeData(w, http.StatusOK, feedEnvelope(items, limit, legacyOffset, "for_me", nextCursor))
+}
+
+func snapshotRecommendation(item feedservice.RankedMoin) []model.RecommendationReason {
+	reasons := make([]model.RecommendationReason, 0, 4)
+	if item.LinkScore > 0 {
+		reasons = append(reasons, model.RecommendationReason{Label: "Link한 사용자의 Moin", Score: item.LinkScore})
+	}
+	if item.TopicScore > 0 {
+		reasons = append(reasons, model.RecommendationReason{Label: fmt.Sprintf("팔로우한 Topic %d개와 관련", item.FollowedTopics), Score: item.TopicScore})
+	}
+	if item.DiscoveryScore > 0 {
+		reasons = append(reasons, model.RecommendationReason{Label: "새로운 관심사·Signal 발견", Score: item.DiscoveryScore})
+	}
+	if item.RecencyScore > 0 {
+		reasons = append(reasons, model.RecommendationReason{Label: "최근 24시간의 새 Moin", Score: item.RecencyScore})
+	}
+	return reasons
+}
+
+func feedEnvelope(items []model.Moin, limit, offset int, mode, nextCursor string) map[string]any {
+	response := map[string]any{"items": items, "limit": limit, "offset": offset, "mode": mode, "rankingVersion": feedservice.RankingVersion}
+	if nextCursor != "" {
+		response["nextCursor"] = nextCursor
+	}
+	return response
 }
 
 func (s *Server) queryPosts(ctx context.Context, where []string, args []any, order string, limit, offset int, viewer string) ([]model.Moin, error) {
-	args = append(args, limit, offset)
-	query := `SELECT ` + postAndAuthorColumns + ` FROM posts p JOIN users u ON u.id=p.author_id WHERE ` + strings.Join(where, " AND ") + fmt.Sprintf(` ORDER BY %s LIMIT $%d OFFSET $%d`, order, len(args)-1, len(args))
-	rows, err := s.repo.Pool().Query(ctx, query, args...)
+	items, err := feedservice.QueryPosts(ctx, s.repo.Pool(), where, args, order, limit, offset, viewer)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	items := make([]model.Moin, 0)
-	for rows.Next() {
-		post, err := scanMoin(rows)
-		if err != nil {
-			return nil, err
-		}
-		if err := s.enrichMoin(ctx, &post, viewer); err != nil {
-			return nil, err
-		}
-		items = append(items, post)
-	}
-	return items, rows.Err()
+	decorateRecommendations(items)
+	return items, nil
 }
 
 func listEnvelope(items []model.Moin, limit, offset int) map[string]any {
@@ -689,13 +770,28 @@ func (s *Server) putReaction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "Moin을 찾을 수 없습니다")
 		return
 	}
-	tag, err := s.repo.Pool().Exec(r.Context(), `INSERT INTO reactions(user_id,post_id,kind) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, p.User.ID, postID, input.Type)
+	tx, err := s.repo.Pool().Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 저장할 수 없습니다")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	tag, err := tx.Exec(r.Context(), `INSERT INTO reactions(user_id,post_id,kind) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, p.User.ID, postID, input.Type)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 저장할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() > 0 && post.AuthorID != p.User.ID {
-		s.notify(r.Context(), post.AuthorID, p.User.ID, "reaction", postID, map[string]string{"postId": postID, "signal": input.Type})
+		if err := s.enqueueNotification(r.Context(), tx, post.AuthorID, p.User.ID, "reaction", postID,
+			map[string]string{"postId": postID, "signal": input.Type},
+			"notification:reaction:"+secure.NewID("op")); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 저장할 수 없습니다")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 저장할 수 없습니다")
+		return
 	}
 	post, _ = s.loadMoin(r.Context(), postID, p.User.ID)
 	writeData(w, http.StatusOK, map[string]any{"type": input.Type, "signals": post.Signals, "viewerSignals": post.ViewerSignals})

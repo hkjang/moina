@@ -16,6 +16,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/hkjang/moina/backend/internal/model"
+	"github.com/hkjang/moina/backend/internal/outbound"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
 	"golang.org/x/oauth2"
@@ -60,10 +61,19 @@ func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	ctx = oidc.ClientContext(ctx, s.client)
+	client, err := s.outboundClient(cfg.AllowedHosts, cfg.PrivateAllowedHosts, cfg.AllowInsecureHTTP)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "oidc_egress_denied", "SSO 제공자 호스트가 아웃바운드 정책에 의해 차단되었습니다")
+		return
+	}
+	ctx = oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "oidc_unavailable", "SSO 제공자 discovery에 실패했습니다")
+		return
+	}
+	if err := validateOIDCProvider(cfg, provider); err != nil {
+		writeError(w, http.StatusBadGateway, "oidc_egress_denied", "SSO discovery가 허용되지 않은 호스트를 반환했습니다")
 		return
 	}
 	state, err := secure.RandomToken(24)
@@ -128,10 +138,19 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	ctx = oidc.ClientContext(ctx, s.client)
+	client, err := s.outboundClient(cfg.AllowedHosts, cfg.PrivateAllowedHosts, cfg.AllowInsecureHTTP)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "oidc_egress_denied", "SSO 제공자 호스트가 아웃바운드 정책에 의해 차단되었습니다")
+		return
+	}
+	ctx = oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "oidc_unavailable", "SSO 제공자 discovery에 실패했습니다")
+		return
+	}
+	if err := validateOIDCProvider(cfg, provider); err != nil {
+		writeError(w, http.StatusBadGateway, "oidc_egress_denied", "SSO discovery가 허용되지 않은 호스트를 반환했습니다")
 		return
 	}
 	tokens, err := oauthConfig(cfg, provider, flow.RedirectURL).Exchange(ctx, code, oauth2.VerifierOption(flow.Verifier))
@@ -201,6 +220,21 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 
 func oauthConfig(cfg model.OIDCConfig, provider *oidc.Provider, redirect string) *oauth2.Config {
 	return &oauth2.Config{ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: redirect, Endpoint: provider.Endpoint(), Scopes: cfg.Scopes}
+}
+
+func validateOIDCProvider(cfg model.OIDCConfig, provider *oidc.Provider) error {
+	policy := outbound.Policy{AllowedHosts: cfg.AllowedHosts, PrivateAllowedHosts: cfg.PrivateAllowedHosts, AllowHTTP: cfg.AllowInsecureHTTP}
+	endpoint := provider.Endpoint()
+	for _, raw := range []string{endpoint.AuthURL, endpoint.TokenURL} {
+		parsed, err := url.Parse(raw)
+		if err != nil {
+			return err
+		}
+		if err := policy.ValidateURL(parsed); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func automaticOIDCRedirect(r *http.Request) string {
@@ -315,10 +349,19 @@ func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	ctx = oidc.ClientContext(ctx, s.client)
+	client, err := s.outboundClient(cfg.AllowedHosts, cfg.PrivateAllowedHosts, cfg.AllowInsecureHTTP)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "oidc_egress_denied", "SSO 제공자 호스트가 아웃바운드 정책에 의해 차단되었습니다")
+		return
+	}
+	ctx = oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "oidc_unavailable", "OIDC discovery에 실패했습니다")
+		return
+	}
+	if err := validateOIDCProvider(cfg, provider); err != nil {
+		writeError(w, http.StatusBadGateway, "oidc_egress_denied", "SSO discovery가 허용되지 않은 호스트를 반환했습니다")
 		return
 	}
 	endpoint := provider.Endpoint()

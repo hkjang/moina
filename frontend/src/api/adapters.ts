@@ -64,7 +64,7 @@ export function normalizeMoin(value: unknown): Moin {
   const viewer = record(raw.viewer);
   const media = Array.isArray(raw.media) ? raw.media.map((item) => {
     const entry = record(item);
-    return { id: text(entry.id), type: entry.type === 'video' ? 'video' as const : 'image' as const, url: text(entry.url) || mediaURL(entry.id) || '', alt: text(entry.alt) || undefined };
+    return { id: text(entry.id), type: entry.type === 'video' ? 'video' as const : 'image' as const, url: text(entry.url) || mediaURL(entry.id) || '', alt: text(entry.altText, entry.alt) || undefined };
   }) : [];
   const signalValues = raw.signals ?? counts.signals;
   const remoinSource = raw.remoinMoin;

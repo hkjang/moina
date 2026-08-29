@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "product": "moina",
-  "version": "v0.1.0",
-  "generatedAt": "2026-08-29T02:36:37.949Z",
+  "version": "v0.1.1",
+  "generatedAt": "2026-08-29T05:38:01.423Z",
   "source": "Playwright actual application capture",
   "screenshots": [
     {
@@ -332,7 +332,7 @@
     {
       "slug": "desktop-moin-detail",
       "title": "데스크톱 Moin 상세",
-      "route": "/moin/moin_HWAw2uFlKnIeDZ0BZZKHN-mX",
+      "route": "/moin/moin_XtwPWL4ZrxHLRMqN_C0VR0ED",
       "viewport": {
         "name": "desktop",
         "width": 1440,
@@ -704,7 +704,7 @@
     {
       "slug": "mobile-moin-detail",
       "title": "모바일 Moin 상세",
-      "route": "/moin/moin_HWAw2uFlKnIeDZ0BZZKHN-mX",
+      "route": "/moin/moin_XtwPWL4ZrxHLRMqN_C0VR0ED",
       "viewport": {
         "name": "mobile",
         "width": 390,

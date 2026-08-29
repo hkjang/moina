@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/hkjang/moina/backend/internal/model"
+	"github.com/hkjang/moina/backend/internal/outbound"
 	"github.com/hkjang/moina/backend/internal/secure"
 )
 
@@ -30,7 +31,7 @@ type chatInput struct {
 }
 
 func validateAI(cfg *model.AIConfig) error {
-	cfg.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	normalizeAI(cfg)
 	cfg.Model = strings.TrimSpace(cfg.Model)
 	cfg.APIStyle = strings.ToLower(strings.TrimSpace(cfg.APIStyle))
 	if cfg.APIStyle == "" {
@@ -52,6 +53,9 @@ func validateAI(cfg *model.AIConfig) error {
 		return errors.New("활성화하려면 API 주소, 모델, API 방식을 입력해야 합니다")
 	}
 	if err := validateServiceURL(cfg.BaseURL, cfg.AllowInsecureHTTP); err != nil {
+		return fmt.Errorf("baseUrl: %w", err)
+	}
+	if err := validateOutboundEndpoint(cfg.BaseURL, cfg.AllowedHosts, cfg.PrivateAllowedHosts, cfg.AllowInsecureHTTP); err != nil {
 		return fmt.Errorf("baseUrl: %w", err)
 	}
 	if cfg.DefaultMaxTokens < 1 || cfg.MaxTokens < cfg.DefaultMaxTokens || cfg.MaxTokens > absoluteMaxAITokens {
@@ -125,7 +129,13 @@ func (s *Server) aiChat(w http.ResponseWriter, r *http.Request) {
 	if cfg.APIKey != "" {
 		request.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 	}
-	response, err := s.client.Do(request)
+	client, err := s.outboundClient(cfg.AllowedHosts, cfg.PrivateAllowedHosts, cfg.AllowInsecureHTTP)
+	if err != nil {
+		s.recordAIUsage(r, cfg, input.MaxTokens, false, time.Since(started))
+		writeError(w, http.StatusBadGateway, "ai_egress_denied", "AI 공급자 호스트가 아웃바운드 정책에 의해 차단되었습니다")
+		return
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		s.recordAIUsage(r, cfg, input.MaxTokens, false, time.Since(started))
 		writeError(w, http.StatusBadGateway, "ai_unavailable", "AI 공급자에 연결할 수 없습니다")
@@ -190,7 +200,12 @@ func (s *Server) adminTestAI(w http.ResponseWriter, r *http.Request) {
 	if cfg.APIKey != "" {
 		request.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 	}
-	response, err := s.client.Do(request)
+	client, err := s.outboundClient(cfg.AllowedHosts, cfg.PrivateAllowedHosts, cfg.AllowInsecureHTTP)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "ai_egress_denied", "AI 공급자 호스트가 아웃바운드 정책에 의해 차단되었습니다")
+		return
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "ai_unavailable", "AI 공급자에 연결할 수 없습니다")
 		return
@@ -202,4 +217,8 @@ func (s *Server) adminTestAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, http.StatusOK, map[string]any{"connected": true, "model": cfg.Model, "streaming": true})
+}
+
+func (s *Server) outboundClient(hosts, privateHosts []string, allowHTTP bool) (*http.Client, error) {
+	return (outbound.Policy{AllowedHosts: hosts, PrivateAllowedHosts: privateHosts, AllowHTTP: allowHTTP}).Client(s.client)
 }
