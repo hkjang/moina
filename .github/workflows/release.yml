@@ -76,9 +76,12 @@ jobs:
           docker run -d --name moina-release-postgres --network moina-release \
             -e POSTGRES_DB=moina -e POSTGRES_USER=moina -e POSTGRES_PASSWORD=release-password \
             postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73 >/dev/null
-          for attempt in {1..45}; do
-            docker exec moina-release-postgres pg_isready -U moina -d moina >/dev/null 2>&1 && break
-            if [[ "${attempt}" -eq 45 ]]; then docker logs moina-release-postgres; exit 1; fi
+          # The official image briefly exposes its temporary init server before
+          # restarting PostgreSQL. Wait for init completion and final readiness.
+          for attempt in {1..60}; do
+            if docker logs moina-release-postgres 2>&1 | grep -F 'PostgreSQL init process complete; ready for start up.' >/dev/null && \
+              docker exec moina-release-postgres pg_isready -U moina -d moina >/dev/null 2>&1; then break; fi
+            if [[ "${attempt}" -eq 60 ]]; then docker logs moina-release-postgres; exit 1; fi
             sleep 1
           done
           docker run -d --name moina-release-app --network moina-release \
