@@ -14,6 +14,11 @@ import {
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { AdminTitle } from "./components";
 import { roleRows } from "./helpers";
+import {
+  mergeWorkflowActions,
+  registeredWorkflowActions,
+  splitWorkflowActions,
+} from "../../utils/workflowActions";
 
 interface SettingRow {
   key: string;
@@ -60,6 +65,9 @@ export function AdminSettingsPage() {
     maxPerPost: 4,
     orphanTtlHours: 24,
   });
+  const [network, setNetwork] = useState<{ trustedProxies: string[] }>({
+    trustedProxies: [],
+  });
   const [workflow, setWorkflow] = useState<WorkflowSettings>({
     enabled: false,
     actions: ["post.publish"],
@@ -70,6 +78,7 @@ export function AdminSettingsPage() {
       setGeneral(findValue("service.general", general));
       setAPI(findValue("api.access", api));
       setMedia(findValue("media.config", media));
+      setNetwork(findValue("network.proxy", network));
     }
   }, [settings.data]);
   useEffect(() => {
@@ -107,9 +116,11 @@ export function AdminSettingsPage() {
     .filter(
       (role) =>
         role.permissions?.includes("approvals:review") ||
+        role.permissions?.includes("approvals:*") ||
         role.permissions?.includes("*"),
     )
     .map((role) => role.name);
+  const workflowActionGroups = splitWorkflowActions(workflow.actions);
   return (
     <div className="page-stack">
       <AdminTitle
@@ -309,6 +320,44 @@ export function AdminSettingsPage() {
           </Card>
           <Card>
             <SectionHeader
+              title="Reverse Proxy 신뢰 정책"
+              description="직접 연결한 Peer가 목록에 있을 때만 Forwarded·X-Forwarded 헤더를 신뢰합니다. 현재 인스턴스에는 즉시, 다른 인스턴스에는 최대 30초 안에 반영됩니다."
+              action={
+                <Button
+                  variant="primary"
+                  onClick={() => void saveSetting("network.proxy", network)}
+                  disabled={working === "network.proxy"}
+                >
+                  <Save />
+                  저장
+                </Button>
+              }
+            />
+            <Field
+              label="신뢰 Proxy IP 또는 CIDR"
+              help="한 줄에 하나씩 입력하세요. 호스트 이름과 와일드카드는 허용하지 않습니다. 비워 두면 전달 헤더를 모두 무시합니다."
+            >
+              <textarea
+                rows={5}
+                spellCheck={false}
+                placeholder={"예: 10.20.0.10\n10.30.0.0/24"}
+                value={network.trustedProxies.join("\n")}
+                onChange={(event) =>
+                  setNetwork({
+                    trustedProxies: event.target.value
+                      .split(/[\n,]/)
+                      .map((item) => item.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+            </Field>
+            <p className="settings-note">
+              감사 로그에는 소켓 IP, 계산된 실제 Client IP와 Proxy Chain을 각각 기록합니다.
+            </p>
+          </Card>
+          <Card>
+            <SectionHeader
               title="검토·승인 프로세스"
               description="설정이 없거나 꺼져 있으면 승인·반려 단계를 완전히 제외합니다."
               action={
@@ -332,23 +381,47 @@ export function AdminSettingsPage() {
             />
             {workflow.enabled && (
               <div className="nested-settings">
-                <Field
-                  label="승인 대상 작업"
-                  help="쉼표로 구분합니다. 기본 게시 승인 코드는 post.publish입니다."
-                >
-                  <input
-                    value={(workflow.actions || []).join(", ")}
-                    onChange={(event) =>
-                      setWorkflow({
-                        ...workflow,
-                        actions: event.target.value
-                          .split(",")
-                          .map((item) => item.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                  />
-                </Field>
+                <fieldset className="permission-picker">
+                  <legend>등록된 승인 작업</legend>
+                  {registeredWorkflowActions.map((action) => (
+                    <label key={action.value}>
+                      <input
+                        type="checkbox"
+                        checked={workflowActionGroups.selected.includes(action.value)}
+                        onChange={(event) => {
+                          const selected = event.target.checked
+                            ? [...workflowActionGroups.selected, action.value]
+                            : workflowActionGroups.selected.filter((item) => item !== action.value);
+                          setWorkflow({
+                            ...workflow,
+                            actions: mergeWorkflowActions(selected, workflowActionGroups.advanced),
+                          });
+                        }}
+                      />
+                      <span><strong>{action.label}</strong><small>{action.description} · <code>{action.value}</code></small></span>
+                    </label>
+                  ))}
+                </fieldset>
+                <details className="advanced-settings">
+                  <summary>고급 패턴 직접 입력</summary>
+                  <Field
+                    label="Action 패턴"
+                    help="한 줄에 하나씩 입력합니다. 전체는 *, 영역 wildcard는 post.*처럼 마지막 segment에만 사용할 수 있습니다."
+                  >
+                    <textarea
+                      rows={4}
+                      spellCheck={false}
+                      value={workflowActionGroups.advanced.join("\n")}
+                      placeholder={"예: post.*\n*"}
+                      onChange={(event) =>
+                        setWorkflow({
+                          ...workflow,
+                          actions: mergeWorkflowActions(workflowActionGroups.selected, event.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                </details>
                 <fieldset className="permission-picker">
                   <legend>승인 가능한 역할</legend>
                   {roleNames.map((role) => (

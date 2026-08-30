@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - "VERSION"
       - "docs/**"
       - "scripts/qa-pages.mjs"
       - "scripts/check-brand-colors.mjs"

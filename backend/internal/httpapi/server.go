@@ -2,9 +2,11 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -27,6 +29,7 @@ import (
 	"github.com/hkjang/moina/backend/internal/observability"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -53,17 +56,20 @@ type attempt struct {
 }
 
 type Server struct {
-	repo      *store.Store
-	secrets   *secure.Manager
-	version   string
-	startedAt time.Time
-	client    *http.Client
-	hub       *notificationHub
-	metrics   *observability.Registry
-	outbox    *event.Repository
-	media     mediastore.MediaStore
-	rateMu    sync.Mutex
-	rates     map[string]*attempt
+	repo            *store.Store
+	secrets         *secure.Manager
+	version         string
+	startedAt       time.Time
+	client          *http.Client
+	hub             *notificationHub
+	metrics         *observability.Registry
+	outbox          *event.Repository
+	media           mediastore.MediaStore
+	rateMu          sync.Mutex
+	rates           map[string]*attempt
+	networkMu       sync.Mutex
+	networkCache    networkConfig
+	networkLoadedAt time.Time
 }
 
 func New(repo *store.Store, secrets *secure.Manager, version string) *Server {
@@ -97,7 +103,7 @@ func (s *Server) SetObservability(registry *observability.Registry) {
 
 func (s *Server) Handler() http.Handler {
 	router := chi.NewRouter()
-	router.Use(observability.HTTPMiddleware(slog.Default()), s.recoverJSON, s.securityHeaders, s.verifyOrigin)
+	router.Use(s.resolveRequestNetwork, observability.HTTPMiddleware(slog.Default()), s.recoverJSON, s.securityHeaders, s.verifyOrigin)
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeData(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -362,7 +368,12 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 				writeError(w, http.StatusServiceUnavailable, "api_disabled", "관리자가 API 키 접근을 비활성화했습니다")
 				return
 			}
-			if !s.allow("api-key|"+p.APIKeyID, cfg.RateLimitPerMinute, time.Minute) {
+			allowed, rateErr := s.allow(r.Context(), "api-key|"+p.APIKeyID, cfg.RateLimitPerMinute, time.Minute)
+			if rateErr != nil {
+				writeError(w, http.StatusServiceUnavailable, "rate_limit_unavailable", "요청 한도 정책을 확인할 수 없습니다")
+				return
+			}
+			if !allowed {
 				w.Header().Set("Retry-After", "60")
 				writeError(w, http.StatusTooManyRequests, "rate_limited", "API 요청 한도를 초과했습니다")
 				return
@@ -429,7 +440,37 @@ func intersectPermissions(a, b []string) []string {
 	return result
 }
 
-func (s *Server) allow(key string, limit int, window time.Duration) bool {
+func (s *Server) allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error) {
+	if limit < 1 || window < time.Second {
+		return false, errors.New("invalid rate limit")
+	}
+	if s.repo == nil {
+		return s.allowMemory(key, limit, window), nil
+	}
+	seconds := int(window.Round(time.Second) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	hash := sha256.Sum256([]byte(key))
+	var count int
+	err := s.repo.Pool().QueryRow(ctx, `INSERT INTO rate_limit_buckets(key_hash,window_seconds,request_count,started_at,expires_at)
+		VALUES($1,$2::integer,1,statement_timestamp(),statement_timestamp()+make_interval(secs=>($2::integer)::double precision))
+		ON CONFLICT(key_hash,window_seconds) DO UPDATE SET
+			request_count=CASE WHEN rate_limit_buckets.expires_at<=statement_timestamp() THEN 1 ELSE rate_limit_buckets.request_count+1 END,
+			started_at=CASE WHEN rate_limit_buckets.expires_at<=statement_timestamp() THEN statement_timestamp() ELSE rate_limit_buckets.started_at END,
+			expires_at=CASE WHEN rate_limit_buckets.expires_at<=statement_timestamp() THEN statement_timestamp()+make_interval(secs=>($2::integer)::double precision) ELSE rate_limit_buckets.expires_at END
+		WHERE rate_limit_buckets.expires_at<=statement_timestamp() OR rate_limit_buckets.request_count<$3::integer
+		RETURNING request_count`, fmt.Sprintf("%x", hash[:]), seconds, limit).Scan(&count)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return count <= limit, nil
+}
+
+func (s *Server) allowMemory(key string, limit int, window time.Duration) bool {
 	now := time.Now()
 	s.rateMu.Lock()
 	defer s.rateMu.Unlock()
@@ -499,21 +540,8 @@ func pagination(r *http.Request) (int, int) {
 	return limit, offset
 }
 
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil {
-		return host
-	}
-	return r.RemoteAddr
-}
-
 func (s *Server) audit(r *http.Request, action, targetType, targetID string, success bool, detail any) {
-	raw := json.RawMessage(`{}`)
-	if detail != nil {
-		if encoded, err := json.Marshal(detail); err == nil {
-			raw = encoded
-		}
-	}
+	raw := auditDetail(r, detail)
 	event := store.AuditEvent{ID: secure.NewID("aud"), ActorID: getPrincipal(r).User.ID, Action: action, TargetType: targetType, TargetID: targetID, Success: success, IP: clientIP(r), UserAgent: r.UserAgent(), Detail: raw, CreatedAt: time.Now().UTC()}
 	if err := s.repo.AddAudit(r.Context(), event); err != nil {
 		slog.Warn("감사 로그 저장 실패", "action", action, "error", err)

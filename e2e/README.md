@@ -4,7 +4,7 @@
 
 ## 애플리케이션 smoke
 
-먼저 `moina:v0.1.2`와 테스트 PostgreSQL을 시작한 뒤 실행합니다.
+먼저 `moina:v0.1.3`과 테스트 PostgreSQL을 시작한 뒤 실행합니다.
 
 ```bash
 npm ci --prefix e2e
@@ -12,9 +12,19 @@ npm --prefix e2e exec -- playwright install chromium
 MOINA_E2E_BASE_URL=http://127.0.0.1:18080 \
 MOINA_E2E_USERNAME=e2e-admin \
 MOINA_E2E_PASSWORD='test-password-12345' \
-MOINA_E2E_VERSION=v0.1.2 \
+MOINA_E2E_VERSION=v0.1.3 \
 npm test --prefix e2e
 ```
+
+기본 테스트는 전체 route 브라우저 smoke 뒤에 핵심 화면의 실제 DOM을 Light·Dark 및 Desktop·Mobile 조합으로 Axe 검사하고, 승인된 핵심 화면 12개의 48개 시각 베이스라인을 비교합니다. Serious·Critical 위반, 키보드 Focus Trap, 200% 확대 Reflow, Forced Colors, Reduced Motion 또는 시각 회귀가 있으면 실패하며 결과는 `e2e/test-results`에 저장됩니다.
+
+접근성 검사만 다시 실행하려면 다음 명령을 사용합니다.
+
+```bash
+npm --prefix e2e run test:accessibility
+```
+
+시각 회귀만 실행하거나 의도한 화면 변경의 베이스라인을 승인하는 절차는 [VISUAL_REGRESSION.md](./VISUAL_REGRESSION.md)를 따릅니다. CI는 베이스라인을 읽기 전용으로 비교하며 자동 갱신하지 않습니다.
 
 빈 전용 DB에서도 열 수 있는 모든 정적 catalog route를 직접 이동한 뒤 새로고침해 같은 URL과 정상 h1을 유지하는지 확인합니다. 데이터 ID나 slug가 필요한 상세 화면은 아래 실제 화면 캡처 단계에서 정상 API로 seed한 반환값을 사용합니다.
 
@@ -26,11 +36,11 @@ npm test --prefix e2e
 MOINA_CAPTURE_BASE_URL=http://127.0.0.1:18080 \
 MOINA_CAPTURE_USERNAME=capture-admin \
 MOINA_CAPTURE_PASSWORD='capture-password-12345' \
-MOINA_CAPTURE_VERSION=v0.1.2 \
+MOINA_CAPTURE_VERSION=v0.1.3 \
 npm --prefix e2e run capture:web
 ```
 
-모든 route를 Light·Dark 테마 각각 `1440×1000`과 `390×844`에서 캡처합니다. 로그인·프로필 컨텍스트를 포함한 총 124개 PNG는 `dist/screenshots-png`에 남고, 메타데이터를 제거한 WebP와 schema v2 manifest가 `docs/assets/screenshots`에 생성됩니다. 자동 생성물을 홍보 페이지가 읽어 테마를 전환할 수 있는 실제 화면 gallery로 사용합니다.
+모든 route를 Light·Dark 테마 각각 `1440×1000`과 `390×844`에서 캡처합니다. 로그인·프로필 컨텍스트를 포함한 전체 PNG는 `dist/screenshots-png`에 남고, 메타데이터를 제거한 WebP와 schema v2 manifest가 `docs/assets/screenshots`에 생성됩니다. 자동 생성물을 홍보 페이지가 읽어 테마를 전환할 수 있는 실제 화면 gallery로 사용합니다.
 
 ## Pages QA
 

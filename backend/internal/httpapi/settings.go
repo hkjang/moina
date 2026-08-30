@@ -131,8 +131,12 @@ func (s *Server) aiConfig(r *http.Request) (model.AIConfig, error) {
 }
 
 func (s *Server) workflowConfig(r *http.Request) (model.WorkflowConfig, error) {
+	return s.workflowConfigContext(r.Context())
+}
+
+func (s *Server) workflowConfigContext(ctx context.Context) (model.WorkflowConfig, error) {
 	cfg := defaultWorkflow()
-	if err := s.loadSetting(r, settingWorkflow, &cfg); err != nil && !store.IsNotFound(err) {
+	if err := s.loadSettingContext(ctx, settingWorkflow, &cfg); err != nil && !store.IsNotFound(err) {
 		return model.WorkflowConfig{}, err
 	}
 	if cfg.Actions == nil {
@@ -260,6 +264,13 @@ func (s *Server) adminPutSetting(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		value, sensitive = cfg, false
+	case settingNetwork:
+		cfg := defaultNetwork()
+		if strictUnmarshal(input.Value, &cfg) != nil || validateNetwork(&cfg) != nil {
+			writeError(w, http.StatusBadRequest, "invalid_value", "신뢰 Proxy 설정은 정확한 IP 또는 CIDR 목록이어야 합니다")
+			return
+		}
+		value, sensitive = cfg, false
 	}
 	record, err := s.saveSetting(r, key, value, sensitive, input.Revision)
 	if store.IsNotFound(err) {
@@ -269,6 +280,9 @@ func (s *Server) adminPutSetting(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "설정을 저장할 수 없습니다")
 		return
+	}
+	if key == settingNetwork {
+		s.invalidateNetworkSettings()
 	}
 	s.audit(r, "setting.update", "setting", key, true, map[string]any{"sensitive": sensitive, "revision": record.Revision})
 	writeData(w, http.StatusOK, map[string]any{"key": key, "sensitive": sensitive, "configured": true, "revision": record.Revision, "updatedAt": record.UpdatedAt})
@@ -535,7 +549,59 @@ func (s *Server) adminPutAI(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusOK, aiView(cfg))
 }
 
-var approvalPattern = regexp.MustCompile(`^(?:\*|[a-z][a-z0-9_.-]*(?::(?:\*|[a-z][a-z0-9_.-]*))?)$`)
+var approvalActionPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$`)
+var approvalNamespacePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$`)
+
+type parsedApprovalActionPattern struct {
+	value     string
+	namespace string
+	global    bool
+	wildcard  bool
+}
+
+// parseApprovalActionPattern accepts only the global wildcard, an exact
+// dot-delimited action, or a wildcard in the terminal namespace position.
+// Keeping parsing and matching together prevents a persisted malformed rule
+// from becoming a broader prefix match.
+func parseApprovalActionPattern(raw string) (parsedApprovalActionPattern, error) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "*" {
+		return parsedApprovalActionPattern{value: value, global: true}, nil
+	}
+	if strings.Contains(value, "*") {
+		if strings.Count(value, "*") != 1 || !strings.HasSuffix(value, ".*") {
+			return parsedApprovalActionPattern{}, errors.New("wildcard must be the terminal namespace segment")
+		}
+		namespace := strings.TrimSuffix(value, ".*")
+		if !approvalNamespacePattern.MatchString(namespace) {
+			return parsedApprovalActionPattern{}, errors.New("invalid wildcard namespace")
+		}
+		return parsedApprovalActionPattern{value: value, namespace: namespace, wildcard: true}, nil
+	}
+	if !approvalActionPattern.MatchString(value) {
+		return parsedApprovalActionPattern{}, errors.New("action must be dot-delimited")
+	}
+	return parsedApprovalActionPattern{value: value}, nil
+}
+
+func normalizeApprovalAction(raw string) (string, bool) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	return value, approvalActionPattern.MatchString(value)
+}
+
+func (pattern parsedApprovalActionPattern) matches(action string) bool {
+	value, valid := normalizeApprovalAction(action)
+	if !valid {
+		return false
+	}
+	if pattern.global {
+		return true
+	}
+	if pattern.wildcard {
+		return strings.HasPrefix(value, pattern.namespace+".")
+	}
+	return pattern.value == value
+}
 
 func (s *Server) adminGetWorkflow(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.workflowConfig(r)
@@ -566,28 +632,25 @@ func (s *Server) adminPutWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	seen := map[string]bool{}
 	for index, action := range cfg.Actions {
-		action = strings.ToLower(strings.TrimSpace(action))
-		if !approvalPattern.MatchString(action) || seen[action] {
+		parsed, err := parseApprovalActionPattern(action)
+		if err != nil || seen[parsed.value] {
 			writeError(w, http.StatusBadRequest, "invalid_actions", "승인 작업 패턴이 올바르지 않거나 중복되었습니다")
 			return
 		}
-		seen[action], cfg.Actions[index] = true, action
+		seen[parsed.value], cfg.Actions[index] = true, parsed.value
 	}
-	if cfg.Enabled {
-		if !s.rolesExist(r, cfg.ApproverRoles) {
-			writeError(w, http.StatusBadRequest, "invalid_roles", "승인 역할이 현재 역할 정책에 없습니다")
+	if !s.rolesExist(r, cfg.ApproverRoles) {
+		writeError(w, http.StatusBadRequest, "invalid_roles", "승인 역할이 현재 역할 정책에 없습니다")
+		return
+	}
+	for _, role := range cfg.ApproverRoles {
+		permissions, err := s.repo.PermissionsForRoles(r.Context(), []string{role})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "승인 역할 권한을 확인할 수 없습니다")
 			return
 		}
-		eligibleApprover := false
-		for _, role := range cfg.ApproverRoles {
-			permissions, err := s.repo.PermissionsForRoles(r.Context(), []string{role})
-			if err == nil && hasPermission(permissions, "approvals:review") {
-				eligibleApprover = true
-				break
-			}
-		}
-		if !eligibleApprover {
-			writeError(w, http.StatusBadRequest, "no_eligible_approver", "approvals:review 권한이 있는 승인 역할이 필요합니다")
+		if !hasPermission(permissions, "approvals:review") {
+			writeError(w, http.StatusBadRequest, "no_eligible_approver", "선택한 모든 승인 역할에 approvals:review 권한이 필요합니다")
 			return
 		}
 	}
@@ -603,8 +666,9 @@ func workflowMatches(cfg model.WorkflowConfig, action string) bool {
 	if !cfg.Enabled {
 		return false
 	}
-	for _, pattern := range cfg.Actions {
-		if pattern == "*" || pattern == action || strings.HasSuffix(pattern, "*") && strings.HasPrefix(action, strings.TrimSuffix(pattern, "*")) {
+	for _, raw := range cfg.Actions {
+		pattern, err := parseApprovalActionPattern(raw)
+		if err == nil && pattern.matches(action) {
 			return true
 		}
 	}

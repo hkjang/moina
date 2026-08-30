@@ -1,4 +1,4 @@
-import { KeyRound, Monitor, RefreshCw, Save, ShieldCheck, UserRoundCog } from 'lucide-react';
+import { Bell, KeyRound, Monitor, RefreshCw, Save, ShieldCheck, UserRoundCog } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { NavLink } from 'react-router-dom';
 import { apiRequest, readableError } from '../api/client';
@@ -30,7 +30,7 @@ export function ProfileSettingsPage() {
 
 function usePreferences() {
   const query = useApiQuery<UserPreferences>('/profile/preferences');
-  const [value, setValue] = useState<UserPreferences>(defaultPreferences);
+  const [value, setValue] = useState(() => mergePreferences());
   useEffect(() => { if (query.data) { const merged = mergePreferences(query.data); setValue(merged); applyAppearance(merged); } }, [query.data]);
   return { query, value, setValue };
 }
@@ -41,6 +41,91 @@ export function FeedSettingsPage() {
   const update = (key: keyof typeof feed, next: number | boolean | string[]) => setValue({ ...value, feed: { ...feed, [key]: next } });
   const save = async () => { setSaving(true); try { await apiRequest('/profile/preferences', { method: 'PUT', body: value }); notify('For Me 설정을 저장했습니다.', 'success'); query.reload(); } catch (error) { notify(readableError(error), 'error'); } finally { setSaving(false); } };
   return <SettingsLayout title="피드 개인화" description="내가 소유하는 For Me 알고리즘의 비율과 추천 이유 표시를 정합니다.">{query.loading ? <LoadingState/> : query.error ? <ErrorState message={query.error} onRetry={query.reload}/> : <Card><SectionHeader title="For Me 구성" description="각 신호는 추천 순위에 적용되며 합계가 100일 필요는 없습니다." action={<Button variant="primary" onClick={() => void save()} disabled={saving}><Save/>{saving ? '저장 중…' : '저장'}</Button>}/><div className="range-stack">{([['topicWeight', '관심 토픽'], ['linkWeight', '내가 Link한 사람'], ['discoveryWeight', '새로운 발견'], ['recencyWeight', '최신성']] as const).map(([key, label]) => <label key={key}><span><strong>{label}</strong><output>{Number(feed[key])}%</output></span><input type="range" min="0" max="100" step="5" value={Number(feed[key])} onChange={(event) => update(key, Number(event.target.value))}/></label>)}</div><SwitchField label="추천 이유 표시" description="각 모인에 Why this Moin? 점수 설명을 표시합니다." checked={feed.showReasons !== false} onChange={(checked) => update('showReasons', checked)}/><Field label="제외 토픽" help="쉼표로 구분하세요. 제외한 토픽은 For Me에 추천하지 않습니다."><input value={(feed.excludedTopics || []).join(', ')} onChange={(event) => update('excludedTopics', event.target.value.split(',').map((item) => item.trim()).filter(Boolean))} placeholder="예: 광고, 스포일러"/></Field></Card>}</SettingsLayout>;
+}
+
+type DesktopPermission = NotificationPermission | 'unsupported';
+
+function currentDesktopPermission(): DesktopPermission {
+  return typeof window === 'undefined' || !('Notification' in window) ? 'unsupported' : window.Notification.permission;
+}
+
+export function NotificationSettingsPage() {
+  const { notify } = useToast();
+  const { query, value, setValue } = usePreferences();
+  const [saving, setSaving] = useState(false);
+  const [desktopPermission, setDesktopPermission] = useState<DesktopPermission>(currentDesktopPermission);
+  const notifications = value.notifications;
+  const updateInApp = (key: keyof typeof notifications.inApp, enabled: boolean) => setValue({
+    ...value,
+    notifications: { ...notifications, inApp: { ...notifications.inApp, [key]: key === 'approvals' ? true : enabled } },
+  });
+  const updateChannel = (channel: 'toast' | 'desktop', enabled: boolean) => setValue({
+    ...value,
+    notifications: { ...notifications, [channel]: { enabled } },
+  });
+  const toggleDesktop = async (enabled: boolean) => {
+    if (!enabled) {
+      updateChannel('desktop', false);
+      return;
+    }
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setDesktopPermission('unsupported');
+      notify('이 브라우저는 데스크톱 알림을 지원하지 않습니다.', 'error');
+      return;
+    }
+    try {
+      const permission = await window.Notification.requestPermission();
+      setDesktopPermission(permission);
+      if (permission === 'granted') {
+        updateChannel('desktop', true);
+      } else {
+        updateChannel('desktop', false);
+        notify(permission === 'denied' ? '브라우저에서 알림 권한이 차단되었습니다.' : '알림 권한을 허용해야 데스크톱 알림을 켤 수 있습니다.', 'error');
+      }
+    } catch {
+      updateChannel('desktop', false);
+      notify('브라우저 알림 권한을 요청할 수 없습니다.', 'error');
+    }
+  };
+  const save = async () => {
+    setSaving(true);
+    try {
+      await apiRequest('/profile/preferences', { method: 'PUT', body: { notifications } });
+      notify('알림 개인화 설정을 저장했습니다.', 'success');
+      query.reload();
+    } catch (error) {
+      notify(readableError(error), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const permissionCopy = desktopPermission === 'granted'
+    ? { label: '허용됨', tone: 'positive' as const, description: '이 브라우저에서 MOINA 데스크톱 알림을 표시할 수 있습니다.' }
+    : desktopPermission === 'denied'
+      ? { label: '차단됨', tone: 'danger' as const, description: '브라우저 사이트 설정에서 알림 권한을 다시 허용해야 합니다.' }
+      : desktopPermission === 'unsupported'
+        ? { label: '지원 안 함', tone: 'warning' as const, description: '현재 브라우저에서는 앱 내 알림과 토스트를 이용해 주세요.' }
+        : { label: '확인 전', tone: 'neutral' as const, description: '데스크톱 알림을 켤 때 브라우저 권한을 요청합니다.' };
+
+  return <SettingsLayout title="알림 개인화" description="알림 종류와 표시 방식, 요약 주기와 방해 금지 시간을 관리합니다.">{query.loading ? <LoadingState/> : query.error ? <ErrorState message={query.error} onRetry={query.reload}/> : <>
+    <Card><SectionHeader title="앱 내 알림" description="알림 센터에 보관할 활동을 선택합니다." action={<Button variant="primary" onClick={() => void save()} disabled={saving}><Save/>{saving ? '저장 중…' : '저장'}</Button>}/>
+      <SwitchField label="멘션" description="다른 사용자가 나를 언급하면 알립니다." checked={notifications.inApp.mentions} onChange={(checked) => updateInApp('mentions', checked)}/>
+      <SwitchField label="Signal" description="내 모인에 새로운 Signal이 생기면 알립니다." checked={notifications.inApp.signals} onChange={(checked) => updateInApp('signals', checked)}/>
+      <SwitchField label="새로운 Link" description="다른 사용자가 나와 Link하면 알립니다." checked={notifications.inApp.follows} onChange={(checked) => updateInApp('follows', checked)}/>
+      <SwitchField label="Echo·인용·Remoin" description="내 모인에서 대화가 이어지면 알립니다." checked={notifications.inApp.echoes} onChange={(checked) => updateInApp('echoes', checked)}/>
+      <SwitchField label="승인·보안 알림" description="필수 운영 기록이므로 끌 수 없으며 항상 알림 센터에 보관됩니다." checked disabled onChange={() => updateInApp('approvals', true)}/>
+    </Card>
+    <Card><SectionHeader title="실시간 표시 방식" description="서버가 허용한 새 알림을 현재 브라우저에 표시하는 방법입니다."/>
+      <SwitchField label="앱 내 토스트" description="MOINA를 사용하는 동안 화면에 짧은 알림을 표시합니다." checked={notifications.toast.enabled} onChange={(checked) => updateChannel('toast', checked)}/>
+      <SwitchField label="데스크톱 알림" description="브라우저가 백그라운드에 있어도 운영체제 알림을 표시합니다." checked={notifications.desktop.enabled} onChange={(checked) => void toggleDesktop(checked)}/>
+      <div className="account-auth"><Bell/><span><strong>브라우저 알림 권한</strong><small>{permissionCopy.description}</small></span><Badge tone={permissionCopy.tone}>{permissionCopy.label}</Badge></div>
+    </Card>
+    <Card><SectionHeader title="요약과 조용한 시간" description="반복 알림은 모아서 보고, 집중 시간에는 실시간 표시를 잠시 멈춥니다."/>
+      <div className="form-grid"><Field label="알림 요약"><select value={notifications.digest.mode} onChange={(event) => setValue({ ...value, notifications: { ...notifications, digest: { ...notifications.digest, mode: event.target.value as typeof notifications.digest.mode } } })}><option value="off">사용 안 함</option><option value="hourly">매시간</option><option value="daily">매일</option></select></Field><Field label="요약 시각" help="일별 요약의 기준 시각입니다."><input type="time" value={notifications.digest.time} disabled={notifications.digest.mode === 'off'} onChange={(event) => setValue({ ...value, notifications: { ...notifications, digest: { ...notifications.digest, time: event.target.value } } })}/></Field></div>
+      <SwitchField label="조용한 시간" description="이 시간에는 토스트와 데스크톱 알림을 표시하지 않습니다." checked={notifications.quietHours.enabled} onChange={(enabled) => setValue({ ...value, notifications: { ...notifications, quietHours: { ...notifications.quietHours, enabled } } })}/>
+      <div className="form-grid"><Field label="시작 시각"><input type="time" value={notifications.quietHours.start} disabled={!notifications.quietHours.enabled} onChange={(event) => setValue({ ...value, notifications: { ...notifications, quietHours: { ...notifications.quietHours, start: event.target.value } } })}/></Field><Field label="종료 시각"><input type="time" value={notifications.quietHours.end} disabled={!notifications.quietHours.enabled} onChange={(event) => setValue({ ...value, notifications: { ...notifications, quietHours: { ...notifications.quietHours, end: event.target.value } } })}/></Field></div>
+    </Card>
+  </>}</SettingsLayout>;
 }
 
 export function AccessibilitySettingsPage() {

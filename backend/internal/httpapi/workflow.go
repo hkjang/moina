@@ -30,6 +30,9 @@ func (s *Server) workflowStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) canReviewWorkflow(r *http.Request, cfg model.WorkflowConfig) bool {
 	p := getPrincipal(r)
+	if !hasPermission(p.Permissions, "approvals:review") {
+		return false
+	}
 	if hasRole(p.User, model.RoleSuperAdmin) {
 		return true
 	}

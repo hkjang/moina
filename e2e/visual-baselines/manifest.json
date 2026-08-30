@@ -1,0 +1,549 @@
+{
+  "schemaVersion": 1,
+  "screenCount": 12,
+  "baselineCount": 48,
+  "browser": {
+    "name": "chromium",
+    "version": "151.0.7922.34"
+  },
+  "rendering": {
+    "locale": "ko-KR",
+    "timezone": "Asia/Seoul",
+    "deviceScaleFactor": 1,
+    "reducedMotion": true
+  },
+  "comparison": {
+    "pixelThreshold": 24,
+    "maxDiffRatio": 0.005
+  },
+  "entries": [
+    {
+      "id": "light-desktop-login",
+      "path": "/login",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "2d80d00b76af087d6c985160a038cd09c613dba2c1af727e4fb891016dddbf7c"
+    },
+    {
+      "id": "light-desktop-flow",
+      "path": "/flow",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "2d5199869b3f4d58100f0699f70cf5a8b3440813824400388adf5209be6a7e78"
+    },
+    {
+      "id": "light-desktop-explore",
+      "path": "/explore",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "7e5f412b65c3701a1d70edc192a74ee16633e3083dc81678b723c200ed36ace9"
+    },
+    {
+      "id": "light-desktop-search",
+      "path": "/search",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "d4ba6a3fdb934ddd618e68f919cb878de7cb4a215bf8c31d08b0359486f3e608"
+    },
+    {
+      "id": "light-desktop-notifications",
+      "path": "/notifications",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "119ee53383a664c68f8f850e09c142bca276265f83e707aa0d18df9ce0611a5e"
+    },
+    {
+      "id": "light-desktop-moims",
+      "path": "/moims",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "67ba4f3a8306a5e96914908924260b9e5cc2a45fb6df32eb5af9dd52c38968d6"
+    },
+    {
+      "id": "light-desktop-ai",
+      "path": "/ai",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "1c2d320061d5e515a7af28e68be3661c5c8a877f40218f469bf220b13b404784"
+    },
+    {
+      "id": "light-desktop-settings-profile",
+      "path": "/settings/profile",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "e761fe0af8072b6737cfb466d2a638a4fa2bdb2b2f02876203231a32ebcb6f4a"
+    },
+    {
+      "id": "light-desktop-settings-notifications",
+      "path": "/settings/notifications",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "b8e28caf9a7e1d88262c461e57697a6aaf185c8232ca4eef1525bd72b1a37eb3"
+    },
+    {
+      "id": "light-desktop-settings-accessibility",
+      "path": "/settings/accessibility",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "d2da5efcf3fbc5c7853d64d3cb62f458fdb291037805771acbce875ee0170ff5"
+    },
+    {
+      "id": "light-desktop-admin-dashboard",
+      "path": "/admin",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "851bab286f888968a90b593a32cc711d4e66896b2ab893a80566c1d617bacfac"
+    },
+    {
+      "id": "light-desktop-admin-settings",
+      "path": "/admin/settings",
+      "theme": "light",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "214023a2b4e2dcc5dae88d1785ef3d6027f86848eaa24dfe5fc309d2b65fe7c8"
+    },
+    {
+      "id": "light-mobile-login",
+      "path": "/login",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "e9bb53e985325c9e244e5a6bc5bfa8e3962dc662e0334cf5fe5c1994397b5610"
+    },
+    {
+      "id": "light-mobile-flow",
+      "path": "/flow",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "6d4b4bc31429bad021812e9a32a9dce83bcd40d9f96a4ee62b66c3b1475334a7"
+    },
+    {
+      "id": "light-mobile-explore",
+      "path": "/explore",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "5a81cc152fb4e4ec8c9d4834168177280981e7efe04b92548e0e5bc03846cff4"
+    },
+    {
+      "id": "light-mobile-search",
+      "path": "/search",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "785c2974b9e160754ee02d8a962a49dcd5e82a2bd80dd5521f79a36d76d4e803"
+    },
+    {
+      "id": "light-mobile-notifications",
+      "path": "/notifications",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "73c25a858f3d34653cc9145b5238b79bd3f4ac009b9414d99e920254318209bf"
+    },
+    {
+      "id": "light-mobile-moims",
+      "path": "/moims",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "ec27d5157d90c0c478d217e270b5992768ea6d189f34acd60ccbed8122f82e7d"
+    },
+    {
+      "id": "light-mobile-ai",
+      "path": "/ai",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "6808442f37403d42dcf992d17ba7b511eacf6b777c614d5b0c367ee93b92cfd4"
+    },
+    {
+      "id": "light-mobile-settings-profile",
+      "path": "/settings/profile",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "ab9a70c9681318efeb0ecec17b69762ed8fc426dffe40ad72fac91f6eb36581f"
+    },
+    {
+      "id": "light-mobile-settings-notifications",
+      "path": "/settings/notifications",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "25aefdea793e974c7db9dc360e2233a2ca7dd51a5dcc872d1ae3f4b2b2c594fa"
+    },
+    {
+      "id": "light-mobile-settings-accessibility",
+      "path": "/settings/accessibility",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "68987f34e9ca9482c9fdefbe23070e930cc98c32c04651e55e7f3a4aebdc3e40"
+    },
+    {
+      "id": "light-mobile-admin-dashboard",
+      "path": "/admin",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "00064da5666cbe038a61d6f6eac5cef945d134e7a19a406ce9f5690e4d13500e"
+    },
+    {
+      "id": "light-mobile-admin-settings",
+      "path": "/admin/settings",
+      "theme": "light",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "5da1b87ad2fce81a68d50e468c199bf973bba36d72eb2df72ead417276220cd0"
+    },
+    {
+      "id": "dark-desktop-login",
+      "path": "/login",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "9a23475e1759b9ddcf41a4834fd1590b46e5a0f39ae4ce435ca49d137e7c4b37"
+    },
+    {
+      "id": "dark-desktop-flow",
+      "path": "/flow",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "1656538d6f6e6b0e13fefecb2d6cf2850df75ee78047514b0ee9fccbca8d35e6"
+    },
+    {
+      "id": "dark-desktop-explore",
+      "path": "/explore",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "eba834421e6977e335ebac0207e8d729ae10ffb1a74fd54fef2f834cea7579a2"
+    },
+    {
+      "id": "dark-desktop-search",
+      "path": "/search",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "ca2172b58b2dd23cf8fce6873d81570bac42b44cccbef33f088c98b05fb255af"
+    },
+    {
+      "id": "dark-desktop-notifications",
+      "path": "/notifications",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "2ffb21ee806acefccaac70853d9c39c32f2595f6e573b3e3340a0b93362e38bd"
+    },
+    {
+      "id": "dark-desktop-moims",
+      "path": "/moims",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "500dcac74ae235cb8544bf3efc847d26e2e856ac7998d11e889e8e269b876acc"
+    },
+    {
+      "id": "dark-desktop-ai",
+      "path": "/ai",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "356ac6d42b22006f92a40923147b9ae887af8931359955782fcf622a749b3a8d"
+    },
+    {
+      "id": "dark-desktop-settings-profile",
+      "path": "/settings/profile",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "7245d2a47e6a57de8d771efabb2a1629c2de4cbf4c04d812485bc6e2d2f3b029"
+    },
+    {
+      "id": "dark-desktop-settings-notifications",
+      "path": "/settings/notifications",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "1a16910f8dc8027dfc83396229e14f9d71890c8a719d98b5bd1c678b24b78f4f"
+    },
+    {
+      "id": "dark-desktop-settings-accessibility",
+      "path": "/settings/accessibility",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "c658dbc0742bfd5c5dd828238df299e03f13ef14861c59f0e014305c8d882d48"
+    },
+    {
+      "id": "dark-desktop-admin-dashboard",
+      "path": "/admin",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "9f9a546585e5664fb919a3bff280127916e00530e6fbace56a5cfe4094ce8694"
+    },
+    {
+      "id": "dark-desktop-admin-settings",
+      "path": "/admin/settings",
+      "theme": "dark",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "sha256": "88c3f4722a4aa257609f37ead0a9314e58d6e3b985b91fb60a9d02a983c0bdd1"
+    },
+    {
+      "id": "dark-mobile-login",
+      "path": "/login",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "ebed24412675862b727dc143458873de3f3ca19be947b22bc366a6b1afe44295"
+    },
+    {
+      "id": "dark-mobile-flow",
+      "path": "/flow",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "a27f95385063e18699af58f87d1a71486db02cf47049a48c7be5c1a5f4cf51d6"
+    },
+    {
+      "id": "dark-mobile-explore",
+      "path": "/explore",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "4f1291a637ccf30b518cf74dde651bd9cf347986004fc55afa943ef6809999ef"
+    },
+    {
+      "id": "dark-mobile-search",
+      "path": "/search",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "f59901488614cb77a51bf8e3eca01ef44f9ff3dd13cef48d811666ac5a86a3dd"
+    },
+    {
+      "id": "dark-mobile-notifications",
+      "path": "/notifications",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "f4418be1fc1ba5c1626f63434f5ece4f671b3a599abd8e01eaa3e64efb0c322b"
+    },
+    {
+      "id": "dark-mobile-moims",
+      "path": "/moims",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "42ccdb308a9b0bd79f61a1df609e653b56b4bc0352106e485028a1580dfe1eba"
+    },
+    {
+      "id": "dark-mobile-ai",
+      "path": "/ai",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "d668fccf9a32fa1895a1195d307786655ca10190ee78499809b7ec9259a7db73"
+    },
+    {
+      "id": "dark-mobile-settings-profile",
+      "path": "/settings/profile",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "01d05640df8c7be11a0d452b768c82737827355bac5e447a3dba3667779ac397"
+    },
+    {
+      "id": "dark-mobile-settings-notifications",
+      "path": "/settings/notifications",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "e28c3115bf97f01793e9b5f2edbf1804891eaa7e59dc17c36f456693ef960fc9"
+    },
+    {
+      "id": "dark-mobile-settings-accessibility",
+      "path": "/settings/accessibility",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "f75abac8cc5cde3b63a3b5e69e2d7006a30e7fe35e32da2243c879ce84aee1a5"
+    },
+    {
+      "id": "dark-mobile-admin-dashboard",
+      "path": "/admin",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "9f9cda0e8cd9c3711e8502242428c667233a038548e6607ec5ab9c5e19c85dbd"
+    },
+    {
+      "id": "dark-mobile-admin-settings",
+      "path": "/admin/settings",
+      "theme": "dark",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "sha256": "0515ddc69d17775382e9a1b3e523c9514555e5fc1b066dc81b7b3937da0b633f"
+    }
+  ]
+}

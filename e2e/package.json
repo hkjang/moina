@@ -1,16 +1,21 @@
 {
   "name": "moina-browser-e2e",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "scripts": {
-    "test": "node browser-smoke.mjs",
+    "test": "npm run test:smoke && npm run test:accessibility && npm run test:visual",
+    "test:smoke": "node browser-smoke.mjs",
+    "test:accessibility": "node accessibility-regression.mjs",
+    "test:visual": "node visual-regression.mjs",
+    "visual:update": "MOINA_UPDATE_VISUALS=1 node visual-regression.mjs",
     "capture": "node capture-pages.mjs",
     "capture:web": "node capture-pages.mjs && node optimize-screenshots.mjs",
     "serve:pages": "node pages-server.mjs",
     "test:pages": "node pages-smoke.mjs"
   },
   "devDependencies": {
+    "axe-core": "4.13.0",
     "playwright": "1.62.1"
   }
 }

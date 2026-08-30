@@ -2,9 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"regexp"
 	"slices"
@@ -37,7 +35,12 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "registration_disabled", "관리자가 회원가입을 허용하지 않았습니다")
 		return
 	}
-	if !s.allow("register|"+clientIP(r), 5, 10*time.Minute) {
+	allowed, rateErr := s.allow(r.Context(), "register|"+clientIP(r), 5, 10*time.Minute)
+	if rateErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "rate_limit_unavailable", "가입 요청 한도를 확인할 수 없습니다")
+		return
+	}
+	if !allowed {
 		writeError(w, http.StatusTooManyRequests, "too_many_attempts", "회원가입 요청이 너무 많습니다")
 		return
 	}
@@ -94,7 +97,13 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	username := strings.ToLower(strings.TrimSpace(input.Username))
 	key := "login|" + username + "|" + clientIP(r)
-	if !s.allow(key, 5, 5*time.Minute) || !s.allow("login-user|"+username, 20, 5*time.Minute) {
+	allowedByClient, clientRateErr := s.allow(r.Context(), key, 5, 5*time.Minute)
+	allowedByUser, userRateErr := s.allow(r.Context(), "login-user|"+username, 20, 5*time.Minute)
+	if clientRateErr != nil || userRateErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "rate_limit_unavailable", "로그인 요청 한도를 확인할 수 없습니다")
+		return
+	}
+	if !allowedByClient || !allowedByUser {
 		writeError(w, http.StatusTooManyRequests, "too_many_attempts", "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요")
 		return
 	}
@@ -178,7 +187,7 @@ func clearAuthCookies(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) auditAnonymous(r *http.Request, action string, success bool) {
-	event := store.AuditEvent{ID: secure.NewID("aud"), Action: action, Success: success, IP: clientIP(r), UserAgent: r.UserAgent(), CreatedAt: time.Now().UTC(), Detail: json.RawMessage(`{}`)}
+	event := store.AuditEvent{ID: secure.NewID("aud"), Action: action, Success: success, IP: clientIP(r), UserAgent: r.UserAgent(), CreatedAt: time.Now().UTC(), Detail: auditDetail(r, nil)}
 	_ = s.repo.AddAudit(r.Context(), event)
 }
 
@@ -200,16 +209,7 @@ func isHTTPS(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !(ip.IsLoopback() || ip.IsPrivate()) {
-		return false
-	}
-	proto := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0])
-	return strings.EqualFold(proto, "https")
+	return requestNetworkInfo(r).ForwardedProto == "https"
 }
 
 func validUsername(value string) bool {

@@ -21,6 +21,7 @@ const AIPage = lazy(() => import('./pages/AIPage'));
 const AccessibilitySettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.AccessibilitySettingsPage })));
 const FeedSettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.FeedSettingsPage })));
 const KeySettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.KeySettingsPage })));
+const NotificationSettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.NotificationSettingsPage })));
 const ProfileSettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.ProfileSettingsPage })));
 const SecuritySettingsPage = lazy(() => import('./pages/SettingsPages').then((module) => ({ default: module.SecuritySettingsPage })));
 const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage').then((module) => ({ default: module.AdminAIPage })));
@@ -62,6 +63,7 @@ export default function App() {
       <Route path="settings" element={<Navigate to="/settings/profile" replace/>}/>
       <Route path="settings/profile" element={<ProfileSettingsPage/>}/>
       <Route path="settings/feed" element={<FeedSettingsPage/>}/>
+      <Route path="settings/notifications" element={<NotificationSettingsPage/>}/>
       <Route path="settings/accessibility" element={<AccessibilitySettingsPage/>}/>
       <Route path="settings/security" element={<SecuritySettingsPage/>}/>
       <Route path="settings/keys" element={<KeySettingsPage/>}/>

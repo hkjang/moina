@@ -29,6 +29,7 @@ export const primaryNavigation: NavItem[] = [
 export const personalNavigation: NavItem[] = [
   { label: '프로필 설정', path: '/settings/profile', icon: UserRoundCog, description: '내 프로필과 계정' },
   { label: '피드 개인화', path: '/settings/feed', icon: CircleGauge, description: 'For Me 추천 비율' },
+  { label: '알림 개인화', path: '/settings/notifications', icon: Bell, description: '종류와 표시 시간' },
   { label: '화면 및 접근성', path: '/settings/accessibility', icon: Settings2, description: '글자 크기와 화면 설정' },
   { label: '로그인 보안', path: '/settings/security', icon: LockKeyhole, description: '비밀번호와 세션' },
   { label: '내 API·MCP 키', path: '/settings/keys', icon: KeyRound, description: '개인 키 권한과 회전' },

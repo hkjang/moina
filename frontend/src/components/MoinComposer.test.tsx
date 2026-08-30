@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
+import { clearApiQueryCache } from "../hooks/apiQueryClient";
 import { MoinComposer } from "./MoinComposer";
 import { ToastProvider } from "./ToastProvider";
 
@@ -56,7 +57,10 @@ describe("MoinComposer media upload", () => {
       value: vi.fn(),
     });
   });
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    clearApiQueryCache({ abort: true });
+  });
 
   it("MP4/WebM을 선택하고 실제 영상 preview와 업로드 취소를 제공한다", async () => {
     let uploadSignal: AbortSignal | undefined;

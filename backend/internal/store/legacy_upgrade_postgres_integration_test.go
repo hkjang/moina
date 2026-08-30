@@ -144,6 +144,7 @@ func TestPostgreSQLV010LegacyUpgradeInIsolatedSchema(t *testing.T) {
 		column string
 	}{
 		{"media_assets", "alt_text"},
+		{"post_media", "alt_text"},
 		{"media_assets", "large_object_oid"},
 		{"outbox_events", "dead_lettered_at"},
 		{"feed_snapshots", "preferences"},

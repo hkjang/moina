@@ -40,6 +40,12 @@ import { Avatar, Badge, Button, IconButton } from "./ui";
 import { ProfileMenu } from "./ProfileMenu";
 import { useToast } from "./ToastProvider";
 import { topicLabel } from "../utils/format";
+import {
+  dispatchLiveNotification,
+  isLiveNotificationPayload,
+  showDesktopNotification,
+  type LiveNotificationPayload,
+} from "../utils/liveNotifications";
 import { applyAppearance } from "../utils/preferences";
 
 function Brand() {
@@ -223,16 +229,21 @@ export function AppShell() {
         };
         socket.onmessage = (event) => {
           try {
-            const payload = JSON.parse(event.data) as {
-              type?: string;
-              title?: string;
-              unreadCount?: number;
-            };
-            if (payload.type === "connected") return;
+            const decoded: unknown = JSON.parse(event.data);
+            if (!isLiveNotificationPayload(decoded)) {
+              void reloadNotificationSummary();
+              return;
+            }
+            const payload: LiveNotificationPayload = decoded;
+            if (!dispatchLiveNotification(payload, {
+              toast: (message) => notify(message),
+              desktop: (notification) => showDesktopNotification(notification, navigate),
+            })) return;
             setUnread((current) => payload.unreadCount ?? current + 1);
-            notify(payload.title || "새 알림이 도착했습니다.");
           } catch {
-            setUnread((current) => current + 1);
+            // The durable REST summary is authoritative. A malformed frame or
+            // a best-effort browser channel failure must not invent unread rows.
+            void reloadNotificationSummary();
           }
         };
         socket.onclose = () => {
@@ -253,7 +264,7 @@ export function AppShell() {
       if (retry) window.clearTimeout(retry);
       socket?.close();
     };
-  }, [notify, reloadNotificationSummary, user]);
+  }, [navigate, notify, reloadNotificationSummary, user]);
 
   const mobileTitle = useMemo(
     () =>
@@ -301,6 +312,13 @@ export function AppShell() {
           <Dialog.Content
             className="mobile-nav-panel"
             aria-describedby={undefined}
+            onCloseAutoFocus={(event) => {
+              const trigger = document.getElementById("mobile-menu-trigger");
+              if (trigger instanceof HTMLButtonElement) {
+                event.preventDefault();
+                trigger.focus();
+              }
+            }}
           >
             <Dialog.Title className="sr-only">주 메뉴</Dialog.Title>
             <div className="mobile-nav-head">
@@ -334,6 +352,7 @@ export function AppShell() {
       <div className="app-content-column">
         <header className="mobile-topbar">
           <IconButton
+            id="mobile-menu-trigger"
             label="메뉴 열기"
             aria-haspopup="dialog"
             aria-expanded={mobileOpen}

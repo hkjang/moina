@@ -122,12 +122,14 @@ const expectedThemes = {
     'ink-muted': '#6f5e59', 'ink-soft': '#806b65', line: '#e9ddd9', 'line-strong': '#d8c8c3', 'control-border': '#9b8179',
     'brand-fg': '#b72a17', 'brand-soft': '#fff4f1', 'brand-soft-hover': '#ffe5df', 'brand-border': '#ffc9be',
     positive: '#147a55', 'positive-soft': '#e8f7f1', 'danger-fill': '#b42345', 'danger-fill-hover': '#8f1d38',
+    'ai-fg': '#7657d6', 'ai-soft': '#f3f0ff',
   },
   dark: {
     bg: '#17110f', surface: '#211816', 'surface-soft': '#2b1f1c', 'surface-raised': '#32231f', ink: '#fff3ef',
     'ink-muted': '#d2bbb4', 'ink-soft': '#b0958d', line: '#48342f', 'line-strong': '#62463e', 'control-border': '#8f6c62',
     'brand-fg': '#ff8a73', 'brand-soft': '#3a1b16', 'brand-soft-hover': '#4a211a', 'brand-border': '#7b3428',
     positive: '#65d4a8', 'positive-soft': '#17372d', 'danger-fill': '#b42345', 'danger-fill-hover': '#8f1d38',
+    'ai-fg': '#b29af8', 'ai-soft': '#302747',
   },
 };
 
@@ -154,6 +156,7 @@ for (const [theme, expected] of Object.entries(expectedThemes)) {
       ['Avatar Start', required('avatar-bg-start'), required('on-brand'), 4.5],
       ['Avatar End', required('avatar-bg-end'), required('on-brand'), 4.5],
       ['Login Hero Note', required('hero-note-fg'), required('hero-note-bg'), 4.5],
+      ['AI Accent', required('ai-fg'), required('ai-soft'), 4.5],
     ];
     for (const [label, foreground, background, minimum] of checks) {
       const ratio = contrast(foreground, background);
@@ -210,7 +213,7 @@ const expectedAssets = {
   'frontend/public/icon-512.png': 'a87acd6cc3e93fc8479031d9c40bf6b5e4fcb4e7229b3131a50ce3f115c5e7d7',
   'docs/assets/icon-192.png': '7b02e5b05eb5920df5a5e89b90d988b484e719cc86c35db66176aeb95fc166e6',
   'docs/assets/icon-512.png': 'a87acd6cc3e93fc8479031d9c40bf6b5e4fcb4e7229b3131a50ce3f115c5e7d7',
-  'docs/assets/og.webp': '4056b135728b74d6e782624a7f1923ef3ecb6622ce7db9a8c58a93b7a2b056e2',
+  'docs/assets/og.webp': '743db216c798efbf862a80e575d76ae029e4e02ec47b62c56ad06edef755df42',
 };
 for (const [asset, expected] of Object.entries(expectedAssets)) {
   const digest = createHash('sha256').update(await readFile(path.join(root, asset))).digest('hex');

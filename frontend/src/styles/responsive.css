@@ -41,3 +41,22 @@
 
 @media (max-width: 390px) { .metric-grid { grid-template-columns: 1fr; }.mobile-bottom-nav { height: 64px; } }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto!important; animation-duration: .01ms!important; animation-iteration-count: 1!important; transition-duration: .01ms!important; } }
+
+@media (forced-colors: active) {
+  :focus-visible { outline: 3px solid Highlight!important; outline-offset: 3px; }
+  .ui-button,
+  .surface-card,
+  .dialog-content,
+  .mobile-nav-panel,
+  .profile-popover,
+  .toast,
+  input,
+  textarea,
+  select { border: 1px solid ButtonText; }
+  .avatar,
+  .badge,
+  .mobile-compose,
+  .state-icon { border: 1px solid CanvasText; }
+  .switch-field input { border: 1px solid ButtonText; forced-color-adjust: auto; }
+  .stream-cursor { background: CanvasText; }
+}

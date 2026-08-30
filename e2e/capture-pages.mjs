@@ -10,7 +10,7 @@ const output = resolve(process.env.MOINA_CAPTURE_OUTPUT || join(root, 'dist/scre
 const baseURL = new URL(process.env.MOINA_CAPTURE_BASE_URL || 'http://127.0.0.1:18080');
 const username = process.env.MOINA_CAPTURE_USERNAME || 'capture-admin';
 const password = process.env.MOINA_CAPTURE_PASSWORD;
-const version = process.env.MOINA_CAPTURE_VERSION || 'v0.1.2';
+const version = process.env.MOINA_CAPTURE_VERSION || 'v0.1.3';
 const staticRoutes = routeCatalogFromEnvironment();
 let routes = staticRoutes;
 const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(baseURL.hostname);
@@ -51,7 +51,12 @@ function monitor(page) {
     const target = new URL(request.url());
     if (['http:', 'https:'].includes(target.protocol) && target.origin !== baseURL.origin) push('external', `[${phase}] ${target}`);
   });
-  page.on('requestfailed', (request) => push('request', `[${phase}] ${request.url()} ${request.failure()?.errorText || ''}`));
+  page.on('requestfailed', (request) => {
+    const reason = request.failure()?.errorText || '실패';
+    const value = `[${phase}] ${request.url()} ${reason}`;
+    if (reason === 'net::ERR_ABORTED') ignored.push(value);
+    else push('request', value);
+  });
   page.on('response', (response) => { if (response.status() >= 500) push('response', `[${phase}] ${response.status()} ${response.url()}`); });
 }
 

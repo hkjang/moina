@@ -137,6 +137,7 @@ export function MoinCard({
       <Link
         className="moin-avatar"
         to={`/profile/${encodeURIComponent(current.author.username)}`}
+        aria-label={`${current.author.displayName} 프로필`}
       >
         <Avatar
           name={current.author.displayName}

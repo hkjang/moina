@@ -12,10 +12,11 @@ describe('한국어 내비게이션', () => {
   it('서비스 관리와 개인 설정을 별도 메뉴 집합으로 유지한다', () => {
     expect(primaryNavigation.some((item) => item.path === '/flow')).toBe(true);
     expect(personalNavigation.every((item) => item.path.startsWith('/settings/'))).toBe(true);
+    expect(personalNavigation.some((item) => item.path === '/settings/notifications')).toBe(true);
     expect(adminNavigation.every((item) => item.admin && item.path.startsWith('/admin'))).toBe(true);
   });
 
-  it('정확한 권한, 와일드카드와 도메인 와일드카드를 해석한다', () => {
+  it('정확한 권한, 전역 와일드카드와 도메인 와일드카드를 해석한다', () => {
     expect(hasPermission(['posts:manage'], 'posts:manage')).toBe(true);
     expect(hasPermission(['posts:*'], 'posts:manage')).toBe(true);
     expect(hasPermission(['*'], 'settings:manage')).toBe(true);

@@ -371,7 +371,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_filter", "알림 필터가 올바르지 않습니다")
 		return
 	}
-	rows, err := s.repo.Pool().Query(r.Context(), `SELECT id,user_id,COALESCE(actor_id,''),type,target_id,payload,read_at,created_at FROM notifications WHERE user_id=$1 AND ($4='all' OR type=$4) ORDER BY created_at DESC LIMIT $2 OFFSET $3`, getPrincipal(r).User.ID, limit, offset, storedType)
+	rows, err := s.repo.Pool().Query(r.Context(), `SELECT id,user_id,COALESCE(actor_id,''),type,target_id,payload,in_app,read_at,created_at FROM notifications WHERE user_id=$1 AND in_app AND ($4='all' OR type=$4) ORDER BY created_at DESC LIMIT $2 OFFSET $3`, getPrincipal(r).User.ID, limit, offset, storedType)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "알림을 불러올 수 없습니다")
 		return
@@ -380,7 +380,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 	items := make([]model.Notification, 0)
 	for rows.Next() {
 		var item model.Notification
-		if err := rows.Scan(&item.ID, &item.UserID, &item.ActorID, &item.Type, &item.TargetID, &item.Payload, &item.ReadAt, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.UserID, &item.ActorID, &item.Type, &item.TargetID, &item.Payload, &item.InApp, &item.ReadAt, &item.CreatedAt); err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "알림을 불러올 수 없습니다")
 			return
 		}
@@ -388,7 +388,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 		items = append(items, item)
 	}
 	var unread int64
-	_ = s.repo.Pool().QueryRow(r.Context(), `SELECT count(*) FROM notifications WHERE user_id=$1 AND read_at IS NULL`, getPrincipal(r).User.ID).Scan(&unread)
+	_ = s.repo.Pool().QueryRow(r.Context(), `SELECT count(*) FROM notifications WHERE user_id=$1 AND in_app AND read_at IS NULL`, getPrincipal(r).User.ID).Scan(&unread)
 	writeData(w, http.StatusOK, map[string]any{"items": items, "unreadCount": unread, "limit": limit, "offset": offset})
 }
 
@@ -398,6 +398,7 @@ func (s *Server) decorateNotification(ctx context.Context, item *model.Notificat
 		"follow": "새로운 Link", "reaction": "새로운 Signal", "reply": "새로운 Echo",
 		"quote": "새로운 Quote Moin", "remoin": "새로운 Remoin",
 		"approval_requested": "검토 요청", "approval_approved": "게시 승인", "approval_rejected": "게시 반려",
+		"digest": "알림 브리핑",
 	}
 	item.Title = labels[storedType]
 	if item.Title == "" {
@@ -428,6 +429,8 @@ func (s *Server) decorateNotification(ctx context.Context, item *model.Notificat
 		item.TargetPath = "/moin/" + postID
 	case "approval_requested":
 		item.TargetPath = "/admin/approvals"
+	case "digest":
+		item.TargetPath = "/notifications"
 	}
 	if storedType == "reaction" {
 		item.Type = "signal"
@@ -450,9 +453,9 @@ func (s *Server) readNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	var err error
 	if input.All {
-		_, err = s.repo.Pool().Exec(r.Context(), `UPDATE notifications SET read_at=COALESCE(read_at,now()) WHERE user_id=$1`, getPrincipal(r).User.ID)
+		_, err = s.repo.Pool().Exec(r.Context(), `UPDATE notifications SET read_at=COALESCE(read_at,now()) WHERE user_id=$1 AND in_app`, getPrincipal(r).User.ID)
 	} else {
-		_, err = s.repo.Pool().Exec(r.Context(), `UPDATE notifications SET read_at=COALESCE(read_at,now()) WHERE user_id=$1 AND id=ANY($2)`, getPrincipal(r).User.ID, input.IDs)
+		_, err = s.repo.Pool().Exec(r.Context(), `UPDATE notifications SET read_at=COALESCE(read_at,now()) WHERE user_id=$1 AND in_app AND id=ANY($2)`, getPrincipal(r).User.ID, input.IDs)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "알림을 읽음 처리할 수 없습니다")

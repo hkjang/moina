@@ -265,7 +265,7 @@ func visibleRelated(ctx context.Context, database Queryer, ids []string, viewerI
 
 const detailsSQL = `WITH
 media_values AS (
-	SELECT pm.post_id,jsonb_agg(jsonb_build_object('id',m.id,'filename',m.filename,'altText',m.alt_text,'mimeType',m.mime_type,'size',m.size_bytes,'width',m.width,'height',m.height,'createdAt',m.created_at) ORDER BY pm.position) AS value
+	SELECT pm.post_id,jsonb_agg(jsonb_build_object('id',m.id,'filename',m.filename,'altText',pm.alt_text,'mimeType',m.mime_type,'size',m.size_bytes,'width',m.width,'height',m.height,'createdAt',m.created_at) ORDER BY pm.position) AS value
 	FROM post_media pm JOIN media_assets m ON m.id=pm.media_id WHERE pm.post_id=ANY($1::text[]) GROUP BY pm.post_id
 ),
 topic_values AS (

@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
   "product": "moina",
-  "version": "v0.1.2",
-  "generatedAt": "2026-08-29T07:59:19.195Z",
+  "version": "v0.1.3",
+  "generatedAt": "2026-08-30T03:04:34.393Z",
   "source": "Playwright actual application capture",
   "themes": [
     "light",
@@ -151,6 +151,19 @@
       "theme": "light",
       "fullPage": true,
       "path": "assets/screenshots/desktop-settings-feed.webp"
+    },
+    {
+      "slug": "desktop-settings-notifications",
+      "title": "밝은 테마 데스크톱 알림 설정",
+      "route": "/settings/notifications",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "theme": "light",
+      "fullPage": true,
+      "path": "assets/screenshots/desktop-settings-notifications.webp"
     },
     {
       "slug": "desktop-settings-accessibility",
@@ -349,8 +362,8 @@
     },
     {
       "slug": "desktop-profile-bootstrap",
-      "title": "밝은 테마 데스크톱 capture-admin 프로필",
-      "route": "/profile/capture-admin",
+      "title": "밝은 테마 데스크톱 e2e-admin 프로필",
+      "route": "/profile/e2e-admin",
       "viewport": {
         "name": "desktop",
         "width": 1440,
@@ -363,7 +376,7 @@
     {
       "slug": "desktop-moin-detail",
       "title": "밝은 테마 데스크톱 Moin 상세",
-      "route": "/moin/moin_jTLp71QiV3J5-zM09Hh3HZKb",
+      "route": "/moin/moin_ADBEJ-tRV5_UmjfTY5lR3Esb",
       "viewport": {
         "name": "desktop",
         "width": 1440,
@@ -554,6 +567,19 @@
       "theme": "light",
       "fullPage": true,
       "path": "assets/screenshots/mobile-settings-feed.webp"
+    },
+    {
+      "slug": "mobile-settings-notifications",
+      "title": "밝은 테마 모바일 알림 설정",
+      "route": "/settings/notifications",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "theme": "light",
+      "fullPage": true,
+      "path": "assets/screenshots/mobile-settings-notifications.webp"
     },
     {
       "slug": "mobile-settings-accessibility",
@@ -752,8 +778,8 @@
     },
     {
       "slug": "mobile-profile-bootstrap",
-      "title": "밝은 테마 모바일 capture-admin 프로필",
-      "route": "/profile/capture-admin",
+      "title": "밝은 테마 모바일 e2e-admin 프로필",
+      "route": "/profile/e2e-admin",
       "viewport": {
         "name": "mobile",
         "width": 390,
@@ -766,7 +792,7 @@
     {
       "slug": "mobile-moin-detail",
       "title": "밝은 테마 모바일 Moin 상세",
-      "route": "/moin/moin_jTLp71QiV3J5-zM09Hh3HZKb",
+      "route": "/moin/moin_ADBEJ-tRV5_UmjfTY5lR3Esb",
       "viewport": {
         "name": "mobile",
         "width": 390,
@@ -957,6 +983,19 @@
       "theme": "dark",
       "fullPage": true,
       "path": "assets/screenshots/dark-desktop-settings-feed.webp"
+    },
+    {
+      "slug": "dark-desktop-settings-notifications",
+      "title": "어두운 테마 데스크톱 알림 설정",
+      "route": "/settings/notifications",
+      "viewport": {
+        "name": "desktop",
+        "width": 1440,
+        "height": 1000
+      },
+      "theme": "dark",
+      "fullPage": true,
+      "path": "assets/screenshots/dark-desktop-settings-notifications.webp"
     },
     {
       "slug": "dark-desktop-settings-accessibility",
@@ -1155,8 +1194,8 @@
     },
     {
       "slug": "dark-desktop-profile-bootstrap",
-      "title": "어두운 테마 데스크톱 capture-admin 프로필",
-      "route": "/profile/capture-admin",
+      "title": "어두운 테마 데스크톱 e2e-admin 프로필",
+      "route": "/profile/e2e-admin",
       "viewport": {
         "name": "desktop",
         "width": 1440,
@@ -1169,7 +1208,7 @@
     {
       "slug": "dark-desktop-moin-detail",
       "title": "어두운 테마 데스크톱 Moin 상세",
-      "route": "/moin/moin_jTLp71QiV3J5-zM09Hh3HZKb",
+      "route": "/moin/moin_ADBEJ-tRV5_UmjfTY5lR3Esb",
       "viewport": {
         "name": "desktop",
         "width": 1440,
@@ -1360,6 +1399,19 @@
       "theme": "dark",
       "fullPage": true,
       "path": "assets/screenshots/dark-mobile-settings-feed.webp"
+    },
+    {
+      "slug": "dark-mobile-settings-notifications",
+      "title": "어두운 테마 모바일 알림 설정",
+      "route": "/settings/notifications",
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "theme": "dark",
+      "fullPage": true,
+      "path": "assets/screenshots/dark-mobile-settings-notifications.webp"
     },
     {
       "slug": "dark-mobile-settings-accessibility",
@@ -1558,8 +1610,8 @@
     },
     {
       "slug": "dark-mobile-profile-bootstrap",
-      "title": "어두운 테마 모바일 capture-admin 프로필",
-      "route": "/profile/capture-admin",
+      "title": "어두운 테마 모바일 e2e-admin 프로필",
+      "route": "/profile/e2e-admin",
       "viewport": {
         "name": "mobile",
         "width": 390,
@@ -1572,7 +1624,7 @@
     {
       "slug": "dark-mobile-moin-detail",
       "title": "어두운 테마 모바일 Moin 상세",
-      "route": "/moin/moin_jTLp71QiV3J5-zM09Hh3HZKb",
+      "route": "/moin/moin_ADBEJ-tRV5_UmjfTY5lR3Esb",
       "viewport": {
         "name": "mobile",
         "width": 390,
@@ -1633,8 +1685,65 @@
   "ignoredExpectedConsoleMessages": [
     "[login:light:desktop] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "[login:authenticate:capture-session] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[theme-preflight:light:desktop] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[theme-preflight:light:desktop] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:desktop:/search] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:desktop:/pulse] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:desktop:/pocket] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:desktop:/moims] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:desktop:/admin/ai] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:desktop:/moims/moina-capture] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
     "[login:light:mobile] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[theme-preflight:light:mobile] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[theme-preflight:light:mobile] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/flow] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/explore] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/search] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/pulse] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/notifications] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/moims] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/settings/notifications] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/settings/accessibility] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/settings/security] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/settings/keys] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/admin] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/admin/users] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/admin/content] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/admin/oidc] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/admin/ai] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/admin/settings] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/profile/e2e-admin] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/topics/moina] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:light:mobile:/moims/moina-capture] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
     "[login:dark:desktop] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
-    "[login:dark:mobile] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    "[capture:dark:desktop:/search] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:desktop:/pocket] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:desktop:/admin/roles] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:desktop:/admin/settings] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:desktop:/profile/e2e-admin] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:desktop:/moin/moin_ADBEJ-tRV5_UmjfTY5lR3Esb] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:desktop:/topics/moina] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:desktop:/moims/moina-capture] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[login:dark:mobile] Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "[theme-preflight:dark:mobile] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/flow] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/explore] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/search] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/notifications] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/pocket] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/moims] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/settings/profile] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/settings/feed] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/settings/notifications] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/settings/accessibility] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/settings/keys] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/admin] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/admin/content] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/admin/approvals] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/admin/roles] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/admin/oidc] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/admin/settings] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/access-denied] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED",
+    "[capture:dark:mobile:/moims/moina-capture] http://127.0.0.1:18080/api/v1/notifications?limit=1 net::ERR_ABORTED"
   ]
 }

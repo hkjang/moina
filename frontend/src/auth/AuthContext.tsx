@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiRequest, readableError } from '../api/client';
+import { clearApiQueryCache } from '../hooks/apiQueryClient';
 import type { SessionUser } from '../types';
 
 interface AuthContextValue {
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     const unauthorized = () => {
+      clearApiQueryCache({ abort: true });
       setUser(null);
       if (window.location.pathname !== '/login') {
         const returnTo = `${window.location.pathname}${window.location.search}`;
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
   const login = useCallback(async (username: string, password: string) => {
     try {
+      clearApiQueryCache({ abort: true });
       const response = await apiRequest<unknown>('/auth/login', { method: 'POST', body: { username, password }, suppressUnauthorized: true });
       const resolved = normalizeUser(response);
       if (resolved) setUser(resolved); else await refresh();
@@ -62,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
   const logout = useCallback(async () => {
     try { await apiRequest('/auth/logout', { method: 'POST', suppressUnauthorized: true }); } catch { /* Local state is still cleared. */ }
-    finally { setUser(null); }
+    finally { clearApiQueryCache({ abort: true }); setUser(null); }
   }, []);
   const value = useMemo(() => ({ user, loading, login, logout, refresh }), [user, loading, login, logout, refresh]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

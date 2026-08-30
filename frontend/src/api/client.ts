@@ -1,7 +1,13 @@
 import { API_BASE } from '../config';
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public code = 'request_failed', public details?: unknown) {
+  constructor(
+    message: string,
+    public status: number,
+    public code = 'request_failed',
+    public details?: unknown,
+    public retryAfterMs?: number,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -38,6 +44,14 @@ function errorMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
+function retryAfterMilliseconds(value: string | null, now = Date.now()) {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000);
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? Math.max(0, timestamp - now) : undefined;
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
@@ -53,7 +67,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (!response.ok) {
     if (response.status === 401 && !options.suppressUnauthorized) window.dispatchEvent(new CustomEvent('moina:unauthorized'));
     const code = payload && typeof payload === 'object' && typeof (payload as Record<string, unknown>).code === 'string' ? String((payload as Record<string, unknown>).code) : 'request_failed';
-    throw new ApiError(errorMessage(payload, `요청을 처리하지 못했습니다. (${response.status})`), response.status, code, payload);
+    throw new ApiError(
+      errorMessage(payload, `요청을 처리하지 못했습니다. (${response.status})`),
+      response.status,
+      code,
+      payload,
+      retryAfterMilliseconds(response.headers.get('retry-after')),
+    );
+  }
+  const method = (options.method || 'GET').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('moina:api-mutated', { detail: { path, method } }));
   }
   if (payload && typeof payload === 'object' && 'data' in payload) return (payload as { data: T }).data;
   return payload as T;

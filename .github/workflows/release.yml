@@ -6,6 +6,7 @@ on:
       - "v*.*.*"
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
@@ -41,6 +42,17 @@ jobs:
           git fetch --no-tags origin main
           release_commit="$(git rev-parse "refs/tags/${RELEASE_VERSION}^{commit}")"
           git merge-base --is-ancestor "${release_commit}" origin/main
+
+      - name: Require successful CI for exact release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          release_commit="$(git rev-parse "refs/tags/${RELEASE_VERSION}^{commit}")"
+          conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${release_commit}&event=push&status=completed&per_page=100" \
+            --jq 'first(.workflow_runs[] | select(.name == "CI")) | .conclusion // empty')"
+          test "${conclusion}" = success || { printf '오류: release commit %s의 성공한 CI가 없습니다.\n' "${release_commit}" >&2; exit 1; }
 
       - name: Source checks
         run: |
@@ -125,7 +137,8 @@ jobs:
           archive="dist/moina-${RELEASE_VERSION}.tar.gz"
           sha256="$(sha256sum "${archive}" | cut -d ' ' -f 1)"
           notes="$(mktemp)"
-          trap 'rm -f -- "${notes}"' EXIT
+          download_dir="$(mktemp -d)"
+          trap 'rm -f -- "${notes}"; rm -rf -- "${download_dir}"' EXIT
           {
             printf '## MOINA 오프라인 이미지\n\n'
             printf -- '- 파일: `%s`\n' "$(basename "${archive}")"
@@ -137,10 +150,14 @@ jobs:
           } > "${notes}"
           if gh release view "${RELEASE_VERSION}" >/dev/null 2>&1; then
             mapfile -t assets < <(gh release view "${RELEASE_VERSION}" --json assets --jq '.assets[].name')
-            for asset in "${assets[@]}"; do
-              [[ "${asset}" == "$(basename "${archive}")" ]] || { printf '오류: 허용되지 않은 기존 asset: %s\n' "${asset}" >&2; exit 1; }
-            done
-            gh release upload "${RELEASE_VERSION}" "${archive}" --clobber
+            [[ "${#assets[@]}" -le 1 ]] || { printf '오류: 기존 release asset이 두 개 이상입니다.\n' >&2; exit 1; }
+            if [[ "${#assets[@]}" -eq 1 ]]; then
+              [[ "${assets[0]}" == "$(basename "${archive}")" ]] || { printf '오류: 허용되지 않은 기존 asset: %s\n' "${assets[0]}" >&2; exit 1; }
+              gh release download "${RELEASE_VERSION}" --pattern "$(basename "${archive}")" --dir "${download_dir}"
+              echo "${sha256}  ${download_dir}/$(basename "${archive}")" | sha256sum --check -
+            else
+              gh release upload "${RELEASE_VERSION}" "${archive}"
+            fi
             gh release edit "${RELEASE_VERSION}" --title "moina ${RELEASE_VERSION}" --notes-file "${notes}"
           else
             gh release create "${RELEASE_VERSION}" "${archive}" --verify-tag \
@@ -150,3 +167,6 @@ jobs:
           [[ "${#published[@]}" -eq 1 && "${published[0]}" == "$(basename "${archive}")" ]]
           remote_digest="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_VERSION}" --jq '.assets[0].digest // empty')"
           [[ -z "${remote_digest}" || "${remote_digest}" == "sha256:${sha256}" ]]
+          rm -f -- "${download_dir}/$(basename "${archive}")"
+          gh release download "${RELEASE_VERSION}" --pattern "$(basename "${archive}")" --dir "${download_dir}"
+          echo "${sha256}  ${download_dir}/$(basename "${archive}")" | sha256sum --check -

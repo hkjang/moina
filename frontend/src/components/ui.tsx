@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode, RefObject } from 'react';
 import { AlertTriangle, Check, LoaderCircle, X } from 'lucide-react';
 import { cn } from '../lib/cn';
 
@@ -55,11 +55,11 @@ export function SwitchField({ label, description, checked, onChange, disabled }:
   return <label className="switch-field"><span><strong>{label}</strong><small>{description}</small></span><input type="checkbox" role="switch" checked={checked} onChange={(event) => onChange(event.target.checked)} disabled={disabled}/></label>;
 }
 
-export function Modal({ open, onOpenChange, title, description, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; children: ReactNode }) {
+export function Modal({ open, onOpenChange, title, description, children, restoreFocusRef }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; children: ReactNode; restoreFocusRef?: RefObject<HTMLElement | null> }) {
   return <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal>
       <Dialog.Overlay className="dialog-overlay"/>
-      <Dialog.Content className="dialog-content custom-scrollbar">
+      <Dialog.Content className="dialog-content custom-scrollbar" onCloseAutoFocus={(event) => { if (restoreFocusRef?.current) { event.preventDefault(); restoreFocusRef.current.focus(); } }}>
         <div className="dialog-heading"><div><Dialog.Title>{title}</Dialog.Title>{description && <Dialog.Description>{description}</Dialog.Description>}</div><Dialog.Close asChild><IconButton label="창 닫기"><X/></IconButton></Dialog.Close></div>
         {children}
       </Dialog.Content>

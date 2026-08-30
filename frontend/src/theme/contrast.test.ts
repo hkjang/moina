@@ -101,9 +101,11 @@ describe('MOINA 의미 색상 대비', () => {
     ['라이트 성공', light, '--positive', '--positive-soft'],
     ['라이트 오류', light, '--danger', '--danger-soft'],
     ['라이트 경고', light, '--warning', '--warning-soft'],
+    ['라이트 AI', light, '--ai-fg', '--ai-soft'],
     ['다크 성공', dark, '--positive', '--positive-soft'],
     ['다크 오류', dark, '--danger', '--danger-soft'],
     ['다크 경고', dark, '--warning', '--warning-soft'],
+    ['다크 AI', dark, '--ai-fg', '--ai-soft'],
   ] as const)('%s 상태 텍스트와 전용 배경이 4.5:1 대비를 만족한다', (_label, theme, foreground, background) => {
     expectContrast(theme, foreground, background, 4.5);
   });

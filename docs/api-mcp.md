@@ -53,7 +53,7 @@ For Me 첫 페이지는 필터를 통과한 최근 후보 최대 200개의 합�
 
 ### Moin 미디어와 대체 텍스트
 
-`POST /api/v1/media`의 multipart `file`은 이미지·MP4·WebM을 streaming 업로드하며 선택적인 `altText` 또는 `alt` text를 함께 받을 수 있습니다. Moin 작성 시 이미 업로드한 media ID와 최종 대체 텍스트를 함께 확정합니다.
+`POST /api/v1/media`의 multipart `file`은 이미지·MP4·WebM을 streaming 업로드하며 선택적인 `altText` 또는 `alt` text를 함께 받을 수 있습니다. 이 값은 업로드 기본 설명입니다. Moin 작성 시 이미 업로드한 media ID와 문맥별 최종 대체 텍스트를 함께 확정하고 `post_media` 관계에 저장합니다.
 
 작성 client는 `posts:write` 권한으로 업로드 전에 현재 서버 계약을 조회합니다.
 
@@ -88,7 +88,25 @@ Client는 이 값을 파일 선택 UI와 사전 검사에 사용하되 업로드
 }
 ```
 
-`mediaAltTexts` key는 같은 요청의 `mediaIds`에 포함돼야 하고 각 값은 최대 500자입니다. 조회 응답의 각 `media` 항목은 `altText`를 제공합니다.
+`mediaAltTexts` key는 같은 요청의 `mediaIds`에 포함돼야 하고 각 값은 최대 500자입니다. 조회 응답의 각 `media` 항목은 해당 Moin 관계의 `altText`를 제공합니다. 같은 media ID를 두 Moin에 연결해 서로 다른 설명을 저장해도 한쪽 값이 다른 쪽을 덮어쓰지 않습니다. 게시물을 수정할 때도 `PATCH /api/v1/posts/{postID}`의 `content`와 선택적 `mediaAltTexts`로 그 Moin의 연결 설명만 변경할 수 있습니다.
+
+## 개인 알림 설정
+
+`GET /api/v1/profile/preferences`는 appearance, feed와 다음 완전한 알림 문서를 반환합니다. `PUT`은 부분 section만 보내도 나머지 값을 보존합니다.
+
+```json
+{
+  "notifications": {
+    "inApp": {"mentions": true, "signals": true, "follows": true, "echoes": true, "approvals": true},
+    "toast": {"enabled": true},
+    "desktop": {"enabled": false},
+    "digest": {"mode": "daily", "time": "08:00"},
+    "quietHours": {"enabled": true, "start": "22:00", "end": "07:00"}
+  }
+}
+```
+
+`digest.mode`는 `off`, `hourly`, `daily` 중 하나이고 시각은 서비스 기본 시간대의 `HH:MM`입니다. Digest를 새로 켜거나 mode·일별 시각을 바꾸면 worker가 변경을 감지한 시점부터 새 집계 구간을 시작하며, 꺼져 있던 기간이나 이전 일정의 알림을 한꺼번에 재생하지 않습니다. Worker는 1분 간격으로 설정을 확인합니다. In App의 Signal·Mention·Follow·Echo는 알림 센터 노출과 미확인 수 포함 여부를 제어합니다. In App을 끈 유형도 cross-instance Toast/Desktop fanout을 위해 `inApp=false`와 읽음 상태의 durable 전달 row로 저장하며 목록에서는 숨깁니다. 승인·보안 알림은 운영상 필수이므로 `approvals`를 false로 보내도 true로 정규화됩니다. Toast와 Desktop은 독립 실시간 표시 채널이며 조용한 시간에는 보류되지만 durable 전달 기록은 유지됩니다. Desktop은 이 설정과 별도로 사용자 동작으로 Browser Notification 권한을 허용해야 합니다.
 
 ## AI SSE
 
@@ -111,11 +129,31 @@ OIDC와 AI 관리 설정의 `allowedHosts`에는 정확한 DNS 이름/IP 또는 
 
 ## WebSocket 알림
 
-브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. `v0.1.2` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
+브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.3` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
+
+```json
+{
+  "id": "ntf_example",
+  "type": "signal",
+  "payload": {},
+  "inApp": false,
+  "toast": true,
+  "desktop": false,
+  "createdAt": "2026-08-30T00:00:00Z"
+}
+```
+
+이 예시는 알림 센터에서는 숨기되 현재 WebSocket을 받은 앱에는 Toast로 표시하는 독립 채널 정책입니다.
 
 ## 운영 API
 
 Prometheus collector는 `GET /metrics`에서 `text/plain; version=0.0.4`를 읽습니다. 이 endpoint는 사용자별 label이나 SQL문을 제공하지 않지만 외부 공개를 전제로 하지 않으므로 reverse proxy에서 운영 수집망으로 제한합니다. 모든 HTTP 응답의 `X-Request-ID`는 같은 요청의 구조화 log `request_id`와 일치합니다.
+
+`network.proxy` 관리자 설정은 `trustedProxies` 배열에 정확한 직접 Peer IP 또는 CIDR을 최대 128개 받습니다. Peer가 이 목록에 있을 때만 `Forwarded` 또는 `X-Forwarded-For`·`X-Forwarded-Proto`를 신뢰합니다. Client chain은 오른쪽부터 검증하고 protocol은 가장 가까운 오른쪽 hop만 사용합니다. 감사 detail은 `socketIp`, 계산된 `clientIp`, 전체 `proxyChain`을 분리합니다. 로그인·가입과 개인 API/MCP key 요청 한도는 PostgreSQL bucket으로 계산해 여러 인스턴스가 같은 quota를 공유하며 저장소 오류는 HTTP 503 `rate_limit_unavailable`로 반환합니다.
+
+시간별·일별 Digest는 Outbox event 생성 시각이 아닌 `notifications.delivered_at` 순서로 아직 `digested_at`이 없는 알림을 집계합니다. 처리한 row는 Digest 생성과 같은 transaction에서 표시되므로 Outbox 처리가 지연되거나 worker 집계 도중 새로 저장된 알림도 다음 실행에서 포함됩니다. `config_signature`은 구독 mode와 일별 시각 전환을 식별하며 전환 시 현재 경계 이전 row를 처리 완료로 표시해 과거 backlog를 재생하지 않습니다. Advisory lock과 사용자별 상태는 여러 인스턴스의 중복 요약을 막고, 잘못된 저장 설정은 사용자별 savepoint에서 격리됩니다.
+
+승인 Action은 `*`, `post.publish` 같은 exact dot action 또는 `post.*` 같은 terminal namespace wildcard만 저장할 수 있습니다. `post*`, `post.`, `post:*`, `*.publish`, `post..publish`는 HTTP 400 `invalid_actions`입니다. 모든 `approverRoles`가 최종 유효 권한 `approvals:review`를 가져야 하며 `*`와 `approvals:*`도 허용됩니다. 유효·무효 역할을 섞어 보내면 전체 요청이 거부됩니다. Pending 요청 조회·승인·반려 때도 현재 권한을 다시 검사하고 요청자 자신의 승인·반려는 409로 차단합니다.
 
 재시도 한도를 넘은 Transactional Outbox 이벤트는 감사 권한이 있는 관리자가 조회합니다.
 
@@ -136,7 +174,7 @@ X-CSRF-Token: ...
 
 MCP Streamable HTTP 요청은 JSON-RPC 2.0과 Bearer key를 사용합니다.
 
-`v0.1.2`는 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
+`v0.1.3`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
 
 ```bash
 curl --fail --silent http://127.0.0.1:8080/mcp \

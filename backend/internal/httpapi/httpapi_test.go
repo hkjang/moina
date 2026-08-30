@@ -97,6 +97,45 @@ func TestWorkflowDisabledSkipsApproval(t *testing.T) {
 	}
 }
 
+func TestApprovalActionPatternGrammarAndMatching(t *testing.T) {
+	valid := []struct {
+		pattern string
+		action  string
+		match   bool
+	}{
+		{"*", "post.publish", true},
+		{"POST.PUBLISH", "post.publish", true},
+		{"post.publish", "post.publish.external", false},
+		{"post.*", "post.publish", true},
+		{"post.*", "postal.publish", false},
+		{"post.moderation.*", "post.moderation.publish", true},
+	}
+	for _, item := range valid {
+		parsed, err := parseApprovalActionPattern(item.pattern)
+		if err != nil {
+			t.Errorf("유효 패턴 %q 거부: %v", item.pattern, err)
+			continue
+		}
+		if got := parsed.matches(item.action); got != item.match {
+			t.Errorf("패턴 %q action %q match=%t, want %t", item.pattern, item.action, got, item.match)
+		}
+	}
+
+	invalid := []string{
+		"", "post", ".post", "post.", "post..publish", "post*", "post.publ*",
+		"*post", "post.*.publish", "post.*.*", "post.**", "post..*", "*.*",
+		"post:*", "post:**", "approvals:review", "post/publish",
+	}
+	for _, pattern := range invalid {
+		if _, err := parseApprovalActionPattern(pattern); err == nil {
+			t.Errorf("잘못된 승인 action 패턴을 허용했습니다: %q", pattern)
+		}
+		if workflowMatches(model.WorkflowConfig{Enabled: true, Actions: []string{pattern}}, "post.publish") {
+			t.Errorf("잘못된 저장 패턴이 action과 일치했습니다: %q", pattern)
+		}
+	}
+}
+
 func TestVerifyOriginChecksBearerAndSafeMethods(t *testing.T) {
 	server := &Server{}
 	handler := server.verifyOrigin(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
@@ -171,7 +210,7 @@ func TestPreferencesPartialUpdateIsStrictAndPreservesOtherSections(t *testing.T)
 	if updated.Appearance.FontScale != 125 || updated.Appearance.Theme != "system" || updated.Feed.TopicWeight != 0 || updated.Feed.LinkWeight != 30 {
 		t.Fatalf("부분 업데이트가 기존 설정을 보존하지 않습니다: %+v", updated)
 	}
-	if !slices.Equal(updated.Feed.ExcludedTopics, []string{"go", "데이터"}) || updated.Notifications.Desktop {
+	if !slices.Equal(updated.Feed.ExcludedTopics, []string{"go", "데이터"}) || updated.Notifications.Desktop.Enabled {
 		t.Fatalf("제외 토픽/알림 정규화가 올바르지 않습니다: %+v", updated)
 	}
 }
@@ -208,6 +247,14 @@ func TestMCPPermissionFiltersTools(t *testing.T) {
 	}
 	if mcpProtocolVersion != "2025-11-25" {
 		t.Fatalf("unexpected MCP protocol version %s", mcpProtocolVersion)
+	}
+}
+
+func TestMCPDoesNotExposeApprovalDecisionTool(t *testing.T) {
+	for _, tool := range mcpTools() {
+		if tool.Permission == "approvals:review" {
+			t.Fatalf("MCP가 브라우저 세션 전용 승인 결정을 노출했습니다: %s", tool.Name)
+		}
 	}
 }
 

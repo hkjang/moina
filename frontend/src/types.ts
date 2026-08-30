@@ -95,6 +95,9 @@ export interface NotificationItem {
   body?: string;
   actor?: Profile;
   targetPath?: string;
+  inApp?: boolean;
+  toast?: boolean;
+  desktop?: boolean;
   readAt?: string;
   createdAt: string;
 }
@@ -120,6 +123,7 @@ export interface UserPreferences {
     density?: "comfortable" | "compact";
   };
   feed?: {
+    mode?: "for_me" | "following";
     topicWeight?: number;
     linkWeight?: number;
     discoveryWeight?: number;
@@ -128,10 +132,28 @@ export interface UserPreferences {
     showReasons?: boolean;
   };
   notifications?: {
-    desktop?: boolean;
-    mentions?: boolean;
-    signals?: boolean;
-    follows?: boolean;
+    inApp?: {
+      mentions?: boolean;
+      signals?: boolean;
+      follows?: boolean;
+      echoes?: boolean;
+      approvals?: boolean;
+    };
+    toast?: {
+      enabled?: boolean;
+    };
+    desktop?: {
+      enabled?: boolean;
+    };
+    digest?: {
+      mode?: "off" | "hourly" | "daily";
+      time?: string;
+    };
+    quietHours?: {
+      enabled?: boolean;
+      start?: string;
+      end?: string;
+    };
   };
 }
 

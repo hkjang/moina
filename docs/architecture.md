@@ -2,7 +2,7 @@
 
 ## 선택
 
-MOINA `v0.1.2`는 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
+MOINA `v0.1.3`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
 
 ```text
 Browser (React, REST/SSE/WebSocket)
@@ -63,15 +63,15 @@ Snapshot 생성은 사용자 단위 `pg_try_advisory_xact_lock`으로 직렬화�
 
 게시·Signal·Link·승인과 알림 이벤트는 업무 데이터와 같은 transaction에서 `outbox_events`에 기록합니다. 단일 Go binary 안의 worker가 `FOR UPDATE SKIP LOCKED`로 claim하고 지수 백오프, idempotency key와 Dead Letter를 적용합니다. PostgreSQL `LISTEN/NOTIFY`는 여러 인스턴스를 즉시 깨우고 polling은 연결 장애 시 복구 경로가 됩니다.
 
-WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 source of truth입니다. 각 인스턴스의 LISTEN consumer는 bounded channel이 가득 차면 다음 signal 전달을 기다리는 backpressure를 적용하고, durable notification row를 읽은 뒤 자신의 Hub로 전파합니다. Browser별 queue가 가득 찬 느린 socket은 연결을 취소해 client의 지수 backoff 재연결 경로로 보냅니다. Client는 연결 시 즉시, 연결 중에도 60초마다 REST unread summary를 다시 읽어 signal·socket 공백을 보완합니다. Dead Letter는 관리자 감사 화면에서 원인을 확인하고 재처리할 수 있습니다.
+WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 source of truth입니다. 각 인스턴스의 LISTEN consumer는 bounded channel이 가득 차면 다음 signal 전달을 기다리는 backpressure를 적용하고, durable notification row를 읽은 뒤 자신의 Hub로 전파합니다. Browser별 queue가 가득 찬 느린 socket은 연결을 취소해 client의 지수 backoff 재연결 경로로 보냅니다. Client는 연결 시 즉시, 연결 중에도 60초마다 REST unread summary를 다시 읽어 signal·socket 공백을 보완합니다. 사용자 설정과 서비스 시간대를 적용한 `inApp`·`toast`·`desktop` flag가 각 frame에 포함되고, 조용한 시간에는 실시간 표시만 보류합니다. In App 비활성 유형도 `in_app=false`와 읽음 상태의 durable 전달 row로 저장해 다른 인스턴스의 fanout을 유지하며 REST 목록·미확인 수에서는 제외합니다. 시간별·일별 Digest worker는 PostgreSQL advisory lock과 `notification_digest_state`로 여러 인스턴스의 중복 요약을 막습니다. `notifications.delivered_at` 순서와 `digested_at IS NULL` marker로 실제 저장된 미처리 전달 row만 집계하고 처리 표시도 같은 transaction에서 갱신하므로 지연 Outbox와 worker 집계 도중 commit된 알림을 다음 실행에서 이어서 처리합니다. `config_signature`은 끔·시간별·일별+시각 전환을 감지해 새 구독 경계를 만들고 이전 일정의 backlog 재생을 막습니다. 사용자별 nested transaction은 손상된 설정을 격리해 전체 batch 진행을 보장합니다. 승인·보안 알림은 In App 운영 기록으로 항상 유지합니다. Dead Letter는 관리자 감사 화면에서 원인을 확인하고 재처리할 수 있습니다.
 
 ## 검색
 
-`v0.1.2` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다.
+`v0.1.3` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다.
 
 ## 인증과 설정
 
-로컬 session과 OIDC가 같은 내부 user/role 모델로 수렴합니다. 환경변수는 DB 연결, bootstrap 관리자와 root encryption key 네 개뿐입니다. OIDC와 AI의 비밀 설정은 암호화하고, 일반·승인·permission 설정은 PostgreSQL revision과 audit log로 관리합니다.
+로컬 session과 OIDC가 같은 내부 user/role 모델로 수렴합니다. 환경변수는 DB 연결, bootstrap 관리자와 root encryption key 네 개뿐입니다. OIDC와 AI의 비밀 설정은 암호화하고, 일반·승인·permission·신뢰 Proxy 설정은 PostgreSQL revision과 audit log로 관리합니다. 직접 연결 Peer가 관리자 IP/CIDR 목록에 있을 때만 Forwarded header를 신뢰하고, 오른쪽부터 신뢰 chain을 제거해 Client IP를 계산합니다. Protocol은 가장 가까운 오른쪽 hop의 값만 사용해 사용자 제어 header가 secure cookie 판단을 바꾸지 못하게 합니다. 로그인·가입과 개인 API/MCP key의 bucket은 PostgreSQL에 두어 모든 인스턴스가 같은 quota를 사용합니다.
 
 ## AI와 MCP
 
@@ -79,11 +79,11 @@ AI adapter는 OpenAI-compatible Responses/Chat Completions 요청 차이를 흡�
 
 `v0.1.0`의 기존 설정에서 endpoint host를 알 수 있더라도 사설 주소 접근 권한은 추론하거나 자동 이관하지 않습니다. 업그레이드 후 로컬 bootstrap 최고 관리자가 `privateAllowedHosts`를 명시 저장해야 새 정책에 포함됩니다. 이는 schema migration이 egress 권한을 조용히 확대하지 않도록 하는 보안 경계입니다.
 
-REST, UI와 MCP는 동일한 DB source of truth와 authorization policy를 사용합니다. 승인 대상 action은 어느 진입점에서도 같은 snapshot/검토 규칙을 적용합니다.
+REST, UI와 MCP는 동일한 DB source of truth와 authorization policy를 사용합니다. 승인 대상 action은 전역 `*`, exact dot action 또는 terminal namespace wildcard만 허용하고 어느 진입점에서도 같은 snapshot/검토 규칙을 적용합니다. 설정한 모든 approver 역할과 알림 대상은 현재 최종 유효 `approvals:review` 권한을 다시 확인하며 요청자의 자기 승인·반려를 차단합니다.
 
 ## 미디어
 
-HTTP 업로드·다운로드 경계는 `io.Reader`/`io.ReadCloser` 기반 `MediaStore`로 분리합니다. PostgreSQL adapter는 새 payload를 Large Object에 64 KiB copy buffer로 streaming하고 metadata·SHA-256·OID만 일반 table에 둡니다. 기존 `bytea` payload는 호환 읽기를 유지합니다. 사용자별 미첨부 media는 100개·512 MiB로 고정 제한하며 사용자 advisory lock 안에서 검사해 동시 업로드 우회를 막습니다.
+HTTP 업로드·다운로드 경계는 `io.Reader`/`io.ReadCloser` 기반 `MediaStore`로 분리합니다. PostgreSQL adapter는 새 payload를 Large Object에 64 KiB copy buffer로 streaming하고 metadata·SHA-256·OID만 일반 table에 둡니다. 기존 `bytea` payload는 호환 읽기를 유지합니다. 업로드의 `media_assets.alt_text`는 기본 설명이고 Moin별 최종 대체 텍스트는 `post_media.alt_text`에 저장해 동일 media 재사용 문맥을 분리합니다. 사용자별 미첨부 media는 100개·512 MiB로 고정 제한하며 사용자 advisory lock 안에서 검사해 동시 업로드 우회를 막습니다.
 
 Large Object read는 인스턴스당 최대 8개를 동시에 유지합니다. DB pool이 작으면 일반 API용 연결 5개를 남기도록 read slot을 더 줄이며 최소 1개는 허용합니다. 참조되지 않은 업로드는 설정형 TTL과 `SKIP LOCKED` batch 정리로 여러 인스턴스에서도 안전하게 삭제됩니다. Cleaner는 매시간 500개 batch를 최대 20회 실행해 인스턴스당 한 주기에 최대 10,000개를 drain합니다. 인증된 작성 client는 `GET /api/v1/media/config`에서 현재 `maxUploadBytes`, `maxPerPost`와 여섯 개 허용 MIME type을 읽고, 업로드 API는 같은 계약과 고정 quota를 최종 검증합니다. 관리자 전용 orphan TTL과 고정 quota는 이 응답에서 제외합니다.
 
@@ -94,7 +94,7 @@ Large Object read는 인스턴스당 최대 8개를 동시에 유지합니다. D
 ## 오프라인 runtime
 
 ```text
-moina:v0.1.2 (linux/amd64, distroless, non-root, read-only)
+moina:v0.1.3 (linux/amd64, distroless, non-root, read-only)
   ├─ /app/moina
   └─ /app/web/dist
 

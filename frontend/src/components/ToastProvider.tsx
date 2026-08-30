@@ -16,7 +16,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => dismiss(id), 4500);
   }, [dismiss]);
   const value = useMemo(() => ({ notify }), [notify]);
-  return <ToastContext.Provider value={value}>{children}<div className="toast-region" aria-live="polite" aria-label="알림 메시지">{items.map((item) => <div className={`toast toast-${item.tone}`} key={item.id}>{item.tone === 'error' ? <CircleAlert/> : <CheckCircle2/>}<span>{item.message}</span><IconButton label="알림 닫기" onClick={() => dismiss(item.id)}><X/></IconButton></div>)}</div></ToastContext.Provider>;
+  return <ToastContext.Provider value={value}>{children}<div className="toast-region" role="region" aria-live="polite" aria-label="알림 메시지">{items.map((item) => <div className={`toast toast-${item.tone}`} key={item.id}>{item.tone === 'error' ? <CircleAlert/> : <CheckCircle2/>}<span>{item.message}</span><IconButton label="알림 닫기" onClick={() => dismiss(item.id)}><X/></IconButton></div>)}</div></ToastContext.Provider>;
 }
 
 export function useToast() {

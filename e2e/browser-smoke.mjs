@@ -12,7 +12,7 @@ const failurePath = join(resultDirectory, 'browser-smoke-failure.png');
 const baseURL = new URL(process.env.MOINA_E2E_BASE_URL || 'http://127.0.0.1:8080');
 const username = process.env.MOINA_E2E_USERNAME || 'e2e-admin';
 const password = process.env.MOINA_E2E_PASSWORD;
-const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.2';
+const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.3';
 const headless = process.env.MOINA_E2E_HEADLESS !== '0';
 const routes = routeCatalogFromEnvironment();
 
@@ -45,7 +45,12 @@ function monitor(page) {
     const target = new URL(request.url());
     if (['http:', 'https:'].includes(target.protocol) && target.origin !== baseURL.origin) add('external', `[${phase}] ${request.method()} ${target}`);
   });
-  page.on('requestfailed', (request) => add('request', `[${phase}] ${request.method()} ${request.url()} (${request.failure()?.errorText || '실패'})`));
+  page.on('requestfailed', (request) => {
+    const reason = request.failure()?.errorText || '실패';
+    const value = `[${phase}] ${request.method()} ${request.url()} (${reason})`;
+    if (reason === 'net::ERR_ABORTED') ignored.push(value);
+    else add('request', value);
+  });
   page.on('response', (response) => {
     if (response.status() >= 500) add('response', `[${phase}] ${response.status()} ${response.url()}`);
   });

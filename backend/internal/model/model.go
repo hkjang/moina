@@ -177,6 +177,9 @@ type Notification struct {
 	Body       string          `json:"body,omitempty"`
 	Actor      any             `json:"actor,omitempty"`
 	TargetPath string          `json:"targetPath,omitempty"`
+	InApp      bool            `json:"inApp"`
+	Toast      bool            `json:"toast"`
+	Desktop    bool            `json:"desktop"`
 	ReadAt     *time.Time      `json:"readAt,omitempty"`
 	CreatedAt  time.Time       `json:"createdAt"`
 }

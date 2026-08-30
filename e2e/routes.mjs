@@ -11,6 +11,7 @@ export const appRoutes = [
   { slug: 'ai', path: '/ai', title: 'AI' },
   { slug: 'settings-profile', path: '/settings/profile', title: '프로필 설정' },
   { slug: 'settings-feed', path: '/settings/feed', title: '피드 개인화' },
+  { slug: 'settings-notifications', path: '/settings/notifications', title: '알림 설정' },
   { slug: 'settings-accessibility', path: '/settings/accessibility', title: '화면 및 접근성' },
   { slug: 'settings-security', path: '/settings/security', title: '로그인 보안' },
   { slug: 'settings-keys', path: '/settings/keys', title: '내 API·MCP 키' },

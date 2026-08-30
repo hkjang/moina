@@ -34,6 +34,17 @@ type postInput struct {
 	MoimID        string            `json:"moimId"`
 }
 
+func normalizeMediaAltTexts(values map[string]string, attached map[string]bool) *publicError {
+	for mediaID, altText := range values {
+		trimmed := strings.TrimSpace(altText)
+		if strings.TrimSpace(mediaID) == "" || attached != nil && !attached[mediaID] || !utf8.ValidString(altText) || utf8.RuneCountInString(trimmed) > 500 || strings.ContainsRune(altText, '\x00') {
+			return &publicError{400, "invalid_media_alt_text", "첨부 미디어의 대체 텍스트는 500자 이하여야 합니다"}
+		}
+		values[mediaID] = trimmed
+	}
+	return nil
+}
+
 func scanMoin(row rowScanner) (model.Moin, error) {
 	return feedservice.ScanMoin(row)
 }
@@ -119,11 +130,8 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 	for _, mediaID := range input.MediaIDs {
 		attachedMedia[mediaID] = true
 	}
-	for mediaID, altText := range input.MediaAltTexts {
-		if !attachedMedia[mediaID] || !utf8.ValidString(altText) || utf8.RuneCountInString(strings.TrimSpace(altText)) > 500 || strings.ContainsRune(altText, '\x00') {
-			return model.Moin{}, &publicError{400, "invalid_media_alt_text", "첨부 미디어의 대체 텍스트는 500자 이하여야 합니다"}
-		}
-		input.MediaAltTexts[mediaID] = strings.TrimSpace(altText)
+	if public := normalizeMediaAltTexts(input.MediaAltTexts, attachedMedia); public != nil {
+		return model.Moin{}, public
 	}
 	var related *model.Moin
 	relatedID := input.ReplyToID
@@ -165,22 +173,27 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 		return model.Moin{}, err
 	}
 	defer tx.Rollback(r.Context())
+	mediaDefaultAltTexts := make(map[string]string, len(input.MediaIDs))
 	if len(input.MediaIDs) > 0 {
-		var count int
-		if err := tx.QueryRow(r.Context(), `SELECT count(*) FROM media_assets WHERE id=ANY($1) AND owner_id=$2`, input.MediaIDs, p.User.ID).Scan(&count); err != nil || count != len(input.MediaIDs) {
+		rows, queryErr := tx.Query(r.Context(), `SELECT id,alt_text FROM media_assets WHERE id=ANY($1) AND owner_id=$2`, input.MediaIDs, p.User.ID)
+		if queryErr != nil {
+			return model.Moin{}, queryErr
+		}
+		for rows.Next() {
+			var mediaID, altText string
+			if scanErr := rows.Scan(&mediaID, &altText); scanErr != nil {
+				rows.Close()
+				return model.Moin{}, scanErr
+			}
+			mediaDefaultAltTexts[mediaID] = altText
+		}
+		rowsErr := rows.Err()
+		rows.Close()
+		if rowsErr != nil {
+			return model.Moin{}, rowsErr
+		}
+		if len(mediaDefaultAltTexts) != len(input.MediaIDs) {
 			return model.Moin{}, &publicError{400, "invalid_media", "본인이 업로드한 미디어만 첨부할 수 있습니다"}
-		}
-	}
-	if len(input.MediaAltTexts) > 0 {
-		mediaIDs := make([]string, 0, len(input.MediaAltTexts))
-		altTexts := make([]string, 0, len(input.MediaAltTexts))
-		for mediaID, altText := range input.MediaAltTexts {
-			mediaIDs = append(mediaIDs, mediaID)
-			altTexts = append(altTexts, altText)
-		}
-		tag, updateErr := tx.Exec(r.Context(), `UPDATE media_assets m SET alt_text=v.alt_text FROM unnest($1::text[],$2::text[]) AS v(id,alt_text) WHERE m.id=v.id AND m.owner_id=$3`, mediaIDs, altTexts, p.User.ID)
-		if updateErr != nil || tag.RowsAffected() != int64(len(mediaIDs)) {
-			return model.Moin{}, &publicError{400, "invalid_media_alt_text", "첨부 미디어의 대체 텍스트를 저장할 수 없습니다"}
 		}
 	}
 	var replyID, quoteID, remoinID any
@@ -202,7 +215,11 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 		return model.Moin{}, err
 	}
 	for index, mediaID := range input.MediaIDs {
-		if _, err := tx.Exec(r.Context(), `INSERT INTO post_media(post_id,media_id,position) VALUES($1,$2,$3)`, postID, mediaID, index); err != nil {
+		altText, supplied := input.MediaAltTexts[mediaID]
+		if !supplied {
+			altText = mediaDefaultAltTexts[mediaID]
+		}
+		if _, err := tx.Exec(r.Context(), `INSERT INTO post_media(post_id,media_id,position,alt_text) VALUES($1,$2,$3,$4)`, postID, mediaID, index, altText); err != nil {
 			return model.Moin{}, err
 		}
 	}
@@ -221,6 +238,9 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 			return model.Moin{}, err
 		}
 		if err := s.enqueueApproverNotifications(r.Context(), tx, p.User.ID, approvalID, postID, workflow.ApproverRoles); err != nil {
+			if errors.Is(err, errNoIndependentApprover) {
+				return model.Moin{}, &publicError{http.StatusConflict, "no_independent_approver", "요청자 외의 활성 승인자가 없어 Moin을 승인 대기로 제출할 수 없습니다"}
+			}
 			return model.Moin{}, err
 		}
 	}
@@ -689,7 +709,8 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	p := getPrincipal(r)
 	id := chi.URLParam(r, "postID")
 	var input struct {
-		Content string `json:"content"`
+		Content       string            `json:"content"`
+		MediaAltTexts map[string]string `json:"mediaAltTexts"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -697,6 +718,10 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	input.Content = strings.TrimSpace(input.Content)
 	if input.Content == "" || utf8.RuneCountInString(input.Content) > 5000 || strings.ContainsRune(input.Content, '\x00') {
 		writeError(w, http.StatusBadRequest, "invalid_content", "내용은 1~5,000자로 입력해 주세요")
+		return
+	}
+	if public := normalizeMediaAltTexts(input.MediaAltTexts, nil); public != nil {
+		writePostError(w, public)
 		return
 	}
 	tx, err := s.repo.Pool().Begin(r.Context())
@@ -709,6 +734,23 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil || tag.RowsAffected() == 0 {
 		writeError(w, http.StatusConflict, "not_editable", "본인의 공개 Moin만 수정할 수 있습니다")
 		return
+	}
+	if len(input.MediaAltTexts) > 0 {
+		mediaIDs := make([]string, 0, len(input.MediaAltTexts))
+		altTexts := make([]string, 0, len(input.MediaAltTexts))
+		for mediaID, altText := range input.MediaAltTexts {
+			mediaIDs = append(mediaIDs, mediaID)
+			altTexts = append(altTexts, altText)
+		}
+		mediaTag, updateErr := tx.Exec(r.Context(), `UPDATE post_media pm SET alt_text=v.alt_text FROM unnest($1::text[],$2::text[]) AS v(id,alt_text) WHERE pm.post_id=$3 AND pm.media_id=v.id`, mediaIDs, altTexts, id)
+		if updateErr != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "미디어 대체 텍스트를 변경할 수 없습니다")
+			return
+		}
+		if mediaTag.RowsAffected() != int64(len(mediaIDs)) {
+			writeError(w, http.StatusBadRequest, "invalid_media_alt_text", "첨부된 미디어의 대체 텍스트만 변경할 수 있습니다")
+			return
+		}
 	}
 	if _, err := tx.Exec(r.Context(), `DELETE FROM post_topics WHERE post_id=$1 AND source='hashtag'`, id); err != nil || attachHashtags(r.Context(), tx, id, input.Content) != nil || tx.Commit(r.Context()) != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")

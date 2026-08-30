@@ -1,6 +1,6 @@
 # MOINA 설정 가이드
 
-이 문서는 `v0.1.2`의 환경변수 계약과 관리자 화면에서 변경할 수 있는 설정을 구분합니다.
+이 문서는 `v0.1.3`의 환경변수 계약과 관리자 화면에서 변경할 수 있는 설정을 구분합니다.
 
 ## 런타임 환경변수
 
@@ -32,12 +32,21 @@ MOINA_ENCRYPTION_KEY=replace-with-base64-32-byte-value
 - session 유지 시간(5~1,440분)
 - 개인 API key 인증과 MCP 활성화 여부, key별 분당 요청 한도
 - 업로드 파일 한도(64 KiB~50 MiB), Moin당 미디어 수(1~12)와 미사용 업로드 보존 시간(1~720시간, 기본 24시간)
+- 신뢰할 Reverse Proxy의 정확한 IP 또는 CIDR 목록(최대 128개)
 
-새 미디어는 PostgreSQL Large Object로 일정한 메모리 사용량 안에서 업로드·다운로드되며, Moin이나 프로필에 연결되지 않은 업로드는 설정된 TTL이 지나면 내장 정리 작업이 삭제합니다. 기존 `bytea` 미디어는 호환 읽기를 유지합니다. 사용자별 미첨부 quota 100개·512 MiB, 인스턴스당 동시 Large Object read 최대 8개와 cleaner 한 주기 최대 10,000개는 `v0.1.2`의 고정 안전 한도이며 관리자 설정으로 변경할 수 없습니다. DB pool이 작으면 media read보다 일반 API 연결 5개를 우선 남깁니다.
+새 미디어는 PostgreSQL Large Object로 일정한 메모리 사용량 안에서 업로드·다운로드되며, Moin이나 프로필에 연결되지 않은 업로드는 설정된 TTL이 지나면 내장 정리 작업이 삭제합니다. 기존 `bytea` 미디어는 호환 읽기를 유지합니다. 사용자별 미첨부 quota 100개·512 MiB, 인스턴스당 동시 Large Object read 최대 8개와 cleaner 한 주기 최대 10,000개는 `v0.1.3`의 고정 안전 한도이며 관리자 설정으로 변경할 수 없습니다. DB pool이 작으면 media read보다 일반 API 연결 5개를 우선 남깁니다.
+
+업로드 시 입력한 대체 텍스트는 재사용 기본값입니다. Moin 작성·수정 시 최종 대체 텍스트를 `post_media` 관계에 따로 저장하므로 같은 media ID를 여러 Moin에서 사용해도 각 문맥의 설명이 서로 덮어쓰이지 않습니다.
 
 작성 화면은 인증 후 `GET /api/v1/media/config`를 조회해 현재 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`를 적용합니다. 이 응답에는 관리자 전용 보존 값인 `orphanTtlHours`가 포함되지 않습니다. 설정을 바꾼 뒤 이미 작성 화면을 열어 둔 사용자는 업로드 전에 이 계약을 다시 조회해야 하며, 서버 검증이 최종 기준입니다.
 
-public base URL, 동시 session 수, Moin 글자 수, WebSocket 및 검색 정책은 `v0.1.2` 관리자 설정 모델에 포함되지 않습니다. 이 값이 필요한 배포는 reverse proxy 정책 또는 후속 버전에서 별도로 관리해야 합니다.
+public base URL, 동시 session 수, Moin 글자 수, WebSocket 및 검색 정책은 `v0.1.3` 관리자 설정 모델에 포함되지 않습니다. 이 값이 필요한 배포는 reverse proxy 정책 또는 후속 버전에서 별도로 관리해야 합니다.
+
+### Reverse Proxy와 요청 한도
+
+`network.proxy.trustedProxies`에는 MOINA에 직접 연결하는 Proxy Peer의 IP 또는 CIDR만 입력합니다. 직접 연결 Peer가 목록에 있을 때만 표준 `Forwarded` 또는 `X-Forwarded-For`·`X-Forwarded-Proto`를 신뢰하며, 오른쪽부터 신뢰 Proxy를 제거해 실제 Client IP를 계산합니다. 전달 protocol은 가장 가까운 오른쪽 hop의 값만 사용해 왼쪽의 사용자 입력이 secure cookie 판단을 바꾸지 못하게 합니다. 빈 목록은 모든 전달 헤더를 무시하는 안전한 기본값입니다. 감사 기록에는 `socketIp`, `clientIp`, `proxyChain`을 분리해 남깁니다.
+
+로그인은 사용자명+Client IP 5분당 5회와 사용자명 전체 5분당 20회를 함께 제한하고, 가입은 Client IP 기준 10분당 5회입니다. 개인 API·MCP key의 `rateLimitPerMinute`도 PostgreSQL `rate_limit_buckets`를 사용하므로 여러 MOINA 인스턴스가 같은 quota를 공유합니다. Rate Limit 저장소를 사용할 수 없으면 인증·키 요청을 허용하지 않고 `rate_limit_unavailable`을 반환합니다.
 
 ### Keycloak/OIDC
 
@@ -66,9 +75,9 @@ DNS가 RFC1918 IPv4 또는 ULA IPv6를 반환하는 폐쇄망 endpoint는 정확
 
 AI URL은 기본적으로 HTTPS만 허용됩니다. 폐쇄망에서 HTTP가 꼭 필요하면 관리 API의 `allowInsecureHttp`를 명시적으로 켜야 하며, 이 경우에도 `allowedHosts`에 정확히 등록한 내부 endpoint만 사용합니다. port 없는 허용 항목은 HTTP 80 또는 HTTPS 443에만 일치하고 비기본 port는 명시해야 합니다. 사설 주소를 해석하는 hostname은 OIDC와 같은 규칙으로 `privateAllowedHosts`에도 등록합니다. DNS 결과에 연결할 때 IP를 고정하고 모든 redirect를 다시 검사합니다. streaming이 기본이며 reverse proxy의 response buffering을 끕니다.
 
-> **v0.1.0 업그레이드 필수 조치:** 기존에 사설 Keycloak/OIDC 또는 AI endpoint를 사용했더라도 `v0.1.2`는 이를 `privateAllowedHosts`로 자동 이관하지 않습니다. 업그레이드 전에 로컬 bootstrap 최고 관리자 로그인을 확인하고, 업그레이드 뒤 그 계정으로 각 설정의 정확한 DNS hostname을 `allowedHosts`와 `privateAllowedHosts`에 명시 저장한 다음 연결 테스트를 수행합니다. 이미 생성된 bootstrap 계정은 환경변수 비밀번호 변경으로 재설정되지 않습니다.
+> **v0.1.0 업그레이드 필수 조치:** 기존에 사설 Keycloak/OIDC 또는 AI endpoint를 사용했더라도 `v0.1.3`은 이를 `privateAllowedHosts`로 자동 이관하지 않습니다. 업그레이드 전에 로컬 bootstrap 최고 관리자 로그인을 확인하고, 업그레이드 뒤 그 계정으로 각 설정의 정확한 DNS hostname을 `allowedHosts`와 `privateAllowedHosts`에 명시 저장한 다음 연결 테스트를 수행합니다. 이미 생성된 bootstrap 계정은 환경변수 비밀번호 변경으로 재설정되지 않습니다.
 
-관리자 공통 system instruction, temperature와 사용자별 사용량 정책은 `v0.1.2` 설정 항목이 아닙니다. 필요한 경우 upstream AI gateway에서 적용하고, MOINA에 설정된 상한보다 더 좁은 한도로 운영합니다.
+관리자 공통 system instruction, temperature와 사용자별 사용량 정책은 `v0.1.3` 설정 항목이 아닙니다. 필요한 경우 upstream AI gateway에서 적용하고, MOINA에 설정된 상한보다 더 좁은 한도로 운영합니다.
 
 ### 승인, 역할과 moderation
 
@@ -79,7 +88,9 @@ AI URL은 기본적으로 HTTPS만 허용됩니다. 폐쇄망에서 HTTP가 꼭 
 
 승인 정책이 비활성화되면 검토·승인·반려 상태와 메뉴를 제외합니다.
 
-신고 유형·제재 단계·보존 기간을 관리자가 사용자 정의하는 정책 모델은 `v0.1.2`에 없습니다. 기관별 보존 규정은 PostgreSQL 백업·삭제 절차와 운영 문서로 관리합니다.
+Action은 전역 `*`, 정확한 dot 구분 Action(`post.publish`, `moim.member.approve`) 또는 마지막 segment만 wildcard인 namespace 패턴(`post.*`)만 허용합니다. `post*`, `post.`, `post:*`, `*.publish`, `post..publish`는 저장할 수 없습니다. 선택한 모든 approver 역할은 최종 유효 권한으로 `approvals:review`를 가져야 하며 `*`와 `approvals:*`도 유효합니다. 승인 알림과 기존 대기 요청 접근 시에도 현재 역할·권한을 다시 검사하고 요청자의 자기 승인·반려를 금지합니다.
+
+신고 유형·제재 단계·보존 기간을 관리자가 사용자 정의하는 정책 모델은 `v0.1.3`에 없습니다. 기관별 보존 규정은 PostgreSQL 백업·삭제 절차와 운영 문서로 관리합니다.
 
 ## 사설 CA
 
@@ -96,4 +107,4 @@ docker compose --env-file .env \
 
 ## 버전
 
-`VERSION`, Go binary, React asset, `/api/v1/version`, 로그인 화면, 프로필 메뉴와 OCI label의 값은 모두 `v0.1.2`로 일치해야 합니다. 런타임 환경변수로 버전을 덮어쓰지 않습니다.
+`VERSION`, Go binary, React asset, `/api/v1/version`, 로그인 화면, 프로필 메뉴와 OCI label의 값은 모두 `v0.1.3`으로 일치해야 합니다. 런타임 환경변수로 버전을 덮어쓰지 않습니다.
