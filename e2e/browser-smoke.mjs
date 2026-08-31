@@ -15,6 +15,7 @@ const password = process.env.MOINA_E2E_PASSWORD;
 const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.5';
 const headless = process.env.MOINA_E2E_HEADLESS !== '0';
 const routes = routeCatalogFromEnvironment();
+const clipboardPNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
 if (!password) throw new Error('MOINA_E2E_PASSWORD가 필요합니다.');
 await mkdir(resultDirectory, { recursive: true });
@@ -169,8 +170,75 @@ try {
   await page.getByText(new RegExp(`^moina\\s+${expectedVersion.replaceAll('.', '\\.')}\$`, 'i')).waitFor({ state: 'visible' });
   assert.equal(summary(), '', `모바일 관리자 메뉴 확인 중 오류\n${summary()}`);
 
+  phase = 'composer-clipboard-media';
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(new URL('/flow', baseURL).toString(), { waitUntil: 'domcontentloaded' });
+  await settle(page);
+  await page.locator('.composer-prompt').click();
+  const composerDialog = page.getByRole('dialog', { name: '새 모인' });
+  await composerDialog.waitFor({ state: 'visible' });
+  const composerTextarea = composerDialog.getByRole('textbox', { name: '모인 내용', exact: true });
+  await composerTextarea.waitFor({ state: 'visible' });
+  await page.waitForFunction((element) => document.activeElement === element, await composerTextarea.elementHandle(), { timeout: 5_000 });
+  assert.equal(await composerTextarea.evaluate((element) => document.activeElement === element), true, '새 모인 Dialog가 열리면 내용 입력란에 포커스가 가야 합니다.');
+  const composerFileInput = composerDialog.locator('input[type="file"]');
+  assert.equal(await composerFileInput.count(), 1, '새 모인 Dialog에는 파일 입력이 하나여야 합니다.');
+  assert.equal(await composerFileInput.evaluate((element) => element.tabIndex), -1, '숨겨진 파일 입력은 Tab 순서에서 제외되어야 합니다.');
+  const composerMediaButton = composerDialog.getByRole('button', { name: /이미지 또는 영상 첨부/ });
+  await composerMediaButton.waitFor({ state: 'visible' });
+  await page.waitForFunction((element) => !element.disabled, await composerMediaButton.elementHandle(), { timeout: 5_000 });
+
+  const uploadResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'POST' && target.pathname === '/api/v1/media';
+  });
+  const pasteResult = await composerTextarea.evaluate((element, png) => {
+    const bytes = Uint8Array.from(atob(png), (value) => value.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], 'clipboard-smoke.png', {
+      type: 'image/png',
+      lastModified: 1_700_000_000_000,
+    }));
+    const event = new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: transfer,
+    });
+    element.dispatchEvent(event);
+    return { defaultPrevented: event.defaultPrevented, files: event.clipboardData?.files.length || 0 };
+  }, clipboardPNG);
+  assert.deepEqual(pasteResult, { defaultPrevented: true, files: 1 }, 'PNG ClipboardEvent를 미디어 첨부로 처리해야 합니다.');
+  const uploadResponse = await uploadResponsePromise;
+  assert.equal(uploadResponse.status(), 201, '클립보드 PNG 업로드는 201이어야 합니다.');
+  const uploadBody = await uploadResponse.json();
+  const mediaID = uploadBody?.data?.id;
+  assert.ok(typeof mediaID === 'string' && mediaID, '업로드 응답에 미디어 ID가 있어야 합니다.');
+  await composerDialog.getByText('1/1개 업로드 완료', { exact: true }).waitFor({ state: 'visible' });
+  const preview = composerDialog.locator('[aria-label="첨부 미디어"] img');
+  await preview.waitFor({ state: 'visible' });
+  const previewDimensions = await preview.evaluate(async (element) => {
+    await element.decode();
+    return { width: element.naturalWidth, height: element.naturalHeight };
+  });
+  assert.deepEqual(previewDimensions, { width: 1, height: 1 }, '붙여넣은 PNG 미리보기를 렌더링해야 합니다.');
+  const removeButton = composerDialog.getByRole('button', { name: '클립보드 이미지 1.png 제거', exact: true });
+  await removeButton.waitFor({ state: 'visible' });
+
+  const deletePath = `/api/v1/media/${encodeURIComponent(mediaID)}`;
+  const deleteResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'DELETE' && target.pathname === deletePath;
+  });
+  await removeButton.click();
+  const deleteResponse = await deleteResponsePromise;
+  assert.equal(deleteResponse.status(), 204, '게시하지 않은 클립보드 미디어 제거는 204여야 합니다.');
+  await composerDialog.locator('[aria-label="첨부 미디어"]').waitFor({ state: 'hidden' });
+  await composerDialog.getByRole('button', { name: '창 닫기', exact: true }).click();
+  await composerDialog.waitFor({ state: 'hidden' });
+  assert.equal(summary(), '', `클립보드 미디어 확인 중 오류\n${summary()}`);
+
   await writeFile(resultPath, `${JSON.stringify({ ok: true, version: expectedVersion, routes: completed, failures, ignored }, null, 2)}\n`);
-  console.log(`브라우저 smoke 통과: ${completed.length}개 route, 새로고침·버전·외부요청·콘솔 오류 정상`);
+  console.log(`브라우저 smoke 통과: ${completed.length}개 route, 새로고침·버전·클립보드 미디어·외부요청·콘솔 오류 정상`);
 } catch (error) {
   await page.screenshot({ path: failurePath, fullPage: true }).catch(() => undefined);
   await writeFile(resultPath, `${JSON.stringify({ ok: false, routes: completed, failures, ignored, error: error instanceof Error ? error.stack : String(error) }, null, 2)}\n`).catch(() => undefined);

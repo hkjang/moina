@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../api/client';
 import type { Moin } from '../types';
@@ -11,12 +11,26 @@ vi.mock('../api/client', async (load) => {
   return { ...actual, apiRequest: vi.fn() };
 });
 
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'u1', username: 'user', displayName: '사용자' },
+  }),
+}));
+
 const mockedRequest = vi.mocked(apiRequest);
 const moin = (): Moin => ({ id: 'm1', content: '테스트 모인', author: { id: 'u1', username: 'user', displayName: '사용자' }, createdAt: '2026-01-01T00:00:00Z', counts: { signals: { like: 0 }, bookmarks: 0, remoins: 0 }, viewer: { signals: [], bookmarked: false, remoined: false } });
-const renderCard = (onMoinChange = vi.fn()) => {
-  render(<MemoryRouter><ToastProvider><MoinCard moin={moin()} onMoinChange={onMoinChange}/></ToastProvider></MemoryRouter>);
-  return onMoinChange;
+const renderCardWithRouter = (onMoinChange = vi.fn(), value = moin()) => {
+  const router = createMemoryRouter([
+    {
+      path: '*',
+      element: <ToastProvider><MoinCard moin={value} onMoinChange={onMoinChange}/></ToastProvider>,
+    },
+  ], { initialEntries: ['/flow'] });
+  render(<RouterProvider router={router}/>);
+  return { onMoinChange, router };
 };
+const renderCard = (onMoinChange = vi.fn()) =>
+  renderCardWithRouter(onMoinChange).onMoinChange;
 
 describe('MoinCard optimistic mutation', () => {
   beforeEach(() => mockedRequest.mockReset());
@@ -29,6 +43,93 @@ describe('MoinCard optimistic mutation', () => {
     expect(screen.getByRole('button', { name: '새로운 관점 0개' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '포켓' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '모인 주소 복사' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '모인 수정' })).toBeInTheDocument();
+  });
+
+  it('승인 대기 중인 모인에는 실패할 수정 동작을 노출하지 않는다', () => {
+    renderCardWithRouter(vi.fn(), { ...moin(), status: 'pending_approval' });
+    expect(screen.queryByRole('button', { name: '모인 수정' })).not.toBeInTheDocument();
+  });
+
+  it('본인 모인을 수정하고 PATCH 응답을 카드와 cache callback에 반영한다', async () => {
+    mockedRequest.mockImplementation((path) => {
+      if (path === '/media/config') return Promise.resolve({ maxUploadBytes: 1024, maxPerPost: 4 });
+      if (path === '/posts/m1') return Promise.resolve({
+        ...moin(),
+        content: '수정된 모인',
+        updatedAt: '2026-01-02T00:00:00Z',
+      });
+      return Promise.resolve({});
+    });
+    const onChange = renderCard();
+
+    fireEvent.click(screen.getByRole('button', { name: '모인 수정' }));
+    const editor = await screen.findByLabelText('수정할 모인 내용');
+    await waitFor(() => expect(editor).toHaveFocus());
+    fireEvent.change(editor, {
+      target: { value: '수정된 모인' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '변경사항 저장' }));
+
+    await waitFor(() => expect(mockedRequest).toHaveBeenCalledWith(
+      '/posts/m1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: expect.objectContaining({ content: '수정된 모인', mediaIds: [] }),
+      }),
+    ));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '수정된 모인' }),
+    ));
+    expect(screen.getByText('수정된 모인')).toBeInTheDocument();
+  });
+
+  it('수정 중인 초안은 확인 없이 닫아 잃지 않는다', async () => {
+    mockedRequest.mockImplementation((path) =>
+      path === '/media/config'
+        ? Promise.resolve({ maxUploadBytes: 1024, maxPerPost: 4 })
+        : Promise.resolve({}),
+    );
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: '모인 수정' }));
+    fireEvent.change(await screen.findByLabelText('수정할 모인 내용'), {
+      target: { value: '저장하지 않은 내용' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '창 닫기' }));
+
+    expect(confirm).toHaveBeenCalledWith('수정 중인 내용과 첨부 변경을 버리고 닫을까요?');
+    expect(screen.getByLabelText('수정할 모인 내용')).toHaveValue('저장하지 않은 내용');
+    confirm.mockRestore();
+  });
+
+  it('초안을 버리고 이동하면 같은 Flow에 남아도 수정 모달을 닫는다', async () => {
+    mockedRequest.mockImplementation((path) =>
+      path === '/media/config'
+        ? Promise.resolve({ maxUploadBytes: 1024, maxPerPost: 4 })
+        : Promise.resolve({}),
+    );
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { router } = renderCardWithRouter();
+    fireEvent.click(screen.getByRole('button', { name: '모인 수정' }));
+    fireEvent.change(await screen.findByLabelText('수정할 모인 내용'), {
+      target: { value: '이동하며 버릴 내용' },
+    });
+
+    await act(async () => {
+      await router.navigate('/flow?compose=1&quote=m1');
+    });
+
+    await waitFor(() =>
+      expect(confirm).toHaveBeenCalledWith(
+        '수정 중인 내용과 첨부 변경을 버리고 이동할까요?',
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.queryByLabelText('수정할 모인 내용')).not.toBeInTheDocument(),
+    );
+    expect(router.state.location.search).toBe('?compose=1&quote=m1');
   });
 
   it('Signal 요청 완료 전에 UI와 cache callback을 먼저 갱신한다', async () => {

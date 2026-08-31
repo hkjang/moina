@@ -26,6 +26,8 @@
 | GET | `/users/{username}`, `/topics`, `/topics/{slug}`, `/search`, `/notifications`, `/moims`, `/moims/{slug}` |
 | POST, DELETE | `/links/{userId}`, `/topics/{slug}/follow`, `/moims/{slug}/members` |
 | POST | `/notifications/read`, `/moims`, `/media`, `/reports` |
+| GET | `/media/config`, `/media/{id}` |
+| DELETE | `/media/{id}` (게시물·avatar에 연결되지 않은 본인 업로드 정리) |
 | GET, PATCH | `/profile` |
 | GET, PUT | `/profile/preferences` |
 | POST | `/profile/password` |
@@ -37,7 +39,7 @@
 | POST (SSE) | `/ai/chat` |
 | WebSocket | `/ws/notifications` |
 
-게시물 작성 body는 `content`, `visibility`, `mediaIds`와 선택적인 `replyToId`, `quoteMoinId`를 사용합니다. AI 응답은 기본 SSE 스트리밍이며 `maxTokens`는 관리자가 정한 범위에서 최대 262,144입니다. WebSocket의 최초 `{type:"connected"}` 이벤트는 알림으로 표시하지 않습니다.
+게시물 작성 body는 `content`, `visibility`, `mediaIds`와 선택적인 `replyToId`, `quoteMoinId`를 사용합니다. 수정 PATCH는 `content`와 선택적인 `mediaIds`, `mediaAltTexts`를 사용합니다. `mediaIds` 생략은 기존 첨부 유지, 빈 배열은 전체 제거, 배열 제공은 표시 순서를 포함한 전체 교체이며 본인이 업로드한 media만 허용합니다. AI 응답은 기본 SSE 스트리밍이며 `maxTokens`는 관리자가 정한 범위에서 최대 262,144입니다. WebSocket의 최초 `{type:"connected"}` 이벤트는 알림으로 표시하지 않습니다.
 
 ## 서비스 관리자
 

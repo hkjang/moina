@@ -6,11 +6,11 @@ MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관�
 
 현재 서비스 버전은 `v0.1.5`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.5`는 관리자 OIDC 설정을 저장할 때 조회 전용 `clientSecretConfigured`가 PUT 입력에 섞여 `invalid_json`으로 거부되던 문제를 해결한 패치 릴리스입니다. 조회 View와 저장 Input을 분리하고 저장 필드를 명시적으로 구성해 기존 Client Secret 유지·명시적 삭제를 모두 보장합니다. 같은 원인의 AI `apiKeyConfigured` 저장 오류도 함께 수정했습니다.
+`v0.1.5`는 관리자 OIDC 설정 저장이 조회 전용 필드 때문에 `invalid_json`으로 거부되던 문제와 같은 원인의 AI 설정 오류를 해결합니다. Moin 작성·수정에서는 캡처 이미지를 `Ctrl/⌘+V`로 바로 붙여넣고 파일을 끌어 놓을 수 있으며, 첨부 미리보기·크기·한도·진행 상태·재시도·삭제와 문맥별 대체 텍스트를 한 화면에서 관리합니다. 실패한 첨부가 조용히 빠진 채 게시되는 것도 차단했습니다.
 
 ## 주요 기능
 
-- Moin 작성, Echo, Remoin, 반응, Pocket과 Link(팔로우)
+- 캡처 이미지 붙여넣기·드래그 앤 드롭·첨부 교체를 지원하는 Moin 작성·수정, Echo, Remoin, 반응, Pocket과 Link(팔로우)
 - Following/For Me Flow, Topic과 Pulse, 통합 검색, 실시간 알림
 - 최근 7일 공개 Moin·Signal과 24시간 가중치를 반영한 Topic Pulse
 - 개인 프로필·피드·글자 크기 설정과 URL 기반 메뉴 복원

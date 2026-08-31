@@ -4,13 +4,15 @@ import {
   Heart,
   Lightbulb,
   MessageCircle,
+  Pencil,
   Quote,
   Repeat2,
   Share2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { apiRequest, readableError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import {
   toggleMoinBookmark,
   toggleMoinRemoin,
@@ -19,7 +21,9 @@ import {
 import type { Moin, SignalType } from "../types";
 import { formatRelativeTime, topicLabel } from "../utils/format";
 import { useToast } from "./ToastProvider";
-import { Avatar, Badge } from "./ui";
+import { DraftNavigationGuard } from "./DraftNavigationGuard";
+import { MoinComposer } from "./MoinComposer";
+import { Avatar, Badge, Modal } from "./ui";
 
 const signalLabels: Record<SignalType, string> = {
   like: "공감",
@@ -28,6 +32,47 @@ const signalLabels: Record<SignalType, string> = {
   question: "논의 필요",
   verify: "근거 확인",
 };
+
+function MoinEditDialog({
+  current,
+  editTriggerRef,
+  editorStateRef,
+  onClose,
+  onUpdated,
+}: {
+  current: Moin;
+  editTriggerRef: { current: HTMLButtonElement | null };
+  editorStateRef: { current: { dirty: boolean; busy: boolean } };
+  onClose: (force?: boolean) => void;
+  onUpdated: (next: Moin) => void;
+}) {
+  return (
+    <>
+      <DraftNavigationGuard
+        stateRef={editorStateRef}
+        busyMessage="업로드 또는 저장이 끝난 뒤 이동해 주세요."
+        confirmMessage="수정 중인 내용과 첨부 변경을 버리고 이동할까요?"
+        onProceed={() => onClose(true)}
+      />
+      <Modal
+        open
+        onOpenChange={(open) => !open && onClose()}
+        title="모인 수정"
+        description="내용을 고치고 기존 첨부를 정리하거나 새 이미지·영상을 추가하세요."
+        restoreFocusRef={editTriggerRef}
+      >
+        <MoinComposer
+          autoFocus
+          editMoin={current}
+          onStateChange={(state) => {
+            editorStateRef.current = state;
+          }}
+          onUpdated={onUpdated}
+        />
+      </Modal>
+    </>
+  );
+}
 
 export function MoinCard({
   moin,
@@ -38,15 +83,28 @@ export function MoinCard({
   onMoinChange?: (next: Moin) => void;
   compact?: boolean;
 }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  const locationSignature = `${location.key}\u0000${location.pathname}\u0000${location.search}\u0000${location.hash}`;
   const { notify } = useToast();
   const [current, setCurrent] = useState(moin);
   const [pending, setPending] = useState(false);
+  const [editing, setEditing] = useState(false);
   const currentRef = useRef(moin);
   const pendingRef = useRef(false);
+  const editTriggerRef = useRef<HTMLButtonElement>(null);
+  const editorStateRef = useRef({ dirty: false, busy: false });
+  const editLocationRef = useRef("");
   useEffect(() => {
     currentRef.current = moin;
     setCurrent(moin);
   }, [moin]);
+  useEffect(() => {
+    if (editing && editLocationRef.current !== locationSignature) {
+      editorStateRef.current = { dirty: false, busy: false };
+      setEditing(false);
+    }
+  }, [editing, locationSignature]);
   const commit = (next: Moin) => {
     currentRef.current = next;
     setCurrent(next);
@@ -129,11 +187,38 @@ export function MoinCard({
     );
   };
   const likeCount = current.counts?.signals?.like || 0;
+  const editable =
+    !compact &&
+    user?.id === current.author.id &&
+    current.kind !== "remoin" &&
+    (!current.status || current.status === "published");
+  const changeEditing = (open: boolean, force = false) => {
+    if (open) {
+      editorStateRef.current = { dirty: false, busy: false };
+      editLocationRef.current = locationSignature;
+      setEditing(true);
+      return;
+    }
+    if (!force && editorStateRef.current.busy) {
+      notify("업로드 또는 저장이 끝난 뒤 수정 창을 닫아 주세요.", "error");
+      return;
+    }
+    if (
+      !force &&
+      editorStateRef.current.dirty &&
+      !window.confirm("수정 중인 내용과 첨부 변경을 버리고 닫을까요?")
+    )
+      return;
+    editorStateRef.current = { dirty: false, busy: false };
+    editLocationRef.current = "";
+    setEditing(false);
+  };
   return (
-    <article
-      className={`moin-card${compact ? " compact" : ""}`}
-      aria-busy={pending || undefined}
-    >
+    <>
+      <article
+        className={`moin-card${compact ? " compact" : ""}`}
+        aria-busy={pending || undefined}
+      >
       <Link
         className="moin-avatar"
         to={`/profile/${encodeURIComponent(current.author.username)}`}
@@ -162,6 +247,19 @@ export function MoinCard({
               {formatRelativeTime(current.createdAt)}
             </span>
           </Link>
+          {editable && (
+            <button
+              ref={editTriggerRef}
+              type="button"
+              className="ui-button ui-button-ghost ui-button-icon moin-edit-button"
+              aria-label="모인 수정"
+              title="모인 수정"
+              onClick={() => changeEditing(true)}
+              disabled={pending}
+            >
+              <Pencil />
+            </button>
+          )}
         </header>
         {current.content && (
           <Link
@@ -288,6 +386,7 @@ export function MoinCard({
             </button>
             <Link
               to={`/flow?compose=1&quote=${encodeURIComponent(current.id)}`}
+              state={{ moinaComposerEntry: true }}
               aria-label="이 모인 인용"
             >
               <Quote />
@@ -309,6 +408,21 @@ export function MoinCard({
           </footer>
         )}
       </div>
-    </article>
+      </article>
+      {editable &&
+        editing &&
+        editLocationRef.current === locationSignature && (
+        <MoinEditDialog
+          current={current}
+          editTriggerRef={editTriggerRef}
+          editorStateRef={editorStateRef}
+          onClose={(force) => changeEditing(false, force)}
+          onUpdated={(next) => {
+            commit(next);
+            changeEditing(false, true);
+          }}
+        />
+      )}
+    </>
   );
 }

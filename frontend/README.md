@@ -24,3 +24,5 @@ VITE_MOINA_VERSION=v0.1.5 npm run build
 동적 캡처 URL 형식은 `/profile/{username}`, `/moin/{id}`, `/topics/{slug}`, `/moims/{slug}`입니다.
 
 API와 보안 계약은 [API_CONTRACT.md](./API_CONTRACT.md)에 고정해 두었습니다.
+
+Moin 작성기와 본인 게시물 수정 모달은 같은 미디어 큐를 사용합니다. 파일 선택뿐 아니라 캡처 이미지를 `Ctrl/⌘+V`로 붙여넣거나 JPEG·PNG·GIF·WebP·MP4·WebM 파일을 끌어 놓을 수 있고, 서버의 현재 개수·용량 제한과 업로드 상태를 화면에서 확인합니다.

@@ -177,6 +177,7 @@ func (s *Server) Handler() http.Handler {
 			auth.With(s.requirePermission("posts:write")).Post("/media", s.uploadMedia)
 			auth.With(s.requirePermission("posts:write")).Get("/media/config", s.mediaConfigStatus)
 			auth.With(s.requirePermission("posts:read")).Get("/media/{mediaID}", s.getMedia)
+			auth.With(s.requirePermission("posts:write")).Delete("/media/{mediaID}", s.deleteMedia)
 			auth.With(s.requirePermission("social:write")).Post("/reports", s.createReport)
 
 			auth.With(s.requirePermission("posts:read")).Get("/workflow/status", s.workflowStatus)

@@ -476,6 +476,13 @@ paths:
       summary: media 조회
       parameters: [{$ref: '#/components/parameters/MediaID'}]
       responses: {'200': {description: 저장된 image/video bytes, content: {image/*: {schema: {type: string, format: binary}}, video/*: {schema: {type: string, format: binary}}}}, '206': {description: 동영상·미디어 byte range}, '404': {$ref: '#/components/responses/Error'}}
+    delete:
+      tags: [Posts]
+      summary: 연결되지 않은 내 media 즉시 삭제
+      description: 본인이 소유하고 Moin 첨부 또는 프로필 avatar로 사용되지 않는 media만 삭제합니다. 존재 여부와 사용 상태는 구분해 노출하지 않습니다.
+      parameters: [{$ref: '#/components/parameters/MediaID'}, {$ref: '#/components/parameters/CSRF'}]
+      x-required-permissions: [posts:write]
+      responses: {'204': {$ref: '#/components/responses/NoContent'}, '409': {$ref: '#/components/responses/Error'}}
   /api/v1/reports:
     post:
       tags: [Governance]
@@ -750,12 +757,22 @@ components:
             required: [content]
             properties:
               content: {type: string, minLength: 1, maxLength: 5000}
+              mediaIds:
+                type: array
+                maxItems: 12
+                uniqueItems: true
+                items: {type: string}
+                description: |
+                  생략하면 기존 첨부를 유지합니다. 빈 배열은 모두 제거하고, 제공한 배열은 순서까지 포함해
+                  전체 첨부 목록을 교체합니다. 본인이 업로드한 media만 사용할 수 있습니다. 관리자가
+                  maxPerPost를 낮춰 기존 첨부 수가 현재 한도를 넘는 경우에는 신규 media를 추가하지 않는
+                  기존 집합의 부분집합·재정렬만 허용합니다.
               mediaAltTexts:
                 type: object
                 maxProperties: 12
                 propertyNames: {type: string, minLength: 1}
                 additionalProperties: {type: string, maxLength: 500}
-                description: 이 Moin에 연결된 media ID별 문맥 대체 텍스트. 다른 Moin에서 같은 media를 재사용해도 값이 공유되지 않습니다.
+                description: 변경 후 이 Moin에 연결된 media ID별 문맥 대체 텍스트. 생략한 기존 media 설명은 유지되고 신규 media는 upload 기본 설명을 사용합니다. 다른 Moin에서 같은 media를 재사용해도 값이 공유되지 않습니다.
     CreateMoim:
       required: true
       content: {application/json: {schema: {$ref: '#/components/schemas/CreateMoim'}}}

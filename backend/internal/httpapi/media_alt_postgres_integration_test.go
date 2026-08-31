@@ -34,20 +34,34 @@ func TestPostgreSQLPostMediaAltTextIsScopedToPost(t *testing.T) {
 
 	suffix := time.Now().UnixNano()
 	userID := fmt.Sprintf("usr_media_alt_%d", suffix)
+	otherUserID := fmt.Sprintf("usr_media_alt_other_%d", suffix)
 	mediaID := fmt.Sprintf("media_alt_%d", suffix)
+	newMediaID := fmt.Sprintf("media_alt_new_%d", suffix)
+	otherMediaID := fmt.Sprintf("media_alt_other_%d", suffix)
+	grandfatherMediaIDs := []string{
+		fmt.Sprintf("media_alt_grandfather_1_%d", suffix),
+		fmt.Sprintf("media_alt_grandfather_2_%d", suffix),
+		fmt.Sprintf("media_alt_grandfather_3_%d", suffix),
+	}
+	aboveLimitMediaID := fmt.Sprintf("media_alt_above_limit_%d", suffix)
 	if _, err := repository.Pool().Exec(ctx, `INSERT INTO users(id,username,display_name,roles)
-		VALUES($1,$1,$1,ARRAY['member']::text[])`, userID); err != nil {
+		VALUES($1,$1,$1,ARRAY['member']::text[]),($2,$2,$2,ARRAY['member']::text[])`, userID, otherUserID); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		cleanupContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_, _ = repository.Pool().Exec(cleanupContext, `DELETE FROM users WHERE id=$1`, userID)
+		_, _ = repository.Pool().Exec(cleanupContext, `DELETE FROM users WHERE id=ANY($1)`, []string{userID, otherUserID})
 	})
 	const uploadDefaultAlt = "업로드 기본 대체 텍스트"
+	const newUploadDefaultAlt = "신규 업로드 기본 대체 텍스트"
 	if _, err := repository.Pool().Exec(ctx, `INSERT INTO media_assets
 		(id,owner_id,filename,alt_text,mime_type,size_bytes,sha256,width,height,data)
-		VALUES($1,$2,'shared.png',$3,'image/png',1,repeat('0',64),1,1,decode('00','hex'))`, mediaID, userID, uploadDefaultAlt); err != nil {
+		VALUES
+		($1,$2,'shared.png',$3,'image/png',1,repeat('0',64),1,1,decode('00','hex')),
+		($4,$2,'new.png',$5,'image/png',1,repeat('1',64),1,1,decode('01','hex')),
+		($6,$7,'other.png','다른 사용자 기본 설명','image/png',1,repeat('2',64),1,1,decode('02','hex'))`,
+		mediaID, userID, uploadDefaultAlt, newMediaID, newUploadDefaultAlt, otherMediaID, otherUserID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,7 +164,100 @@ func TestPostgreSQLPostMediaAltTextIsScopedToPost(t *testing.T) {
 	if assetAlt != uploadDefaultAlt {
 		t.Fatalf("media_assets.alt_text = %q, want unchanged default %q", assetAlt, uploadDefaultAlt)
 	}
-	if _, err := repository.Pool().Exec(ctx, `UPDATE post_media SET alt_text=repeat('가',501) WHERE post_id=$1 AND media_id=$2`, first.ID, mediaID); err == nil {
+
+	first = request(http.MethodPatch, "/api/v1/posts/"+first.ID, map[string]any{
+		"content": "첨부 순서와 목록 수정", "mediaIds": []string{newMediaID, mediaID},
+	}, http.StatusOK)
+	assertPostMediaList(t, first, []string{newMediaID, mediaID}, map[string]string{
+		newMediaID: newUploadDefaultAlt,
+		mediaID:    "첫 번째 게시물의 수정 설명",
+	})
+
+	request(http.MethodPatch, "/api/v1/posts/"+first.ID, map[string]any{
+		"content": "잘못된 설명으로 롤백되어야 함", "mediaIds": []string{newMediaID, mediaID},
+		"mediaAltTexts": map[string]string{"media-not-attached": "허용되지 않는 설명"},
+	}, http.StatusBadRequest)
+	first = request(http.MethodGet, "/api/v1/posts/"+first.ID, nil, http.StatusOK)
+	if first.Content != "첨부 순서와 목록 수정" {
+		t.Fatalf("invalid alt key 뒤 content = %q", first.Content)
+	}
+	assertPostMediaList(t, first, []string{newMediaID, mediaID}, map[string]string{
+		newMediaID: newUploadDefaultAlt,
+		mediaID:    "첫 번째 게시물의 수정 설명",
+	})
+
+	request(http.MethodPatch, "/api/v1/posts/"+first.ID, map[string]any{
+		"content": "다른 사용자 media로 롤백되어야 함", "mediaIds": []string{otherMediaID},
+	}, http.StatusBadRequest)
+	first = request(http.MethodGet, "/api/v1/posts/"+first.ID, nil, http.StatusOK)
+	if first.Content != "첨부 순서와 목록 수정" {
+		t.Fatalf("foreign media 뒤 content = %q", first.Content)
+	}
+	assertPostMediaList(t, first, []string{newMediaID, mediaID}, map[string]string{
+		newMediaID: newUploadDefaultAlt,
+		mediaID:    "첫 번째 게시물의 수정 설명",
+	})
+	request(http.MethodPatch, "/api/v1/posts/"+first.ID, map[string]any{
+		"content": "중복 media로 변경되지 않아야 함", "mediaIds": []string{mediaID, mediaID},
+	}, http.StatusBadRequest)
+	request(http.MethodPatch, "/api/v1/posts/"+first.ID, map[string]any{
+		"content": "없는 media로 롤백되어야 함", "mediaIds": []string{"media-does-not-exist"},
+	}, http.StatusBadRequest)
+	first = request(http.MethodGet, "/api/v1/posts/"+first.ID, nil, http.StatusOK)
+	if first.Content != "첨부 순서와 목록 수정" {
+		t.Fatalf("duplicate/missing media 뒤 content = %q", first.Content)
+	}
+	assertPostMediaList(t, first, []string{newMediaID, mediaID}, map[string]string{
+		newMediaID: newUploadDefaultAlt,
+		mediaID:    "첫 번째 게시물의 수정 설명",
+	})
+
+	grandfatherAssets := append(append([]string{}, grandfatherMediaIDs...), aboveLimitMediaID)
+	if _, err := repository.Pool().Exec(ctx, `INSERT INTO media_assets
+		(id,owner_id,filename,alt_text,mime_type,size_bytes,sha256,width,height,data)
+		SELECT value,$2,value||'.png','기존 첨부 기본 설명 '||ordinality,'image/png',1,repeat('3',64),1,1,decode('03','hex')
+		FROM unnest($1::text[]) WITH ORDINALITY AS assets(value,ordinality)`, grandfatherAssets, userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.Pool().Exec(ctx, `INSERT INTO post_media(post_id,media_id,position,alt_text)
+		SELECT $1,value,(ordinality+1)::smallint,'기존 문맥 설명 '||ordinality
+		FROM unnest($2::text[]) WITH ORDINALITY AS attachments(value,ordinality)`, first.ID, grandfatherMediaIDs); err != nil {
+		t.Fatal(err)
+	}
+	grandfatherOrder := []string{grandfatherMediaIDs[2], grandfatherMediaIDs[1], grandfatherMediaIDs[0], newMediaID, mediaID}
+	grandfatherAlt := map[string]string{
+		grandfatherMediaIDs[0]: "기존 문맥 설명 1",
+		grandfatherMediaIDs[1]: "기존 문맥 설명 2",
+		grandfatherMediaIDs[2]: "기존 문맥 설명 3",
+		newMediaID:             newUploadDefaultAlt,
+		mediaID:                "첫 번째 게시물의 수정 설명",
+	}
+	first = request(http.MethodPatch, "/api/v1/posts/"+first.ID, map[string]any{
+		"content": "낮아진 한도 위 기존 첨부 재정렬", "mediaIds": grandfatherOrder,
+	}, http.StatusOK)
+	assertPostMediaList(t, first, grandfatherOrder, grandfatherAlt)
+
+	request(http.MethodPatch, "/api/v1/posts/"+first.ID, map[string]any{
+		"content": "낮아진 한도 위 신규 첨부는 롤백", "mediaIds": []string{
+			grandfatherMediaIDs[2], grandfatherMediaIDs[1], grandfatherMediaIDs[0], newMediaID, aboveLimitMediaID,
+		},
+	}, http.StatusBadRequest)
+	first = request(http.MethodGet, "/api/v1/posts/"+first.ID, nil, http.StatusOK)
+	if first.Content != "낮아진 한도 위 기존 첨부 재정렬" {
+		t.Fatalf("above-limit addition 뒤 content = %q", first.Content)
+	}
+	assertPostMediaList(t, first, grandfatherOrder, grandfatherAlt)
+
+	first = request(http.MethodPatch, "/api/v1/posts/"+first.ID, map[string]any{
+		"content": "첨부 전체 제거", "mediaIds": []string{},
+	}, http.StatusOK)
+	if len(first.Media) != 0 {
+		t.Fatalf("empty mediaIds 뒤 media = %+v", first.Media)
+	}
+	second = request(http.MethodGet, "/api/v1/posts/"+second.ID, nil, http.StatusOK)
+	assertPostMediaAlt(t, second, mediaID, "두 번째 게시물의 설명")
+
+	if _, err := repository.Pool().Exec(ctx, `UPDATE post_media SET alt_text=repeat('가',501) WHERE post_id=$1 AND media_id=$2`, second.ID, mediaID); err == nil {
 		t.Fatal("post_media accepted alt_text longer than 500 characters")
 	}
 }
@@ -159,5 +266,17 @@ func assertPostMediaAlt(t *testing.T, post model.Moin, mediaID, want string) {
 	t.Helper()
 	if len(post.Media) != 1 || post.Media[0].ID != mediaID || post.Media[0].AltText != want {
 		t.Fatalf("post %s media = %+v, want %s alt %q", post.ID, post.Media, mediaID, want)
+	}
+}
+
+func assertPostMediaList(t *testing.T, post model.Moin, wantIDs []string, wantAlt map[string]string) {
+	t.Helper()
+	if len(post.Media) != len(wantIDs) {
+		t.Fatalf("post %s media = %+v, want IDs %v", post.ID, post.Media, wantIDs)
+	}
+	for index, wantID := range wantIDs {
+		if post.Media[index].ID != wantID || post.Media[index].AltText != wantAlt[wantID] {
+			t.Fatalf("post %s media[%d] = %+v, want %s alt %q", post.ID, index, post.Media[index], wantID, wantAlt[wantID])
+		}
 	}
 }

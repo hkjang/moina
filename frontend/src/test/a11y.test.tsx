@@ -2,6 +2,7 @@ import { cleanup, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, it } from 'vitest';
 import type { Moin } from '../types';
+import { AuthProvider } from '../auth/AuthContext';
 import { MoinCard } from '../components/MoinCard';
 import { ToastProvider } from '../components/ToastProvider';
 import { Button, Card, Field, PageHeader, SwitchField } from '../components/ui';
@@ -37,7 +38,7 @@ describe('대표 DOM 접근성', () => {
     };
     const { container } = render(
       <MemoryRouter>
-        <ToastProvider><main><MoinCard moin={moin} /></main></ToastProvider>
+        <AuthProvider><ToastProvider><main><MoinCard moin={moin} /></main></ToastProvider></AuthProvider>
       </MemoryRouter>,
     );
     await expectNoA11yViolations(container);

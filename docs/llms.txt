@@ -30,6 +30,7 @@
 - 알림 설정은 In App 유형, Toast, Desktop, 시간별·일별 Digest와 조용한 시간을 분리한다. WebSocket frame은 inApp, toast, desktop 정책 flag를 제공하며 In App 숨김 row는 알림 목록과 unread 수에서 제외한다.
 - Digest는 실제 알림 저장 시각 delivered_at 순서의 미처리 row를 집계하고 digested_at으로 완료를 표시해 지연 Outbox와 동시 commit을 다음 실행에서 이어서 처리한다. config_signature은 mode·일별 시각 전환을 새 구독 경계로 만들어 과거 backlog 재생을 막는다.
 - 미디어 대체 텍스트는 원본 파일이 아니라 각 post_media 관계에 저장되어 같은 media를 Moin별 문맥으로 설명할 수 있다.
+- Moin 작성·수정은 파일 선택, drag-and-drop과 clipboard 이미지 paste를 같은 직렬 upload queue로 처리한다. PATCH mediaIds 생략은 유지, 빈 배열은 전체 제거, 제공 배열은 순서 포함 전체 교체다.
 - 신뢰 Reverse Proxy는 직접 Peer IP/CIDR allowlist만 사용한다. 주소 chain은 오른쪽부터 검증하고 protocol은 가장 가까운 오른쪽 hop 값만 사용한다.
 - 로그인·가입과 개인 API/MCP key 요청 한도는 PostgreSQL bucket으로 모든 인스턴스가 공유하며 저장소 오류는 fail closed한다.
 - 승인 Action은 전역 *, exact dot action 또는 terminal namespace wildcard만 허용하고, 모든 approver 역할의 현재 approvals:review 유효 권한과 자기 승인 금지를 재검증한다.

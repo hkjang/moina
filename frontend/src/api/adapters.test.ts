@@ -29,4 +29,16 @@ describe('백엔드 응답 어댑터', () => {
     expect(moin.kind).toBe('remoin');
     expect(moin.quoteMoin).toMatchObject({ id: 'p1', content: '원문' });
   });
+
+  it('게시 상태와 편집에 필요한 미디어 메타데이터를 보존한다', () => {
+    const moin = normalizeMoin({
+      id: 'p1', content: '승인 대기', status: 'pending_approval',
+      author: { id: 'u1', username: 'jang' },
+      media: [{ id: 'media-1', filename: 'capture.png', mimeType: 'image/png', size: 321 }],
+    });
+    expect(moin.status).toBe('pending_approval');
+    expect(moin.media?.[0]).toMatchObject({
+      filename: 'capture.png', mimeType: 'image/png', size: 321,
+    });
+  });
 });

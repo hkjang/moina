@@ -64,7 +64,15 @@ export function normalizeMoin(value: unknown): Moin {
   const viewer = record(raw.viewer);
   const media = Array.isArray(raw.media) ? raw.media.map((item) => {
     const entry = record(item);
-    return { id: text(entry.id), type: entry.type === 'video' ? 'video' as const : 'image' as const, url: text(entry.url) || mediaURL(entry.id) || '', alt: text(entry.altText, entry.alt) || undefined };
+    return {
+      id: text(entry.id),
+      type: entry.type === 'video' ? 'video' as const : 'image' as const,
+      url: text(entry.url) || mediaURL(entry.id) || '',
+      alt: text(entry.altText, entry.alt) || undefined,
+      filename: text(entry.filename) || undefined,
+      mimeType: text(entry.mimeType) || undefined,
+      size: Number.isFinite(Number(entry.size)) ? Number(entry.size) : undefined,
+    };
   }) : [];
   const signalValues = raw.signals ?? counts.signals;
   const remoinSource = raw.remoinMoin;
@@ -74,6 +82,7 @@ export function normalizeMoin(value: unknown): Moin {
     kind: raw.kind === 'echo' || raw.kind === 'quote' || raw.kind === 'remoin' ? raw.kind : remoinSource ? 'remoin' : 'moin',
     createdAt: text(raw.createdAt, raw.created_at, new Date().toISOString()), updatedAt: text(raw.updatedAt) || undefined,
     visibility: raw.visibility === 'followers' || raw.visibility === 'moim' ? raw.visibility : 'public',
+    status: raw.status === 'published' || raw.status === 'pending_approval' || raw.status === 'rejected' || raw.status === 'deleted' ? raw.status : undefined,
     topics: Array.isArray(raw.topics) ? raw.topics.map(normalizeTopic) : [], media,
     replyToId: text(raw.replyToId, raw.parentId) || undefined,
     quoteMoin: raw.quoteMoin || raw.quotePost || remoinSource ? normalizeMoin(raw.quoteMoin ?? raw.quotePost ?? remoinSource) : undefined,

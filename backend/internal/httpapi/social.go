@@ -773,6 +773,25 @@ func (s *Server) getMedia(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, object.Metadata.Filename, object.Metadata.CreatedAt, object.Body)
 }
 
+func (s *Server) deleteMedia(w http.ResponseWriter, r *http.Request) {
+	mediaID := strings.TrimSpace(chi.URLParam(r, "mediaID"))
+	ownerID := getPrincipal(r).User.ID
+	tag, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM media_assets asset
+		WHERE asset.id=$1 AND asset.owner_id=$2
+		AND NOT EXISTS(SELECT 1 FROM post_media linked WHERE linked.media_id=asset.id)
+		AND NOT EXISTS(SELECT 1 FROM users avatar_user WHERE avatar_user.avatar_id=asset.id)`, mediaID, ownerID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "미디어를 삭제할 수 없습니다")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeError(w, http.StatusConflict, "media_in_use_or_unavailable", "사용 중이거나 삭제할 수 없는 미디어입니다")
+		return
+	}
+	s.audit(r, "media.delete", "media", mediaID, true, nil)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {
 	p := getPrincipal(r)
 	var input struct {

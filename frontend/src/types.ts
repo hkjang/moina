@@ -69,6 +69,9 @@ export interface Moin {
     type: "image" | "video";
     url: string;
     alt?: string;
+    filename?: string;
+    mimeType?: string;
+    size?: number;
   }>;
   replyToId?: string;
   quoteMoin?: Moin;
