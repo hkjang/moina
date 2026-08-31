@@ -26,7 +26,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "c4035bd9f68a122944df48a8c46cb875f4d9279fe670b7e2644282f66151a9d3"
+      "sha256": "a4db70397c2f489a99e5ddc0b4810a42cb236dc511df96301198dab16cf7ff7a"
     },
     {
       "id": "light-desktop-flow",
@@ -37,7 +37,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "8a255c9ef28cfa81b02d3537b88b11c17d98cc1a998917a01de2582ae3a5e78e"
+      "sha256": "2d5199869b3f4d58100f0699f70cf5a8b3440813824400388adf5209be6a7e78"
     },
     {
       "id": "light-desktop-explore",
@@ -48,7 +48,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "3018e3f29d61259dc65306d94af219318f89d8d0e26c9fcbe2d09f40a6fe3317"
+      "sha256": "7e5f412b65c3701a1d70edc192a74ee16633e3083dc81678b723c200ed36ace9"
     },
     {
       "id": "light-desktop-search",
@@ -59,7 +59,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "50487f125d5e142041cc932a0dbcc5156068c31ee1e014fd1f1dd6d35cb9a585"
+      "sha256": "d4ba6a3fdb934ddd618e68f919cb878de7cb4a215bf8c31d08b0359486f3e608"
     },
     {
       "id": "light-desktop-notifications",
@@ -70,7 +70,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "f530c3ea7505c88bd46535ff48eb7a1b8d1718408c5b94e6fedda74c26b1191a"
+      "sha256": "119ee53383a664c68f8f850e09c142bca276265f83e707aa0d18df9ce0611a5e"
     },
     {
       "id": "light-desktop-moims",
@@ -81,7 +81,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "d15fa389a8f66ca8e014a66492daa74bdb10cddea8d73585e4acbc86420b77f4"
+      "sha256": "bccfe009e4f0e2ec9020893248e92aa599d3e9311857daab7f88da78173c2540"
     },
     {
       "id": "light-desktop-ai",
@@ -92,7 +92,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "34f5cfacd704012852f5426e7ed28127e8a41293da1760fddc78787f4b368142"
+      "sha256": "1c2d320061d5e515a7af28e68be3661c5c8a877f40218f469bf220b13b404784"
     },
     {
       "id": "light-desktop-settings-profile",
@@ -103,7 +103,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "23da29d11855e334cd7f4f816bc928ea3b197af08061b4f88c5ce4eebb4e5985"
+      "sha256": "842d39383c9210388a5f9a52159f945642712ca02cdc1e3106f73d68c9712b5d"
     },
     {
       "id": "light-desktop-settings-notifications",
@@ -114,7 +114,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "e84262f8573cf7b20686e8795705d96d3bff558ea349011282c27892717ed5b0"
+      "sha256": "b8e28caf9a7e1d88262c461e57697a6aaf185c8232ca4eef1525bd72b1a37eb3"
     },
     {
       "id": "light-desktop-settings-accessibility",
@@ -125,7 +125,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "41de9b30e4b031687f5ed2c31b642f14f7e9c4a77668a8381737506f03660631"
+      "sha256": "d2da5efcf3fbc5c7853d64d3cb62f458fdb291037805771acbce875ee0170ff5"
     },
     {
       "id": "light-desktop-admin-dashboard",
@@ -136,7 +136,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "bf6f6fbc81c178c1fb9e8236d568849b2bb15b985f78a432b1277aa255ddc546"
+      "sha256": "851bab286f888968a90b593a32cc711d4e66896b2ab893a80566c1d617bacfac"
     },
     {
       "id": "light-desktop-admin-settings",
@@ -147,7 +147,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "cfc4fa27564d6ca2b57c86267716836de272b32b8be2c9160432aadf1712bed6"
+      "sha256": "214023a2b4e2dcc5dae88d1785ef3d6027f86848eaa24dfe5fc309d2b65fe7c8"
     },
     {
       "id": "light-mobile-login",
@@ -158,7 +158,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "c59a257fcdbf32dd25a6846d363c64169400a1ddec1e4bc26ca1cb0c4b1606a7"
+      "sha256": "670020eaff69f00b8998c2abf5a9fe903717de6cc4089dbd85dcae4b7169ce67"
     },
     {
       "id": "light-mobile-flow",
@@ -169,7 +169,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "bfc98f1394fabe326ad74f3c8f78996353f1d7045c7b5d4cd7f70130c6ad4b96"
+      "sha256": "6d4b4bc31429bad021812e9a32a9dce83bcd40d9f96a4ee62b66c3b1475334a7"
     },
     {
       "id": "light-mobile-explore",
@@ -180,7 +180,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "8fd0ffafce16bec97e0330e5a5db1f31df2e68d9e00748342bc111f1a2dd2955"
+      "sha256": "5a81cc152fb4e4ec8c9d4834168177280981e7efe04b92548e0e5bc03846cff4"
     },
     {
       "id": "light-mobile-search",
@@ -191,7 +191,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "b93320bbd11c5adc8ff155c5d3256b7580d3ca9b1ec14649f2847a6ae0d8b019"
+      "sha256": "785c2974b9e160754ee02d8a962a49dcd5e82a2bd80dd5521f79a36d76d4e803"
     },
     {
       "id": "light-mobile-notifications",
@@ -202,7 +202,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "a2919312565a864e124ac74e421af3e649a1ac80325b1a95b023621ace107318"
+      "sha256": "73c25a858f3d34653cc9145b5238b79bd3f4ac009b9414d99e920254318209bf"
     },
     {
       "id": "light-mobile-moims",
@@ -213,7 +213,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "b282904928e608bb6bb415791e54d8dcd4ce8e7af98031849b55bc2bc442b9be"
+      "sha256": "ec27d5157d90c0c478d217e270b5992768ea6d189f34acd60ccbed8122f82e7d"
     },
     {
       "id": "light-mobile-ai",
@@ -224,7 +224,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "ae4043e86af946aa6201231592ea1b7333339704f4922113bee85dc019f25038"
+      "sha256": "6808442f37403d42dcf992d17ba7b511eacf6b777c614d5b0c367ee93b92cfd4"
     },
     {
       "id": "light-mobile-settings-profile",
@@ -235,7 +235,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "9d118a9af521c2bf13f710fead4e61ed284acb4a8b7fc904a1c3bf74a56cc4be"
+      "sha256": "a518dd747f9dd45e23f0e84294df2c80cce2115d5097ae471412cdfe4a7da2cc"
     },
     {
       "id": "light-mobile-settings-notifications",
@@ -246,7 +246,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "463956bf6f8890763b769b2e0f9fdac02e6fe7c523b33b35b191dccbe34957f8"
+      "sha256": "25aefdea793e974c7db9dc360e2233a2ca7dd51a5dcc872d1ae3f4b2b2c594fa"
     },
     {
       "id": "light-mobile-settings-accessibility",
@@ -257,7 +257,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "f96112300f1668fd72b0cd32d258266ac2f001ef382df223d9a1059868aa865a"
+      "sha256": "68987f34e9ca9482c9fdefbe23070e930cc98c32c04651e55e7f3a4aebdc3e40"
     },
     {
       "id": "light-mobile-admin-dashboard",
@@ -268,7 +268,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "6cd1daf3b7bdaa5e488d43890f373b4a7d0b8a64dfceadac4a13cc33390a560d"
+      "sha256": "00064da5666cbe038a61d6f6eac5cef945d134e7a19a406ce9f5690e4d13500e"
     },
     {
       "id": "light-mobile-admin-settings",
@@ -279,7 +279,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "03c9d2225ac47573937f95ecc2843168b527321740bf5a2ed8c226f54a946577"
+      "sha256": "5da1b87ad2fce81a68d50e468c199bf973bba36d72eb2df72ead417276220cd0"
     },
     {
       "id": "dark-desktop-login",
@@ -290,7 +290,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "66e3bd9d100dd9243f999f312300ac5234e425c34e10c1503da42c7dcfd01661"
+      "sha256": "f18385be8a36afa1ffe18d37cf1c6a5133124d32767522c0712411843635680c"
     },
     {
       "id": "dark-desktop-flow",
@@ -301,7 +301,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "e9cadf07dd13d15f49bc0a2dbd1cef99175d2a6cd339b657785ec04b7c6383cb"
+      "sha256": "1656538d6f6e6b0e13fefecb2d6cf2850df75ee78047514b0ee9fccbca8d35e6"
     },
     {
       "id": "dark-desktop-explore",
@@ -312,7 +312,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "38feb35a03aac67eb96961d7a74f67e59c73ffbbd64482e30ef581041592f2ae"
+      "sha256": "eba834421e6977e335ebac0207e8d729ae10ffb1a74fd54fef2f834cea7579a2"
     },
     {
       "id": "dark-desktop-search",
@@ -323,7 +323,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "d451950e04e8ab733da65b8799cb86bcaac8a7dbfbecafad8b174a4ec8684d8a"
+      "sha256": "ca2172b58b2dd23cf8fce6873d81570bac42b44cccbef33f088c98b05fb255af"
     },
     {
       "id": "dark-desktop-notifications",
@@ -334,7 +334,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "f18a091b9f4aaa06824cff64e61dc96239f8ccd12475ebe43ad5c62ca7a4c3e4"
+      "sha256": "2ffb21ee806acefccaac70853d9c39c32f2595f6e573b3e3340a0b93362e38bd"
     },
     {
       "id": "dark-desktop-moims",
@@ -345,7 +345,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "c47bc38d987f1fa79c887e7d301e59e0395fb086e84e3f7029312e59eccee0f9"
+      "sha256": "500dcac74ae235cb8544bf3efc847d26e2e856ac7998d11e889e8e269b876acc"
     },
     {
       "id": "dark-desktop-ai",
@@ -356,7 +356,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "24218090ac048ae4ada6143c017dcd95aa70523df94ac5a537dcfcb963890e94"
+      "sha256": "356ac6d42b22006f92a40923147b9ae887af8931359955782fcf622a749b3a8d"
     },
     {
       "id": "dark-desktop-settings-profile",
@@ -367,7 +367,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "fa249e2a72753c31271f9a1cb54dc4182df1e91b205eb7dc44c4ddb801434510"
+      "sha256": "85acde0eab6da8f19824481a9283b3fa8f2e0023150369eb56990965e97ce57b"
     },
     {
       "id": "dark-desktop-settings-notifications",
@@ -378,7 +378,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "dca44f1764400d2f412f93aea839f998fbe9bdd943c4d6b86d330ae838756040"
+      "sha256": "1a16910f8dc8027dfc83396229e14f9d71890c8a719d98b5bd1c678b24b78f4f"
     },
     {
       "id": "dark-desktop-settings-accessibility",
@@ -389,7 +389,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "9eb7e8a2b489f480251d80b6a2c772a41a273eefb8ac51f0028174c7411c6403"
+      "sha256": "c658dbc0742bfd5c5dd828238df299e03f13ef14861c59f0e014305c8d882d48"
     },
     {
       "id": "dark-desktop-admin-dashboard",
@@ -400,7 +400,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "ba2b193097e8af6f15fafd81faefaeff4cb0bc36164cb9166dc8d682f47399c2"
+      "sha256": "9f9a546585e5664fb919a3bff280127916e00530e6fbace56a5cfe4094ce8694"
     },
     {
       "id": "dark-desktop-admin-settings",
@@ -411,7 +411,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "f1359633e9958bd081ea76bf9e02b9031903c6d773ee7ddbedd06fe348226877"
+      "sha256": "88c3f4722a4aa257609f37ead0a9314e58d6e3b985b91fb60a9d02a983c0bdd1"
     },
     {
       "id": "dark-mobile-login",
@@ -422,7 +422,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "19d46c254be32759f1ada2aa8cf09b03150028cfffd6a81f9f5eb162c2ffe8a5"
+      "sha256": "cab2d91c8417ba7796b7211fe6a87c24d661923996c1fbcf5b88bcec7ebb8808"
     },
     {
       "id": "dark-mobile-flow",
@@ -433,7 +433,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "ae314319a2be97fa39510538c0725ed9f51aaae3dc657599030e7c8567524bc4"
+      "sha256": "a27f95385063e18699af58f87d1a71486db02cf47049a48c7be5c1a5f4cf51d6"
     },
     {
       "id": "dark-mobile-explore",
@@ -444,7 +444,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "176350c2eee3f06ada6f3c2c2e177125d64f6182c32db20d9224931f4f9009ba"
+      "sha256": "4f1291a637ccf30b518cf74dde651bd9cf347986004fc55afa943ef6809999ef"
     },
     {
       "id": "dark-mobile-search",
@@ -455,7 +455,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "6dde7f6d12240144fed71444ba4f9a1bfcd043335f44fadcc232d753f8a22053"
+      "sha256": "f59901488614cb77a51bf8e3eca01ef44f9ff3dd13cef48d811666ac5a86a3dd"
     },
     {
       "id": "dark-mobile-notifications",
@@ -466,7 +466,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "940ee94df57a946c403caf361ca1c2861b134e2f1ac2d8651d5699dab460a9f8"
+      "sha256": "f4418be1fc1ba5c1626f63434f5ece4f671b3a599abd8e01eaa3e64efb0c322b"
     },
     {
       "id": "dark-mobile-moims",
@@ -477,7 +477,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "c1e9c959f7ab47e6bbd6bfb5ff08a13e0b255f7bff61dd60137390f14b02d6a2"
+      "sha256": "42ccdb308a9b0bd79f61a1df609e653b56b4bc0352106e485028a1580dfe1eba"
     },
     {
       "id": "dark-mobile-ai",
@@ -488,7 +488,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "4c30847c5fdd7bf3a6c9fba0909426271c0733b919d7038d069049b71a817517"
+      "sha256": "d668fccf9a32fa1895a1195d307786655ca10190ee78499809b7ec9259a7db73"
     },
     {
       "id": "dark-mobile-settings-profile",
@@ -499,7 +499,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "aa6edfb342cf3f4a821d833e2a60b7b2e5a83657a7f2e8f1484c5631ca63bdcb"
+      "sha256": "85f11694ddc4a5949b3f783fa318de797603c48b20a183b73514e5816e0d2b0e"
     },
     {
       "id": "dark-mobile-settings-notifications",
@@ -510,7 +510,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "516a20b3a95d5adfd8e93d16006681309b447e76993f4e57924a6ccf47f3057d"
+      "sha256": "e28c3115bf97f01793e9b5f2edbf1804891eaa7e59dc17c36f456693ef960fc9"
     },
     {
       "id": "dark-mobile-settings-accessibility",
@@ -521,7 +521,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "a61a07505a7fd7c9760687e4aca950bdd08ee863b46b614e9c97c2a56743a629"
+      "sha256": "f75abac8cc5cde3b63a3b5e69e2d7006a30e7fe35e32da2243c879ce84aee1a5"
     },
     {
       "id": "dark-mobile-admin-dashboard",
@@ -532,7 +532,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "ccf6022d66cc09f2b95eddbd1d625ff06203d3b4ce897a5ed88f0759a9b8cb82"
+      "sha256": "9f9cda0e8cd9c3711e8502242428c667233a038548e6607ec5ab9c5e19c85dbd"
     },
     {
       "id": "dark-mobile-admin-settings",
@@ -543,7 +543,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "87adc2be085c34d8094df84ca80a57b9adb7b770abd33e46d41ff0b1eede7d95"
+      "sha256": "0515ddc69d17775382e9a1b3e523c9514555e5fc1b066dc81b7b3937da0b633f"
     }
   ]
 }

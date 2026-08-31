@@ -29,6 +29,8 @@ node e2e/visual-regression.mjs
 
 갱신 후 `e2e/visual-baselines/manifest.json`과 48개 PNG의 변경을 실제·Diff 이미지와 함께 검토해 커밋합니다. CI에서 실수로 베이스라인이 바뀌지 않도록 갱신은 기본 차단되며, 특별한 재생성 작업에서만 `MOINA_ALLOW_CI_VISUAL_UPDATE=1`을 추가할 수 있습니다.
 
+릴리스에 커밋하는 승인 베이스라인의 기준 renderer는 CI의 `ubuntu-24.04`와 lockfile에 고정된 Playwright Chromium입니다. 같은 Chromium 버전이어도 OS font package와 rasterizer가 다르면 모든 화면에 픽셀 차이가 생길 수 있으므로, 로컬 갱신 결과만으로 승인하지 않습니다. UI 변경 후 CI가 실패하면 `moina-ci-diagnostics` artifact의 `*-actual.png`와 `*-diff.png`를 검토하고, 동일 CI renderer에서 생성된 actual과 manifest SHA-256을 함께 반영한 뒤 CI 비교가 48개 모두 통과하는지 확인합니다.
+
 ## 결정성 계약
 
 - Locale은 `ko-KR`, 시간대는 `Asia/Seoul`, device scale은 `1`, 모션은 `reduce`로 고정합니다.
