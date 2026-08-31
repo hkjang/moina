@@ -4,14 +4,15 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.3`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.4`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.3`은 승인 Action wildcard와 승인자 권한을 엄격히 검증하고, 게시물 문맥별 미디어 대체 텍스트, 실제 알림 채널·Digest 설정, 신뢰 Reverse Proxy와 PostgreSQL 전역 요청 한도를 연결한 정확성·정책 정합성 릴리스입니다.
+`v0.1.4`는 TLS 종료 Reverse Proxy에서 ES module과 로그인 요청이 403으로 막히던 회귀를 해결하고, 정적 asset 재검증·캐시 계약을 강화한 가용성 릴리스입니다. 멘션 알림 원문 이동, 실제 7일 Topic Pulse 점수, 대상별 검색, 공개 프로필 Signal 통계, 실행 가능한 승인 Action 검증과 Dialog 포커스·Moin Action 접근성 개선도 함께 제공합니다.
 
 ## 주요 기능
 
 - Moin 작성, Echo, Remoin, 반응, Pocket과 Link(팔로우)
 - Following/For Me Flow, Topic과 Pulse, 통합 검색, 실시간 알림
+- 최근 7일 공개 Moin·Signal과 24시간 가중치를 반영한 Topic Pulse
 - 개인 프로필·피드·글자 크기 설정과 URL 기반 메뉴 복원
 - Keycloak 등 표준 OIDC Provider의 Authorization Code + PKCE 연동
 - 관리자 UI에서 OIDC, AI, 승인 정책과 역할·권한을 설정하고 신고·제재를 운영
@@ -30,6 +31,7 @@ MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관�
 - 알림 LISTEN backpressure, slow WebSocket 재연결과 60초 REST 정합성 보완
 - In App·Toast·Desktop·Digest·조용한 시간 알림 개인화와 필수 승인 알림 정책
 - 신뢰 Proxy IP/CIDR 기반 실제 Client IP 계산, 감사 Proxy Chain과 다중 인스턴스 공용 PostgreSQL 요청 한도
+- TLS Proxy bootstrap용 Fetch Metadata Origin 검증, immutable hash asset과 stale chunk 404
 - Moin 관계별 대체 텍스트와 엄격한 승인 Action 패턴·승인자 최종 권한 검증
 
 ## 기술 구성
@@ -83,7 +85,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.3
+moina:v0.1.4
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -101,20 +103,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.3.tar.gz
-dist/moina-v0.1.3.tar.gz.sha256
+dist/moina-v0.1.4.tar.gz
+dist/moina-v0.1.4.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.3.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.4.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.3.tar.gz
-gzip -dc moina-v0.1.3.tar.gz | docker image load
-docker image inspect moina:v0.1.3
+sha256sum moina-v0.1.4.tar.gz
+gzip -dc moina-v0.1.4.tar.gz | docker image load
+docker image inspect moina:v0.1.4
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -163,15 +165,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.3 -m "moina v0.1.3"
-git push origin v0.1.3
+git tag -a v0.1.4 -m "moina v0.1.4"
+git push origin v0.1.4
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.3
-file:  moina-v버전.tar.gz  예: moina-v0.1.3.tar.gz
+image: moina:v버전          예: moina:v0.1.4
+file:  moina-v버전.tar.gz  예: moina-v0.1.4.tar.gz
 ```
 
 ## 라이선스

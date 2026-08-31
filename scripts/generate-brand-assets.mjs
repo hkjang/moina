@@ -12,9 +12,10 @@ const temporary = join(root, 'dist', 'brand-assets');
 const requireFromE2E = createRequire(join(root, 'e2e', 'package.json'));
 const { chromium } = requireFromE2E('playwright');
 const requiredPalette = ['#F8745D', '#E63E23', '#B72A17', '#FFD1C8', '#FFF1ED'];
+const ffmpeg = process.env.MOINA_FFMPEG || 'ffmpeg';
 
 function runFFmpeg(arguments_, label) {
-  const result = spawnSync('ffmpeg', arguments_, { encoding: 'utf8' });
+  const result = spawnSync(ffmpeg, arguments_, { encoding: 'utf8' });
   if (result.status !== 0) throw new Error(`${label} 변환 실패: ${result.stderr.trim() || 'ffmpeg를 실행할 수 없습니다.'}`);
 }
 
@@ -52,7 +53,7 @@ async function rasterizePNG(page, sourcePath, outputPath, sourceWidth, sourceHei
   await writeFile(outputPath, Buffer.from(encoded.slice(encoded.indexOf(',') + 1), 'base64'));
 }
 
-const encoderProbe = spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' });
+const encoderProbe = spawnSync(ffmpeg, ['-hide_banner', '-encoders'], { encoding: 'utf8' });
 const availableEncoders = `${encoderProbe.stdout}\n${encoderProbe.stderr}`;
 if (encoderProbe.status !== 0 || !/\bpng\b/.test(availableEncoders) || !/\blibwebp\b/.test(availableEncoders)) {
   throw new Error('PNG와 libwebp encoder가 포함된 ffmpeg가 필요합니다.');

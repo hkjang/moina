@@ -22,6 +22,15 @@ describe('MoinCard optimistic mutation', () => {
   beforeEach(() => mockedRequest.mockReset());
   afterEach(() => cleanup());
 
+  it('반응·저장·공유 아이콘 버튼에 항상 접근 가능한 이름을 제공한다', () => {
+    renderCard();
+    expect(screen.getByRole('button', { name: '리모인 0개' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '공감 0개' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '새로운 관점 0개' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '포켓' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '모인 주소 복사' })).toBeInTheDocument();
+  });
+
   it('Signal 요청 완료 전에 UI와 cache callback을 먼저 갱신한다', async () => {
     let resolve!: (value: unknown) => void;
     mockedRequest.mockReturnValueOnce(new Promise((done) => { resolve = done; }));

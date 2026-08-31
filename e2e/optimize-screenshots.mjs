@@ -8,12 +8,13 @@ const input = resolve(process.env.MOINA_CAPTURE_OUTPUT || join(root, 'dist/scree
 const output = resolve(process.env.MOINA_SCREENSHOT_OUTPUT || join(root, 'docs/assets/screenshots'));
 const generatedRoot = resolve(root, 'dist');
 const publishedOutput = resolve(root, 'docs/assets/screenshots');
+const ffmpeg = process.env.MOINA_FFMPEG || 'ffmpeg';
 if (input === generatedRoot || !input.startsWith(`${generatedRoot}${sep}`)) throw new Error('캡처 입력은 프로젝트 dist 하위의 전용 디렉터리여야 합니다.');
 if (output !== publishedOutput) throw new Error('WebP 출력은 docs/assets/screenshots 전용 디렉터리만 허용합니다.');
 const manifest = JSON.parse(await readFile(join(input, 'manifest.json'), 'utf8'));
 if (!Array.isArray(manifest.screenshots) || !manifest.screenshots.length) throw new Error('최적화할 실제 캡처가 없습니다.');
 
-const probe = spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' });
+const probe = spawnSync(ffmpeg, ['-hide_banner', '-encoders'], { encoding: 'utf8' });
 if (probe.status !== 0 || !/\blibwebp\b/.test(`${probe.stdout}\n${probe.stderr}`)) throw new Error('libwebp encoder가 포함된 ffmpeg가 필요합니다.');
 
 await mkdir(output, { recursive: true });
@@ -24,7 +25,7 @@ for (const screenshot of manifest.screenshots) {
   const source = join(input, `${screenshot.slug}.png`);
   const temporary = join(output, `.${screenshot.slug}.tmp.webp`);
   const target = join(output, `${screenshot.slug}.webp`);
-  const result = spawnSync('ffmpeg', [
+  const result = spawnSync(ffmpeg, [
     '-hide_banner', '-loglevel', 'error', '-y', '-i', source,
     '-map_metadata', '-1', '-c:v', 'libwebp', '-preset', 'text',
     '-quality', '82', '-compression_level', '6', temporary,

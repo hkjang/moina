@@ -162,6 +162,7 @@ type Topic struct {
 	Description   string    `json:"description,omitempty"`
 	FollowerCount int64     `json:"followerCount"`
 	MoinCount     int64     `json:"moinCount"`
+	TrendScore    float64   `json:"trendScore,omitempty"`
 	Following     bool      `json:"following,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 }

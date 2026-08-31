@@ -46,15 +46,16 @@ func (s *Server) writeProfile(w http.ResponseWriter, r *http.Request, userID str
 		writeError(w, http.StatusNotFound, "not_found", "사용자를 찾을 수 없습니다")
 		return
 	}
-	var followers, following, posts int64
+	var followers, following, posts, signals int64
 	var followed, blocked, muted bool
 	err = s.repo.Pool().QueryRow(r.Context(), `SELECT
 		(SELECT count(*) FROM follows WHERE followee_id=$1),
 		(SELECT count(*) FROM follows WHERE follower_id=$1),
-		(SELECT count(*) FROM posts WHERE author_id=$1 AND status='published'),
+		(SELECT count(*) FROM posts WHERE author_id=$1 AND status='published' AND visibility='public'),
+		(SELECT count(*) FROM reactions r JOIN posts p ON p.id=r.post_id WHERE p.author_id=$1 AND p.status='published' AND p.visibility='public'),
 		EXISTS(SELECT 1 FROM follows WHERE follower_id=$2 AND followee_id=$1),
 		EXISTS(SELECT 1 FROM blocks WHERE blocker_id=$2 AND blocked_id=$1),
-		EXISTS(SELECT 1 FROM mutes WHERE muter_id=$2 AND muted_id=$1)`, userID, viewer).Scan(&followers, &following, &posts, &followed, &blocked, &muted)
+		EXISTS(SELECT 1 FROM mutes WHERE muter_id=$2 AND muted_id=$1)`, userID, viewer).Scan(&followers, &following, &posts, &signals, &followed, &blocked, &muted)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "프로필을 불러올 수 없습니다")
 		return
@@ -63,7 +64,7 @@ func (s *Server) writeProfile(w http.ResponseWriter, r *http.Request, userID str
 	if user.AvatarID != "" {
 		avatarURL = "/api/v1/media/" + user.AvatarID
 	}
-	view := map[string]any{"id": user.ID, "username": user.Username, "displayName": user.DisplayName, "bio": user.Bio, "avatarId": user.AvatarID, "avatarUrl": avatarURL, "accountType": user.AccountType, "followerCount": followers, "followingCount": following, "moinCount": posts, "following": followed, "followed": followed, "blocked": blocked, "muted": muted, "createdAt": user.CreatedAt, "updatedAt": user.UpdatedAt}
+	view := map[string]any{"id": user.ID, "username": user.Username, "displayName": user.DisplayName, "bio": user.Bio, "avatarId": user.AvatarID, "avatarUrl": avatarURL, "accountType": user.AccountType, "followerCount": followers, "followingCount": following, "moinCount": posts, "signal": signals, "following": followed, "followed": followed, "blocked": blocked, "muted": muted, "createdAt": user.CreatedAt, "updatedAt": user.UpdatedAt}
 	if viewer == userID {
 		view["email"] = user.Email
 		view["provider"] = user.Provider
@@ -183,7 +184,54 @@ func (s *Server) listTopics(w http.ResponseWriter, r *http.Request) {
 	viewer := getPrincipal(r).User.ID
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	pattern := "%" + escapeLike(strings.ToLower(query)) + "%"
-	rows, err := s.repo.Pool().Query(r.Context(), `SELECT t.id,t.slug,t.name,t.description,t.created_at,(SELECT count(*) FROM user_topic_follows WHERE topic_id=t.id),(SELECT count(*) FROM post_topics pt JOIN posts p ON p.id=pt.post_id WHERE pt.topic_id=t.id AND p.status='published'),EXISTS(SELECT 1 FROM user_topic_follows WHERE topic_id=t.id AND user_id=$1) FROM topics t WHERE $2='' OR lower(t.name) LIKE $3 ESCAPE E'\\' OR lower(t.slug) LIKE $3 ESCAPE E'\\' ORDER BY (SELECT count(*) FROM post_topics WHERE topic_id=t.id) DESC,t.name LIMIT $4 OFFSET $5`, viewer, query, pattern, limit, offset)
+	sort := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort")))
+	if sort == "" {
+		sort = "popular"
+	}
+	if !slicesContains([]string{"popular", "trending", "recent", "name"}, sort) {
+		writeError(w, http.StatusBadRequest, "invalid_sort", "Topic 정렬 방식이 올바르지 않습니다")
+		return
+	}
+	rows, err := s.repo.Pool().Query(r.Context(), `WITH post_activity AS (
+		SELECT pt.topic_id,
+			count(*)::bigint AS moin_count,
+			count(*) FILTER (WHERE p.published_at >= statement_timestamp()-interval '24 hours')::bigint AS day_moins,
+			count(*) FILTER (WHERE p.published_at >= statement_timestamp()-interval '7 days' AND p.published_at < statement_timestamp()-interval '24 hours')::bigint AS week_moins,
+			max(p.published_at) AS latest_published_at
+		FROM post_topics pt
+		JOIN posts p ON p.id=pt.post_id
+		WHERE p.status='published' AND p.visibility='public'
+		GROUP BY pt.topic_id
+	), reaction_activity AS (
+		SELECT pt.topic_id,
+			count(*) FILTER (WHERE r.created_at >= statement_timestamp()-interval '24 hours')::bigint AS day_signals,
+			count(*) FILTER (WHERE r.created_at >= statement_timestamp()-interval '7 days' AND r.created_at < statement_timestamp()-interval '24 hours')::bigint AS week_signals
+		FROM post_topics pt
+		JOIN posts p ON p.id=pt.post_id AND p.status='published' AND p.visibility='public'
+		JOIN reactions r ON r.post_id=p.id AND r.created_at >= statement_timestamp()-interval '7 days'
+		GROUP BY pt.topic_id
+	), topic_rows AS (
+		SELECT t.id,t.slug,t.name,t.description,t.created_at,
+			(SELECT count(*) FROM user_topic_follows utf WHERE utf.topic_id=t.id)::bigint AS follower_count,
+			COALESCE(pa.moin_count,0)::bigint AS moin_count,
+			EXISTS(SELECT 1 FROM user_topic_follows utf WHERE utf.topic_id=t.id AND utf.user_id=$1) AS following,
+			(COALESCE(pa.day_moins,0)*8 + COALESCE(pa.week_moins,0)*2 + COALESCE(ra.day_signals,0)*2 + COALESCE(ra.week_signals,0)*0.5)::double precision AS trend_score,
+			pa.latest_published_at
+		FROM topics t
+		LEFT JOIN post_activity pa ON pa.topic_id=t.id
+		LEFT JOIN reaction_activity ra ON ra.topic_id=t.id
+		WHERE $2='' OR lower(t.name) LIKE $3 ESCAPE E'\\' OR lower(t.slug) LIKE $3 ESCAPE E'\\'
+	)
+	SELECT id,slug,name,description,created_at,follower_count,moin_count,following,trend_score
+	FROM topic_rows
+	WHERE $6<>'trending' OR trend_score>0
+	ORDER BY
+		CASE WHEN $6='trending' THEN trend_score END DESC,
+		CASE WHEN $6='recent' THEN latest_published_at END DESC NULLS LAST,
+		CASE WHEN $6='name' THEN lower(name) END,
+		CASE WHEN $6='popular' THEN moin_count END DESC,
+		follower_count DESC,lower(name),id
+	LIMIT $4 OFFSET $5`, viewer, query, pattern, limit, offset, sort)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Topic을 불러올 수 없습니다")
 		return
@@ -192,7 +240,7 @@ func (s *Server) listTopics(w http.ResponseWriter, r *http.Request) {
 	items := make([]model.Topic, 0)
 	for rows.Next() {
 		var topic model.Topic
-		if err := rows.Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following); err != nil {
+		if err := rows.Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following, &topic.TrendScore); err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "Topic을 불러올 수 없습니다")
 			return
 		}
@@ -205,7 +253,7 @@ func (s *Server) getTopic(w http.ResponseWriter, r *http.Request) {
 	slug := strings.ToLower(strings.TrimSpace(chi.URLParam(r, "slug")))
 	viewer := getPrincipal(r).User.ID
 	var topic model.Topic
-	err := s.repo.Pool().QueryRow(r.Context(), `SELECT t.id,t.slug,t.name,t.description,t.created_at,(SELECT count(*) FROM user_topic_follows WHERE topic_id=t.id),(SELECT count(*) FROM post_topics pt JOIN posts p ON p.id=pt.post_id WHERE pt.topic_id=t.id AND p.status='published'),EXISTS(SELECT 1 FROM user_topic_follows WHERE topic_id=t.id AND user_id=$2) FROM topics t WHERE t.slug=$1`, slug, viewer).Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following)
+	err := s.repo.Pool().QueryRow(r.Context(), `SELECT t.id,t.slug,t.name,t.description,t.created_at,(SELECT count(*) FROM user_topic_follows WHERE topic_id=t.id),(SELECT count(*) FROM post_topics pt JOIN posts p ON p.id=pt.post_id WHERE pt.topic_id=t.id AND p.status='published' AND p.visibility='public'),EXISTS(SELECT 1 FROM user_topic_follows WHERE topic_id=t.id AND user_id=$2) FROM topics t WHERE t.slug=$1`, slug, viewer).Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "Topic을 찾을 수 없습니다")
 		return
@@ -246,6 +294,14 @@ func (s *Server) unfollowTopic(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	recommended := r.URL.Query().Get("recommended") == "true"
+	searchType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+	if searchType == "" {
+		searchType = "all"
+	}
+	if !slicesContains([]string{"all", "posts", "users", "topics", "moims"}, searchType) {
+		writeError(w, http.StatusBadRequest, "invalid_type", "검색 대상이 올바르지 않습니다")
+		return
+	}
 	query, err := searchservice.Parse(r.URL.Query().Get("q"), recommended)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_query", "검색어는 1~100자로 입력해 주세요")
@@ -253,7 +309,9 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, _ := pagination(r)
 	viewer := getPrincipal(r).User.ID
-	usersRows, err := s.repo.Pool().Query(r.Context(), `SELECT `+userSelectColumns+` FROM users
+	users := make([]map[string]any, 0)
+	if searchType == "all" || searchType == "users" {
+		usersRows, err := s.repo.Pool().Query(r.Context(), `SELECT `+userSelectColumns+` FROM users
 		WHERE active AND id<>$4
 		AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$4 AND b.blocked_id=users.id) OR (b.blocker_id=users.id AND b.blocked_id=$4))
 		AND ($6 OR lower(username) LIKE $3 ESCAPE E'\\' OR lower(display_name) LIKE $3 ESCAPE E'\\' OR lower(bio) LIKE $3 ESCAPE E'\\' OR lower(username) % $2 OR lower(display_name) % $2 OR word_similarity($2,lower(bio)) >= 0.3 OR to_tsvector('simple',username||' '||display_name||' '||bio) @@ websearch_to_tsquery('simple',$1))
@@ -264,37 +322,42 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 			greatest(similarity(lower(username),$2)*80,similarity(lower(display_name),$2)*40,word_similarity($2,lower(bio))*25)
 		) DESC, CASE WHEN $6 THEN (SELECT count(*) FROM follows rf WHERE rf.followee_id=users.id) ELSE 0 END DESC,username
 		LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-		return
-	}
-	users := make([]map[string]any, 0)
-	for usersRows.Next() {
-		user, scanErr := scanUserRow(usersRows)
-		if scanErr != nil {
-			usersRows.Close()
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 			return
 		}
-		users = append(users, publicUserView(user))
+		for usersRows.Next() {
+			user, scanErr := scanUserRow(usersRows)
+			if scanErr != nil {
+				usersRows.Close()
+				writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+				return
+			}
+			users = append(users, publicUserView(user))
+		}
+		usersRows.Close()
 	}
-	usersRows.Close()
-	postWhere := []string{
-		"p.status='published'",
-		`NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))`,
-		`(p.visibility='public' OR p.author_id=$1 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$1))`,
-		`($5 OR lower(p.content) LIKE $4 ESCAPE E'\\' OR lower(p.content) % $3 OR word_similarity($3,lower(p.content)) >= 0.3 OR to_tsvector('simple',p.content) @@ websearch_to_tsquery('simple',$2))`,
+	posts := make([]model.Moin, 0)
+	if searchType == "all" || searchType == "posts" {
+		postWhere := []string{
+			"p.status='published'",
+			`NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))`,
+			`(p.visibility='public' OR p.author_id=$1 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$1))`,
+			`($5 OR lower(p.content) LIKE $4 ESCAPE E'\\' OR lower(p.content) % $3 OR word_similarity($3,lower(p.content)) >= 0.3 OR to_tsvector('simple',p.content) @@ websearch_to_tsquery('simple',$2))`,
+		}
+		postOrder := `(CASE WHEN $3<>'' AND lower(p.content)=$3 THEN 500 ELSE 0 END + ts_rank_cd(to_tsvector('simple',p.content),websearch_to_tsquery('simple',$2))*100 + greatest(similarity(lower(p.content),$3),word_similarity($3,lower(p.content)))*40) DESC,p.published_at DESC,p.id DESC`
+		posts, err = feedservice.QueryPosts(r.Context(), s.repo.Pool(), postWhere, []any{viewer, query.Raw, query.Folded, query.Pattern, recommended}, postOrder, limit, 0, viewer)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+			return
+		}
+		decorateRecommendations(posts)
 	}
-	postOrder := `(CASE WHEN $3<>'' AND lower(p.content)=$3 THEN 500 ELSE 0 END + ts_rank_cd(to_tsvector('simple',p.content),websearch_to_tsquery('simple',$2))*100 + greatest(similarity(lower(p.content),$3),word_similarity($3,lower(p.content)))*40) DESC,p.published_at DESC,p.id DESC`
-	posts, err := feedservice.QueryPosts(r.Context(), s.repo.Pool(), postWhere, []any{viewer, query.Raw, query.Folded, query.Pattern, recommended}, postOrder, limit, 0, viewer)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-		return
-	}
-	decorateRecommendations(posts)
-	topicRows, err := s.repo.Pool().Query(r.Context(), `SELECT t.id,t.slug,t.name,t.description,t.created_at,
+	topics := make([]model.Topic, 0)
+	if searchType == "all" || searchType == "topics" {
+		topicRows, err := s.repo.Pool().Query(r.Context(), `SELECT t.id,t.slug,t.name,t.description,t.created_at,
 		(SELECT count(*) FROM user_topic_follows WHERE topic_id=t.id),
-		(SELECT count(*) FROM post_topics pt JOIN posts p ON p.id=pt.post_id WHERE pt.topic_id=t.id AND p.status='published'),
+		(SELECT count(*) FROM post_topics pt JOIN posts p ON p.id=pt.post_id WHERE pt.topic_id=t.id AND p.status='published' AND p.visibility='public'),
 		EXISTS(SELECT 1 FROM user_topic_follows WHERE topic_id=t.id AND user_id=$4)
 		FROM topics t
 		WHERE $6 OR lower(t.name) LIKE $3 ESCAPE E'\\' OR lower(t.slug) LIKE $3 ESCAPE E'\\' OR lower(t.name) % $2 OR lower(t.slug) % $2 OR word_similarity($2,lower(t.description)) >= 0.3 OR to_tsvector('simple',t.name||' '||t.description) @@ websearch_to_tsquery('simple',$1)
@@ -304,23 +367,24 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 			ts_rank_cd(to_tsvector('simple',t.name||' '||t.description),websearch_to_tsquery('simple',$1))*100 +
 			greatest(similarity(lower(t.slug),$2)*100,similarity(lower(t.name),$2)*80,word_similarity($2,lower(t.description))*30)
 		) DESC,t.name LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-		return
-	}
-	topics := make([]model.Topic, 0)
-	for topicRows.Next() {
-		var topic model.Topic
-		if err := topicRows.Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following); err != nil {
-			topicRows.Close()
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 			return
 		}
-		topics = append(topics, topic)
+		for topicRows.Next() {
+			var topic model.Topic
+			if err := topicRows.Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following); err != nil {
+				topicRows.Close()
+				writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+				return
+			}
+			topics = append(topics, topic)
+		}
+		topicRows.Close()
 	}
-	topicRows.Close()
 	moims := make([]model.Moim, 0)
-	moimRows, err := s.repo.Pool().Query(r.Context(), `SELECT m.id,m.slug,m.name,m.description,m.owner_id,m.visibility,m.created_at,
+	if searchType == "all" || searchType == "moims" {
+		moimRows, err := s.repo.Pool().Query(r.Context(), `SELECT m.id,m.slug,m.name,m.description,m.owner_id,m.visibility,m.created_at,
 		(SELECT count(*) FROM moim_members WHERE moim_id=m.id),(SELECT count(*) FROM posts WHERE moim_id=m.id AND status='published'),
 		EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$4)
 		FROM moims m
@@ -332,20 +396,21 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 			ts_rank_cd(to_tsvector('simple',m.name||' '||m.description),websearch_to_tsquery('simple',$1))*100 +
 			greatest(similarity(lower(m.slug),$2)*100,similarity(lower(m.name),$2)*80,word_similarity($2,lower(m.description))*30)
 		) DESC,m.created_at DESC LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-		return
-	}
-	for moimRows.Next() {
-		var item model.Moim
-		if err := moimRows.Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.OwnerID, &item.Visibility, &item.CreatedAt, &item.MemberCount, &item.MoinCount, &item.Joined); err != nil {
-			moimRows.Close()
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 			return
 		}
-		moims = append(moims, item)
+		for moimRows.Next() {
+			var item model.Moim
+			if err := moimRows.Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.OwnerID, &item.Visibility, &item.CreatedAt, &item.MemberCount, &item.MoinCount, &item.Joined); err != nil {
+				moimRows.Close()
+				writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+				return
+			}
+			moims = append(moims, item)
+		}
+		moimRows.Close()
 	}
-	moimRows.Close()
 	writeData(w, http.StatusOK, map[string]any{"query": query.Raw, "users": users, "posts": posts, "topics": topics, "moims": moims})
 }
 
@@ -395,7 +460,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 func (s *Server) decorateNotification(ctx context.Context, item *model.Notification) {
 	storedType := item.Type
 	labels := map[string]string{
-		"follow": "새로운 Link", "reaction": "새로운 Signal", "reply": "새로운 Echo",
+		"follow": "새로운 Link", "reaction": "새로운 Signal", "reply": "새로운 Echo", "mention": "새로운 멘션",
 		"quote": "새로운 Quote Moin", "remoin": "새로운 Remoin",
 		"approval_requested": "검토 요청", "approval_approved": "게시 승인", "approval_rejected": "게시 반려",
 		"digest": "알림 브리핑",
@@ -421,7 +486,7 @@ func (s *Server) decorateNotification(ctx context.Context, item *model.Notificat
 				item.TargetPath = "/profile/" + username
 			}
 		}
-	case "reaction", "reply", "quote", "remoin", "approval_approved", "approval_rejected":
+	case "reaction", "reply", "quote", "remoin", "mention", "approval_approved", "approval_rejected":
 		postID := item.TargetID
 		if value, ok := payload["postId"].(string); ok {
 			postID = value

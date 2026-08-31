@@ -4,8 +4,8 @@ import { mergeWorkflowActions, splitWorkflowActions } from './workflowActions';
 describe('승인 작업 편집기', () => {
   it('등록된 exact action과 고급 wildcard를 분리한다', () => {
     expect(splitWorkflowActions(['post.publish', 'post.*', 'agent.post.publish'])).toEqual({
-      selected: ['post.publish', 'agent.post.publish'],
-      advanced: ['post.*'],
+      selected: ['post.publish'],
+      advanced: ['post.*', 'agent.post.publish'],
     });
   });
 

@@ -603,6 +603,10 @@ func (pattern parsedApprovalActionPattern) matches(action string) bool {
 	return pattern.value == value
 }
 
+func implementedApprovalPattern(pattern parsedApprovalActionPattern) bool {
+	return pattern.matches("post.publish")
+}
+
 func (s *Server) adminGetWorkflow(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.workflowConfig(r)
 	if err != nil {
@@ -635,6 +639,10 @@ func (s *Server) adminPutWorkflow(w http.ResponseWriter, r *http.Request) {
 		parsed, err := parseApprovalActionPattern(action)
 		if err != nil || seen[parsed.value] {
 			writeError(w, http.StatusBadRequest, "invalid_actions", "승인 작업 패턴이 올바르지 않거나 중복되었습니다")
+			return
+		}
+		if !implementedApprovalPattern(parsed) {
+			writeError(w, http.StatusBadRequest, "unsupported_actions", "현재 승인 요청을 생성할 수 있는 작업은 post.publish뿐입니다")
 			return
 		}
 		seen[parsed.value], cfg.Actions[index] = true, parsed.value

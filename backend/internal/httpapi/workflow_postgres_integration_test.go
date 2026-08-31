@@ -113,7 +113,7 @@ func TestPostgreSQLWorkflowPolicyGuards(t *testing.T) {
 		}
 	}
 
-	server := New(repository, secrets, "v0.1.3-test")
+	server := New(repository, secrets, "v0.1.4-test")
 	handler := server.Handler()
 	requestJSON := func(method, path, token, csrf, body string) *httptest.ResponseRecorder {
 		t.Helper()

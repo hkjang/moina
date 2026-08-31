@@ -24,7 +24,7 @@ function PersonCard({ profile }: { profile: Profile }) {
 }
 
 export function ExplorePage() {
-  const topics = useApiQuery<unknown>('/topics?sort=trending&limit=8');
+	const topics = useApiQuery<unknown>('/topics?sort=trending&limit=8');
   const topicPage = topics.data === undefined ? undefined : normalizePage(topics.data, normalizeTopic);
   return <div className="page-stack"><PageHeader eyebrow="DISCOVER" title="탐색" description="팔로워 수보다 관심사와 대화의 품질을 중심으로 새로운 연결을 발견하세요."/>
     <section><div className="section-title"><div><Compass/><span><h2>관심사 둘러보기</h2><p>활동과 연결을 바탕으로 고른 토픽입니다.</p></span></div><Link to="/pulse">펄스 보기 <ArrowRight/></Link></div>{topics.loading ? <LoadingState/> : topics.error ? <ErrorState message={topics.error} onRetry={topics.reload}/> : topicPage?.items.length ? <div className="topic-grid">{topicPage.items.map((topic) => <TopicCard topic={topic} key={topic.id} onChanged={topics.reload}/>)}</div> : <EmptyState title="아직 토픽이 없습니다" description="첫 모인에서 새로운 토픽을 시작해 보세요."/>}</section>
@@ -56,7 +56,7 @@ export function SearchPage() {
 export function PulsePage() {
   const query = useApiQuery<unknown>('/topics?sort=trending&limit=30');
   const topics = query.data === undefined ? [] : normalizePage(query.data, normalizeTopic).items;
-  return <div className="page-stack"><PageHeader eyebrow="NOW" title="Pulse" description="지금 MOINA에서 빠르게 커지는 대화와 관심사의 흐름입니다."/>{query.loading ? <LoadingState/> : query.error ? <ErrorState message={query.error} onRetry={query.reload}/> : topics.length ? <div className="pulse-list">{topics.map((topic, index) => <Link to={`/topics/${encodeURIComponent(topic.slug)}`} key={topic.id}><span className="pulse-rank">{String(index + 1).padStart(2, '0')}</span><span><strong>{topicLabel(topic.name)}</strong><small>{topic.description || '지금 대화가 이어지고 있습니다.'}</small></span><span className="pulse-score"><TrendingUp/>{Math.round(topic.trendScore || 0)}</span></Link>)}</div> : <EmptyState title="집계된 펄스가 없습니다" description="대화가 시작되면 상승 중인 토픽을 투명하게 보여드립니다."/>}</div>;
+	return <div className="page-stack"><PageHeader eyebrow="NOW" title="Pulse" description="지금 MOINA에서 빠르게 커지는 대화와 관심사의 흐름입니다."/>{query.loading ? <LoadingState/> : query.error ? <ErrorState message={query.error} onRetry={query.reload}/> : topics.length ? <div className="pulse-list">{topics.map((topic, index) => <Link to={`/topics/${encodeURIComponent(topic.slug)}`} key={topic.id}><span className="pulse-rank">{String(index + 1).padStart(2, '0')}</span><span><strong>{topicLabel(topic.name)}</strong><small>{topic.description || '지금 대화가 이어지고 있습니다.'}</small></span><span className="pulse-score" aria-label={`활동 점수 ${Math.round(topic.trendScore || 0)}`} title="최근 24시간 활동에 더 큰 가중치를 둔 7일 점수"><TrendingUp/>{Math.round(topic.trendScore || 0)}</span></Link>)}</div> : <EmptyState title="집계된 펄스가 없습니다" description="대화가 시작되면 상승 중인 토픽을 투명하게 보여드립니다."/>}</div>;
 }
 
 export function TopicPage() {

@@ -10,7 +10,7 @@ const output = resolve(process.env.MOINA_CAPTURE_OUTPUT || join(root, 'dist/scre
 const baseURL = new URL(process.env.MOINA_CAPTURE_BASE_URL || 'http://127.0.0.1:18080');
 const username = process.env.MOINA_CAPTURE_USERNAME || 'capture-admin';
 const password = process.env.MOINA_CAPTURE_PASSWORD;
-const version = process.env.MOINA_CAPTURE_VERSION || 'v0.1.3';
+const version = process.env.MOINA_CAPTURE_VERSION || 'v0.1.4';
 const staticRoutes = routeCatalogFromEnvironment();
 let routes = staticRoutes;
 const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(baseURL.hostname);
@@ -243,9 +243,15 @@ async function seedDynamicRoutes(context) {
     content: '사람과 생각이 지식으로 모이는 MOINA를 시작합니다. #MOINA #AI',
     visibility: 'public',
     mediaIds: [],
+  });
+  const moimPost = await apiJSON(context, 'POST', '/posts', {
+    content: 'MOINA 연구소에서 이어지는 첫 대화입니다. #MOINA',
+    visibility: 'moim',
+    mediaIds: [],
     moimId: moim.data.id,
   });
   assert.ok(post.data?.id, '캡처용 Moin ID가 필요합니다.');
+  assert.ok(moimPost.data?.id, '캡처용 Moim Moin ID가 필요합니다.');
 
   return [
     { slug: 'profile-bootstrap', path: `/profile/${encodeURIComponent(username)}`, title: `${username} 프로필`, dynamic: true },

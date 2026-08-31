@@ -241,6 +241,7 @@ export function MoinCard({
               className={current.viewer?.remoined ? "active success" : ""}
               onClick={() => void remoin()}
               aria-pressed={current.viewer?.remoined}
+              aria-label={`리모인 ${current.counts?.remoins || 0}개`}
             >
               <Repeat2 />
               <span>{current.counts?.remoins || 0}</span>
@@ -252,6 +253,7 @@ export function MoinCard({
               className={activeSignals.includes("like") ? "active danger" : ""}
               onClick={() => void react("like")}
               aria-pressed={activeSignals.includes("like")}
+              aria-label={`${signalLabels.like} ${likeCount}개`}
               title={signalLabels.like}
             >
               <Heart />
@@ -266,6 +268,7 @@ export function MoinCard({
               }
               onClick={() => void react("insight")}
               aria-pressed={activeSignals.includes("insight")}
+              aria-label={`${signalLabels.insight} ${current.counts?.signals?.insight || 0}개`}
               title={signalLabels.insight}
             >
               <Lightbulb />
@@ -278,6 +281,7 @@ export function MoinCard({
               className={current.viewer?.bookmarked ? "active brand" : ""}
               onClick={() => void bookmark()}
               aria-pressed={current.viewer?.bookmarked}
+              aria-label="포켓"
             >
               <Bookmark />
               <span className="action-label">포켓</span>
@@ -291,6 +295,7 @@ export function MoinCard({
             </Link>
             <button
               type="button"
+              aria-label="모인 주소 복사"
               onClick={() =>
                 void navigator.clipboard
                   ?.writeText(`${window.location.origin}/moin/${current.id}`)

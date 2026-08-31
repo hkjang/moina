@@ -12,7 +12,7 @@ const failurePath = join(resultDirectory, 'browser-smoke-failure.png');
 const baseURL = new URL(process.env.MOINA_E2E_BASE_URL || 'http://127.0.0.1:8080');
 const username = process.env.MOINA_E2E_USERNAME || 'e2e-admin';
 const password = process.env.MOINA_E2E_PASSWORD;
-const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.3';
+const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.4';
 const headless = process.env.MOINA_E2E_HEADLESS !== '0';
 const routes = routeCatalogFromEnvironment();
 
@@ -89,9 +89,25 @@ monitor(page);
 
 try {
   phase = 'login';
-  await page.goto(new URL('/login', baseURL).toString(), { waitUntil: 'domcontentloaded' });
+  const loginDocument = await page.goto(new URL('/login', baseURL).toString(), { waitUntil: 'domcontentloaded' });
+  assert.equal(loginDocument?.headers()['cache-control'], 'no-cache', 'SPA 문서는 배포 후 재검증되어야 합니다.');
   await page.getByRole('heading', { name: '로그인', exact: true }).waitFor({ state: 'visible' });
   await settle(page);
+  phase = 'asset-contract';
+  const moduleSource = await page.locator('script[type="module"][src]').first().getAttribute('src');
+  assert.ok(moduleSource, '진입 ES module 경로를 확인할 수 있어야 합니다.');
+  const proxyOrigin = new URL(baseURL);
+  proxyOrigin.protocol = 'https:';
+  const moduleResponse = await context.request.get(new URL(moduleSource, baseURL).toString(), {
+    headers: { Origin: proxyOrigin.origin },
+  });
+  assert.equal(moduleResponse.status(), 200, 'TLS 종료 proxy 뒤에서도 진입 ES module을 제공해야 합니다.');
+  assert.equal(moduleResponse.headers()['cache-control'], 'public, max-age=31536000, immutable', 'hash asset은 immutable이어야 합니다.');
+  assert.match(moduleResponse.headers()['content-type'] || '', /javascript/, 'ES module MIME이 올바르게 설정되어야 합니다.');
+  const missingAsset = await context.request.get(new URL('/assets/stale-release-chunk.js', baseURL).toString());
+  assert.equal(missingAsset.status(), 404, '이전 릴리스의 누락 chunk는 SPA HTML이 아니라 404여야 합니다.');
+  assert.equal(missingAsset.headers()['cache-control'], 'no-store', '누락 chunk 응답을 저장하면 안 됩니다.');
+  phase = 'login';
   await page.getByText(new RegExp(`moina\\s+${expectedVersion.replaceAll('.', '\\.')}|MOINA\\s+${expectedVersion.replaceAll('.', '\\.')}`, 'i')).first().waitFor({ state: 'visible' });
   await page.getByLabel(/사용자 이름|아이디/).fill(username);
   await page.getByLabel('비밀번호').fill(password);

@@ -209,7 +209,8 @@ async function runKeyboardChecks(context, page) {
   }
   await page.keyboard.press('Escape');
   await composerDialog.waitFor({ state: 'hidden' });
-  await page.waitForFunction(() => document.activeElement?.classList.contains('composer-prompt'), undefined, { timeout: 2_000 });
+  await page.waitForFunction((element) => document.activeElement === element, await composerTrigger.elementHandle(), { timeout: 5_000 });
+  await page.waitForTimeout(100);
   assert.equal(await composerTrigger.evaluate((element) => document.activeElement === element), true, 'Moin 작성 Dialog가 닫히면 Trigger로 포커스가 돌아가야 합니다.');
   keyboardChecks.push('composer-focus-trap');
 
@@ -230,7 +231,7 @@ async function runKeyboardChecks(context, page) {
   }
   await page.keyboard.press('Escape');
   await mobileDialog.waitFor({ state: 'hidden' });
-  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '메뉴 열기', undefined, { timeout: 2_000 });
+  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '메뉴 열기', undefined, { timeout: 5_000 });
   assert.equal(await menuTrigger.evaluate((element) => document.activeElement === element), true, '모바일 메뉴가 닫히면 Trigger로 포커스가 돌아가야 합니다.');
   keyboardChecks.push('mobile-menu-focus-trap');
 }

@@ -406,7 +406,7 @@ export function AdminSettingsPage() {
                   <summary>고급 패턴 직접 입력</summary>
                   <Field
                     label="Action 패턴"
-                    help="한 줄에 하나씩 입력합니다. 전체는 *, 영역 wildcard는 post.*처럼 마지막 segment에만 사용할 수 있습니다."
+                    help="현재 실행 가능한 작업은 post.publish이며 * 또는 post.* 패턴도 사용할 수 있습니다. 다른 작업 패턴은 저장되지 않습니다."
                   >
                     <textarea
                       rows={4}

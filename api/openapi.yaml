@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MOINA API
-  version: 0.1.3
+  version: 0.1.4
   summary: AI 소셜 지식 네트워크 REST·SSE·MCP API
   description: |
     서버에 실제 등록된 canonical route 계약입니다. 브라우저 session 또는 개인 API/MCP key로 인증합니다.
@@ -232,12 +232,14 @@ paths:
     get:
       tags: [Social]
       summary: 사용자 프로필
+      description: moinCount와 signal은 공개·게시 상태의 Moin 및 해당 Moin이 받은 Signal만 집계합니다.
       parameters: [{$ref: '#/components/parameters/Username'}]
       responses: {'200': {$ref: '#/components/responses/User'}, '404': {$ref: '#/components/responses/Error'}}
   /api/v1/profiles/{username}:
     get:
       tags: [Social]
       summary: 사용자 프로필 alias
+      description: moinCount와 signal은 공개·게시 상태의 Moin 및 해당 Moin이 받은 Signal만 집계합니다.
       parameters: [{$ref: '#/components/parameters/Username'}]
       responses: {'200': {$ref: '#/components/responses/User'}}
   /api/v1/links/{userID}:
@@ -338,8 +340,13 @@ paths:
     get:
       tags: [Discovery]
       summary: Topic·Pulse 목록
-      parameters: [{$ref: '#/components/parameters/Offset'}, {$ref: '#/components/parameters/Limit'}]
-      responses: {'200': {$ref: '#/components/responses/Data'}}
+      description: trending은 최근 7일 공개 Moin과 Signal을 집계하고 최근 24시간 활동에 더 높은 가중치를 적용합니다.
+      parameters:
+        - {name: q, in: query, schema: {type: string}}
+        - {name: sort, in: query, schema: {type: string, enum: [popular, trending, recent, name], default: popular}}
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses: {'200': {$ref: '#/components/responses/Data'}, '400': {$ref: '#/components/responses/Error'}}
   /api/v1/topics/{slug}:
     get:
       tags: [Discovery]
@@ -364,10 +371,10 @@ paths:
       summary: Moin·사용자·Topic·Moim 통합 검색
       parameters:
         - {name: q, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 100}}
-        - {name: type, in: query, schema: {type: string, enum: [all, posts, users, topics, moims]}}
+        - {name: type, in: query, description: 지정한 검색 대상만 조회하며 생략하면 전체 대상을 조회합니다., schema: {type: string, enum: [all, posts, users, topics, moims], default: all}}
         - {$ref: '#/components/parameters/Offset'}
         - {$ref: '#/components/parameters/Limit'}
-      responses: {'200': {$ref: '#/components/responses/Data'}}
+      responses: {'200': {$ref: '#/components/responses/Data'}, '400': {$ref: '#/components/responses/Error'}}
   /api/v1/notifications:
     get:
       tags: [Notifications]
@@ -1125,6 +1132,11 @@ components:
         provider: {type: string}
         roles: {type: array, items: {type: string}}
         active: {type: boolean}
+        followerCount: {type: integer, minimum: 0}
+        followingCount: {type: integer, minimum: 0}
+        moinCount: {type: integer, minimum: 0, description: 공개·게시 Moin 수}
+        signal: {type: integer, minimum: 0, description: 공개·게시 Moin이 받은 Signal 수}
+        followed: {type: boolean}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
     Post:
@@ -1241,9 +1253,9 @@ components:
           items: {type: string, examples: [10.20.0.10, 10.30.0.0/24]}
     WorkflowActionPattern:
       type: string
-      description: 전역 `*`, dot 구분 exact action, 또는 마지막 segment만 `*`인 namespace wildcard. 입력은 소문자로 정규화됩니다. `post*`, `post.`, `post:*`, `*.publish`, `post..publish`는 거부합니다.
+      description: 현재 실행 가능한 post.publish를 포함하는 전역 `*`, exact action, 또는 마지막 segment wildcard `post.*`. 입력은 소문자로 정규화됩니다. 문법상 유효해도 현재 승인 요청 producer가 없는 action은 거부합니다.
       pattern: '^(?:\*|[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*\.\*|[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)+)$'
-      examples: ['*', post.publish, 'post.*', moim.member.approve, agent.post.publish]
+      examples: ['*', post.publish, 'post.*']
     WorkflowConfig:
       type: object
       additionalProperties: false

@@ -213,7 +213,7 @@ const expectedAssets = {
   'frontend/public/icon-512.png': 'a87acd6cc3e93fc8479031d9c40bf6b5e4fcb4e7229b3131a50ce3f115c5e7d7',
   'docs/assets/icon-192.png': '7b02e5b05eb5920df5a5e89b90d988b484e719cc86c35db66176aeb95fc166e6',
   'docs/assets/icon-512.png': 'a87acd6cc3e93fc8479031d9c40bf6b5e4fcb4e7229b3131a50ce3f115c5e7d7',
-  'docs/assets/og.webp': '743db216c798efbf862a80e575d76ae029e4e02ec47b62c56ad06edef755df42',
+  'docs/assets/og.webp': '2f2e0ea14abcd799d1b031a07d1abbd71281f59a92fd0d6289aee5a331dfd0d0',
 };
 for (const [asset, expected] of Object.entries(expectedAssets)) {
   const digest = createHash('sha256').update(await readFile(path.join(root, asset))).digest('hex');

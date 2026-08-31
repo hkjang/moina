@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,6 +139,24 @@ func TestApprovalActionPatternGrammarAndMatching(t *testing.T) {
 	}
 }
 
+func TestApprovalActionPatternsMapToImplementedProducer(t *testing.T) {
+	for _, raw := range []string{"*", "post.*", "post.publish", "POST.PUBLISH"} {
+		pattern, err := parseApprovalActionPattern(raw)
+		if err != nil || !implementedApprovalPattern(pattern) {
+			t.Errorf("implemented action pattern %q is not usable: %v", raw, err)
+		}
+	}
+	for _, raw := range []string{"moim.member.approve", "agent.post.publish", "moim.*"} {
+		pattern, err := parseApprovalActionPattern(raw)
+		if err != nil {
+			t.Fatalf("syntactically valid future action %q failed parsing: %v", raw, err)
+		}
+		if implementedApprovalPattern(pattern) {
+			t.Errorf("unsupported action pattern %q unexpectedly maps to post.publish", raw)
+		}
+	}
+}
+
 func TestVerifyOriginChecksBearerAndSafeMethods(t *testing.T) {
 	server := &Server{}
 	handler := server.verifyOrigin(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
@@ -195,6 +216,90 @@ func TestVerifyOriginChecksBearerAndSafeMethods(t *testing.T) {
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("wrong HTTP default port status=%d", recorder.Code)
+	}
+}
+
+func TestVerifyOriginAllowsStaticModuleBehindTLSProxy(t *testing.T) {
+	server := &Server{}
+	handler := server.verifyOrigin(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	request := httptest.NewRequest(http.MethodGet, "http://moina.internal/assets/index-example.js", nil)
+	request.Host = "moina.internal"
+	request.Header.Set("Origin", "https://moina.internal")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("TLS proxy module asset status=%d", recorder.Code)
+	}
+}
+
+func TestVerifyOriginUsesSameOriginFetchMetadataForProxyBootstrap(t *testing.T) {
+	server := &Server{}
+	handler := server.verifyOrigin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isHTTPS(r) {
+			t.Error("browser-visible HTTPS was not detected")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodPost, "http://moina:8080/api/v1/auth/login", nil)
+	request.Host = "moina:8080"
+	request.Header.Set("Origin", "https://social.example")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("TLS proxy bootstrap status=%d", recorder.Code)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "http://moina:8080/api/v1/auth/login", nil)
+	request.Host = "moina:8080"
+	request.Header.Set("Origin", "https://social.example")
+	request.Header.Set("Sec-Fetch-Site", "cross-site")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("cross-site proxy bootstrap status=%d", recorder.Code)
+	}
+}
+
+func TestServeSPAAssetCachingAndFallback(t *testing.T) {
+	root := t.TempDir()
+	assets := filepath.Join(root, "assets")
+	if err := os.MkdirAll(assets, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("<!doctype html><title>MOINA</title>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(assets, "index-hash.js"), []byte("export const ready = true;"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	server := &Server{staticRoot: root}
+
+	recorder := httptest.NewRecorder()
+	server.serveSPA(recorder, httptest.NewRequest(http.MethodGet, "http://moina.internal/assets/index-hash.js", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Header().Get("Content-Type"), "javascript") {
+		t.Fatalf("existing asset status=%d content-type=%q", recorder.Code, recorder.Header().Get("Content-Type"))
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("existing asset cache-control=%q", got)
+	}
+
+	recorder = httptest.NewRecorder()
+	server.serveSPA(recorder, httptest.NewRequest(http.MethodGet, "http://moina.internal/assets/stale-hash.js", nil))
+	if recorder.Code != http.StatusNotFound || strings.Contains(recorder.Body.String(), "<title>MOINA</title>") {
+		t.Fatalf("missing asset status=%d body=%q", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("missing asset cache-control=%q", got)
+	}
+
+	recorder = httptest.NewRecorder()
+	server.serveSPA(recorder, httptest.NewRequest(http.MethodGet, "http://moina.internal/flow", nil))
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), "<title>MOINA</title>") {
+		t.Fatalf("SPA route status=%d body=%q", recorder.Code, recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Fatalf("SPA route cache-control=%q", got)
 	}
 }
 
@@ -275,6 +380,20 @@ func TestNotificationAliasesMatchUI(t *testing.T) {
 	server.decorateNotification(t.Context(), &item)
 	if item.Type != "signal" || item.Title == "" {
 		t.Fatalf("notification=%+v", item)
+	}
+	mention := model.Notification{Type: "mention", TargetID: "moin-target", Payload: json.RawMessage(`{"postId":"moin-payload"}`)}
+	server.decorateNotification(t.Context(), &mention)
+	if mention.Type != "mention" || mention.Title != "새로운 멘션" || mention.TargetPath != "/moin/moin-payload" {
+		t.Fatalf("mention notification=%+v", mention)
+	}
+}
+
+func TestListTopicsRejectsUnknownSort(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/topics?sort=oldest", nil)
+	recorder := httptest.NewRecorder()
+	new(Server).listTopics(recorder, request)
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"code":"invalid_sort"`) {
+		t.Fatalf("unknown Topic sort status=%d body=%q", recorder.Code, recorder.Body.String())
 	}
 }
 

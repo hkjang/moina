@@ -2,7 +2,7 @@
 
 ## 책임 경계
 
-GitHub Release에는 `linux/amd64`용 `moina:v0.1.3` 서비스 이미지 하나를 저장한 `moina-v0.1.3.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
+GitHub Release에는 `linux/amd64`용 `moina:v0.1.4` 서비스 이미지 하나를 저장한 `moina-v0.1.4.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
 
 ## 반입과 설치
 
@@ -13,16 +13,18 @@ GitHub Release에는 `linux/amd64`용 `moina:v0.1.3` 서비스 이미지 하나�
 5. `pull never`, read-only, dropped capabilities로 시작합니다.
 
 ```bash
-sha256sum moina-v0.1.3.tar.gz
-gzip -t moina-v0.1.3.tar.gz
-gzip -dc moina-v0.1.3.tar.gz | docker image load
-docker image inspect moina:v0.1.3
+sha256sum moina-v0.1.4.tar.gz
+gzip -t moina-v0.1.4.tar.gz
+gzip -dc moina-v0.1.4.tar.gz | docker image load
+docker image inspect moina:v0.1.4
 cp .env.example .env
 chmod 600 .env
 docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull never
 ```
 
-기본 bind는 `127.0.0.1:8080`입니다. 기관 TLS reverse proxy가 HTTPS, SSE flush와 WebSocket upgrade를 전달해야 합니다. 배포 후 **서비스 관리자 → 일반 설정 → Reverse Proxy 신뢰 정책**에 MOINA로 직접 연결하는 Proxy IP 또는 CIDR만 등록합니다. 등록되지 않은 Peer의 `Forwarded`·`X-Forwarded-*` 헤더는 무시됩니다.
+기본 bind는 `127.0.0.1:8080`입니다. 기관 TLS reverse proxy가 원래 `Host`, HTTPS protocol, SSE flush와 WebSocket upgrade를 전달해야 합니다. 같은 Origin의 최신 브라우저 요청은 Fetch Metadata로 최초 로컬 관리자 로그인까지 안전하게 bootstrap할 수 있습니다. 로그인 직후 **서비스 관리자 → 일반 설정 → Reverse Proxy 신뢰 정책**에 MOINA로 직접 연결하는 Proxy IP 또는 CIDR만 등록하고 다시 로그인한 뒤 OIDC를 설정합니다. 등록되지 않은 Peer의 `Forwarded`·`X-Forwarded-*` 헤더는 Client IP·OIDC redirect 계산에 사용하지 않습니다.
+
+SPA 문서와 manifest는 `Cache-Control: no-cache`, Vite hash asset은 1년 `immutable`로 제공됩니다. 존재하지 않는 이전 릴리스 chunk는 HTML fallback 대신 `404 asset_not_found`와 `no-store`를 반환합니다. Origin 검사는 자격 증명을 처리하는 `/api/v1/**`와 `/mcp` 경계에 적용하며 정적 파일에는 적용하지 않습니다.
 
 ## 상태와 관측
 
@@ -48,9 +50,9 @@ docker compose -f deploy/docker-compose.offline.yml logs --since 15m moina
 
 ## Migration과 검색 준비
 
-`v0.1.3`은 시작 시 `pg_trgm` 확장을 만들고 trigram·전문 검색 index를 생성합니다. migration 계정이 extension 생성 권한이 없다면 DBA가 대상 database에 `CREATE EXTENSION IF NOT EXISTS pg_trgm`을 먼저 실행해야 합니다. 별도 OpenSearch나 인터넷 연결은 필요하지 않습니다.
+`v0.1.4`은 시작 시 `pg_trgm` 확장을 만들고 trigram·전문 검색 index를 생성합니다. migration 계정이 extension 생성 권한이 없다면 DBA가 대상 database에 `CREATE EXTENSION IF NOT EXISTS pg_trgm`을 먼저 실행해야 합니다. 별도 OpenSearch나 인터넷 연결은 필요하지 않습니다.
 
-적용한 migration에는 SHA-256 checksum을 저장합니다. 이미 기록된 SQL 파일이 바뀌어 checksum이 다르면 시작을 중단하므로, 운영 DB의 `schema_migrations`를 임의 수정하거나 적용 완료 migration 파일을 덮어쓰지 않습니다. **DB에 현재 binary가 알지 못하는 migration version이 하나라도 있으면 downgrade로 판단해 기동을 거부합니다.** 새 변경은 항상 다음 번호 migration으로 배포합니다. v0.1.3의 migration 005는 Moin 관계별 `post_media.alt_text`와 기존 기본 설명 backfill을, 006은 다중 인스턴스 공용 `rate_limit_buckets`를, 007은 사용자별 `notification_digest_state`를 추가합니다. Migration 008은 알림 전달 row에 `notifications.in_app`을 추가하고 In App 미확인 조회용 부분 index를 만들며, 009는 Outbox 실제 전달 시각인 `notifications.delivered_at`과 Digest 집계 index를 추가합니다. Migration 010은 각 일반 알림의 Digest 처리 완료 시각인 `notifications.digested_at`과 미처리 알림 index를 추가해 worker 실행 사이에 commit된 전달 row도 다음 Digest가 이어서 처리하도록 합니다. Migration 011은 `notification_digest_state.config_signature`에 끔·시간별·일별+시각 구성을 기록합니다. 기존 상태에는 현재 저장 설정의 signature를 backfill해 업그레이드 직후 이미 도래한 정상 window를 임의로 버리지 않습니다. Migration에는 연결 단계와 분리된 최대 30분 제한이 적용되며 완료되기 전에는 readiness가 성공하지 않습니다. 대용량 index 생성 중 배포 관리자가 컨테이너를 조기 종료하지 않도록 startup/readiness 허용 시간을 30분 이상으로 잡고, 한도 초과 시 log와 PostgreSQL lock·I/O·권한을 확인합니다.
+적용한 migration에는 SHA-256 checksum을 저장합니다. 이미 기록된 SQL 파일이 바뀌어 checksum이 다르면 시작을 중단하므로, 운영 DB의 `schema_migrations`를 임의 수정하거나 적용 완료 migration 파일을 덮어쓰지 않습니다. **DB에 현재 binary가 알지 못하는 migration version이 하나라도 있으면 downgrade로 판단해 기동을 거부합니다.** 새 변경은 항상 다음 번호 migration으로 배포합니다. v0.1.4의 migration 005는 Moin 관계별 `post_media.alt_text`와 기존 기본 설명 backfill을, 006은 다중 인스턴스 공용 `rate_limit_buckets`를, 007은 사용자별 `notification_digest_state`를 추가합니다. Migration 008은 알림 전달 row에 `notifications.in_app`을 추가하고 In App 미확인 조회용 부분 index를 만들며, 009는 Outbox 실제 전달 시각인 `notifications.delivered_at`과 Digest 집계 index를 추가합니다. Migration 010은 각 일반 알림의 Digest 처리 완료 시각인 `notifications.digested_at`과 미처리 알림 index를 추가해 worker 실행 사이에 commit된 전달 row도 다음 Digest가 이어서 처리하도록 합니다. Migration 011은 `notification_digest_state.config_signature`에 끔·시간별·일별+시각 구성을 기록합니다. 기존 상태에는 현재 저장 설정의 signature를 backfill해 업그레이드 직후 이미 도래한 정상 window를 임의로 버리지 않습니다. Migration에는 연결 단계와 분리된 최대 30분 제한이 적용되며 완료되기 전에는 readiness가 성공하지 않습니다. 대용량 index 생성 중 배포 관리자가 컨테이너를 조기 종료하지 않도록 startup/readiness 허용 시간을 30분 이상으로 잡고, 한도 초과 시 log와 PostgreSQL lock·I/O·권한을 확인합니다.
 
 Flow cursor는 서명 없는 versioned Base64 URL opaque 데이터이지만 서버가 내부 값을 검증합니다. Following은 게시 시각·ID를, For Me는 기준 시각·점수·ID·랭킹 버전과 사용자별 server ranking snapshot ID를 포함합니다. For Me는 필터를 통과한 최근 후보 최대 200개의 합계·component 점수와 당시 개인화 설정을 고정합니다. 동일 사용자·랭킹 버전·설정은 같은 30초 bucket에서 snapshot을 재사용합니다.
 
@@ -74,7 +76,7 @@ Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 
 
 ## 미디어 업로드 계약 확인
 
-인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.3` 관리자 설정이 아닙니다.
+인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.4` 관리자 설정이 아닙니다.
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/v1/media/config \
@@ -108,7 +110,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 
 ### v0.1.0 내부 OIDC·AI 사용자의 필수 조치
 
-`v0.1.3`은 사설 주소를 자동 허용하지 않습니다. `v0.1.0`에서 RFC1918/ULA로 해석되는 Keycloak/OIDC 또는 AI endpoint를 사용했다면 업그레이드 뒤 해당 연결은 `privateAllowedHosts`를 명시적으로 저장하기 전까지 실패합니다. 기존 host를 자동으로 사설 예외로 승격하지 않는 것은 SSRF 방어를 약화하지 않기 위한 의도된 변경입니다.
+`v0.1.4`은 사설 주소를 자동 허용하지 않습니다. `v0.1.0`에서 RFC1918/ULA로 해석되는 Keycloak/OIDC 또는 AI endpoint를 사용했다면 업그레이드 뒤 해당 연결은 `privateAllowedHosts`를 명시적으로 저장하기 전까지 실패합니다. 기존 host를 자동으로 사설 예외로 승격하지 않는 것은 SSRF 방어를 약화하지 않기 위한 의도된 변경입니다.
 
 1. OIDC에 의존하지 말고 검증해 둔 **로컬 bootstrap 최고 관리자**로 로그인합니다. Bootstrap 환경변수의 비밀번호를 바꿔도 이미 생성된 계정 비밀번호는 재설정되지 않습니다.
 2. Keycloak/OIDC와 AI 설정 각각의 `allowedHosts`에 endpoint의 정확한 authority가 있는지 확인합니다.
@@ -123,7 +125,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 
 - root encryption key는 application 관리자 계정과 분리해 vault/HSM 수준으로 보관합니다.
 - 개인 API/MCP key는 사용자 화면에서 회전하고 이전 token은 즉시 폐기합니다.
-- `v0.1.3`은 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
+- `v0.1.4`은 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
 - 유출이 의심되면 관련 key 폐기, session 종료, audit 조사와 downstream secret rotation을 함께 수행합니다.
 
 ## 장애 분류
@@ -136,6 +138,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 | binary보다 새로운 migration 감지 | 잘못된 image downgrade 여부 확인 → DB schema와 일치하는 정식 release image로 복구 |
 | Flow 새로고침 429 | `feed_snapshot_busy` 확인 → `Retry-After: 1` 준수 → 같은 계정의 반복 refresh/자동화 중지 |
 | 로그인·가입·API key 요청 503 | `rate_limit_unavailable` 확인 → PostgreSQL 연결·lock·용량과 `rate_limit_buckets` migration 확인 |
+| JS asset 403·빈 화면 | 응답의 `invalid_origin` 확인 → v0.1.4 이상 배포 → proxy의 원래 Host 전달 → index `no-cache`와 asset 200/immutable 확인 |
 | 감사 Client IP 이상 | 직접 Peer가 신뢰 Proxy IP/CIDR인지 확인 → `socketIp`·`clientIp`·`proxyChain` 비교 → 임의 Forwarded header 차단 확인 |
 | OIDC 실패 | issuer → `allowedHosts`/`privateAllowedHosts`와 port → DNS 결과·차단 주소 → CA → redirect URI → clock skew |
 | AI streaming 지연 | endpoint → `allowedHosts`/`privateAllowedHosts`와 port → DNS/CA → reverse proxy buffering/timeout |

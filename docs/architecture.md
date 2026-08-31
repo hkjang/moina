@@ -2,7 +2,7 @@
 
 ## 선택
 
-MOINA `v0.1.3`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
+MOINA `v0.1.4`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
 
 ```text
 Browser (React, REST/SSE/WebSocket)
@@ -67,11 +67,11 @@ WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 
 
 ## 검색
 
-`v0.1.3` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다.
+`v0.1.4` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. `type`을 지정하면 해당 대상의 SQL만 실행하고, 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다. 공개 프로필의 Moin·Signal 통계는 공개·게시 상태의 Moin만 집계합니다. Topic Pulse는 최근 7일의 공개 Moin과 Signal을 집계하고 최근 24시간 활동에 더 큰 가중치를 적용하며, 비공개·삭제·승인 대기 Moin은 제외합니다.
 
 ## 인증과 설정
 
-로컬 session과 OIDC가 같은 내부 user/role 모델로 수렴합니다. 환경변수는 DB 연결, bootstrap 관리자와 root encryption key 네 개뿐입니다. OIDC와 AI의 비밀 설정은 암호화하고, 일반·승인·permission·신뢰 Proxy 설정은 PostgreSQL revision과 audit log로 관리합니다. 직접 연결 Peer가 관리자 IP/CIDR 목록에 있을 때만 Forwarded header를 신뢰하고, 오른쪽부터 신뢰 chain을 제거해 Client IP를 계산합니다. Protocol은 가장 가까운 오른쪽 hop의 값만 사용해 사용자 제어 header가 secure cookie 판단을 바꾸지 못하게 합니다. 로그인·가입과 개인 API/MCP key의 bucket은 PostgreSQL에 두어 모든 인스턴스가 같은 quota를 사용합니다.
+로컬 session과 OIDC가 같은 내부 user/role 모델로 수렴합니다. 환경변수는 DB 연결, bootstrap 관리자와 root encryption key 네 개뿐입니다. OIDC와 AI의 비밀 설정은 암호화하고, 일반·승인·permission·신뢰 Proxy 설정은 PostgreSQL revision과 audit log로 관리합니다. 직접 연결 Peer가 관리자 IP/CIDR 목록에 있을 때만 Forwarded header를 신뢰하고, 오른쪽부터 신뢰 chain을 제거해 Client IP를 계산합니다. Protocol은 가장 가까운 오른쪽 hop만 사용합니다. 신뢰 Proxy를 아직 등록하지 않은 최초 로그인은 browser가 위조할 수 없는 `Sec-Fetch-Site: same-origin`과 HTTPS Origin으로 자격 증명 경계를 검증하고 Secure cookie를 설정하며, cross-site·same-site cross-origin 요청은 계속 거부합니다. 로그인·가입과 개인 API/MCP key의 bucket은 PostgreSQL에 두어 모든 인스턴스가 같은 quota를 사용합니다.
 
 ## AI와 MCP
 
@@ -94,7 +94,7 @@ Large Object read는 인스턴스당 최대 8개를 동시에 유지합니다. D
 ## 오프라인 runtime
 
 ```text
-moina:v0.1.3 (linux/amd64, distroless, non-root, read-only)
+moina:v0.1.4 (linux/amd64, distroless, non-root, read-only)
   ├─ /app/moina
   └─ /app/web/dist
 

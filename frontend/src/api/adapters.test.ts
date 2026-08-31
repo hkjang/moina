@@ -18,8 +18,9 @@ describe('백엔드 응답 어댑터', () => {
   });
 
   it('토픽 표시에서 중복 #을 제거하고 페이지 래퍼를 읽는다', () => {
-    const page = normalizePage({ items: [{ id: 't1', slug: 'go', name: '##Go' }], nextCursor: 'next' }, normalizeTopic);
+    const page = normalizePage({ items: [{ id: 't1', slug: 'go', name: '##Go', trendScore: 12.5 }], nextCursor: 'next' }, normalizeTopic);
     expect(page.items[0].name).toBe('Go');
+    expect(page.items[0].trendScore).toBe(12.5);
     expect(page.nextCursor).toBe('next');
   });
 

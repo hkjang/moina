@@ -209,7 +209,7 @@ func isHTTPS(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	return requestNetworkInfo(r).ForwardedProto == "https"
+	return requestNetworkInfo(r).ForwardedProto == "https" || browserOriginScheme(r) == "https"
 }
 
 func validUsername(value string) bool {

@@ -199,15 +199,19 @@ export function AppShell() {
   useEffect(() => {
     if (!user) return;
     rememberRoute(user.id, `${location.pathname}${location.search}`);
-    setMobileOpen(false);
     const title = [...primaryNavigation, ...adminNavigation].find(
       (item) => item.path === location.pathname,
     )?.label;
     document.title = title ? `${title} · MOINA` : "MOINA";
-    requestAnimationFrame(() =>
+  }, [location.pathname, location.search, user]);
+
+  useEffect(() => {
+    setMobileOpen(false);
+    const frame = requestAnimationFrame(() =>
       mainRef.current?.focus({ preventScroll: true }),
     );
-  }, [location.pathname, location.search, user]);
+    return () => cancelAnimationFrame(frame);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!user) return;

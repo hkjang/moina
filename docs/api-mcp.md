@@ -129,7 +129,7 @@ OIDC와 AI 관리 설정의 `allowedHosts`에는 정확한 DNS 이름/IP 또는 
 
 ## WebSocket 알림
 
-브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.3` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
+브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.4` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
 
 ```json
 {
@@ -153,7 +153,7 @@ Prometheus collector는 `GET /metrics`에서 `text/plain; version=0.0.4`를 읽�
 
 시간별·일별 Digest는 Outbox event 생성 시각이 아닌 `notifications.delivered_at` 순서로 아직 `digested_at`이 없는 알림을 집계합니다. 처리한 row는 Digest 생성과 같은 transaction에서 표시되므로 Outbox 처리가 지연되거나 worker 집계 도중 새로 저장된 알림도 다음 실행에서 포함됩니다. `config_signature`은 구독 mode와 일별 시각 전환을 식별하며 전환 시 현재 경계 이전 row를 처리 완료로 표시해 과거 backlog를 재생하지 않습니다. Advisory lock과 사용자별 상태는 여러 인스턴스의 중복 요약을 막고, 잘못된 저장 설정은 사용자별 savepoint에서 격리됩니다.
 
-승인 Action은 `*`, `post.publish` 같은 exact dot action 또는 `post.*` 같은 terminal namespace wildcard만 저장할 수 있습니다. `post*`, `post.`, `post:*`, `*.publish`, `post..publish`는 HTTP 400 `invalid_actions`입니다. 모든 `approverRoles`가 최종 유효 권한 `approvals:review`를 가져야 하며 `*`와 `approvals:*`도 허용됩니다. 유효·무효 역할을 섞어 보내면 전체 요청이 거부됩니다. Pending 요청 조회·승인·반려 때도 현재 권한을 다시 검사하고 요청자 자신의 승인·반려는 409로 차단합니다.
+현재 승인 요청 producer와 reviewer가 구현된 Action은 `post.publish`입니다. 이를 포함하는 `*`, exact `post.publish` 또는 `post.*`만 저장할 수 있습니다. 문법상 유효해도 구현되지 않은 Action은 HTTP 400 `unsupported_actions`, `post*`, `post.`, `post:*`, `*.publish`, `post..publish`는 `invalid_actions`입니다. 모든 `approverRoles`가 최종 유효 권한 `approvals:review`를 가져야 하며 `*`와 `approvals:*`도 허용됩니다. 유효·무효 역할을 섞어 보내면 전체 요청이 거부됩니다. Pending 요청 조회·승인·반려 때도 현재 권한을 다시 검사하고 요청자 자신의 승인·반려는 409로 차단합니다.
 
 재시도 한도를 넘은 Transactional Outbox 이벤트는 감사 권한이 있는 관리자가 조회합니다.
 
@@ -174,7 +174,7 @@ X-CSRF-Token: ...
 
 MCP Streamable HTTP 요청은 JSON-RPC 2.0과 Bearer key를 사용합니다.
 
-`v0.1.3`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
+`v0.1.4`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
 
 ```bash
 curl --fail --silent http://127.0.0.1:8080/mcp \

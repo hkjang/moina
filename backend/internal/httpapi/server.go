@@ -33,11 +33,11 @@ import (
 )
 
 const (
-	SessionCookie = "moina_session"
-	CSRFCookie    = "moina_csrf"
-	OIDCCookie    = "moina_oidc_flow"
-	maxBodyBytes  = 4 << 20
-	staticRoot    = "/app/web/dist"
+	SessionCookie     = "moina_session"
+	CSRFCookie        = "moina_csrf"
+	OIDCCookie        = "moina_oidc_flow"
+	maxBodyBytes      = 4 << 20
+	defaultStaticRoot = "/app/web/dist"
 )
 
 type principal struct {
@@ -70,12 +70,13 @@ type Server struct {
 	networkMu       sync.Mutex
 	networkCache    networkConfig
 	networkLoadedAt time.Time
+	staticRoot      string
 }
 
 func New(repo *store.Store, secrets *secure.Manager, version string) *Server {
 	server := &Server{
 		repo: repo, secrets: secrets, version: version, startedAt: time.Now().UTC(),
-		client: &http.Client{}, hub: newNotificationHub(), metrics: observability.NewRegistry(), rates: make(map[string]*attempt),
+		client: &http.Client{}, hub: newNotificationHub(), metrics: observability.NewRegistry(), rates: make(map[string]*attempt), staticRoot: defaultStaticRoot,
 	}
 	if repo != nil {
 		server.outbox = event.NewRepository(repo.Pool())
@@ -288,6 +289,14 @@ func (s *Server) recoverJSON(next http.Handler) http.Handler {
 
 func (s *Server) verifyOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Static files and SPA documents do not cross an authenticated boundary.
+		// In particular, browsers send Origin for same-origin ES module requests;
+		// applying the API policy here would block /assets/*.js behind a TLS
+		// terminating proxy before an administrator can configure that proxy.
+		if !originProtectedPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
 		if origin == "" {
 			// Native/API clients can omit Origin. Browser requests that include it,
@@ -297,6 +306,15 @@ func (s *Server) verifyOrigin(next http.Handler) http.Handler {
 			return
 		}
 		parsed, err := url.Parse(origin)
+		if browserOriginScheme(r) != "" {
+			// Fetch Metadata describes the browser-visible request relationship and
+			// is not writable by page JavaScript. It remains accurate when an
+			// unconfigured reverse proxy rewrites scheme or Host, while cross-site
+			// and same-site cross-origin requests are still rejected. Non-browser
+			// API clients can already omit Origin and follow the branch above.
+			next.ServeHTTP(w, r)
+			return
+		}
 		expectedScheme := "http"
 		if isHTTPS(r) {
 			expectedScheme = "https"
@@ -307,6 +325,24 @@ func (s *Server) verifyOrigin(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func originProtectedPath(path string) bool {
+	return path == "/mcp" || path == "/api/v1" || strings.HasPrefix(path, "/api/v1/")
+}
+
+func browserOriginScheme(r *http.Request) string {
+	if !strings.EqualFold(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")), "same-origin") {
+		return ""
+	}
+	origin, err := url.Parse(strings.TrimSpace(r.Header.Get("Origin")))
+	if err != nil || origin.Host == "" || origin.User != nil || origin.RawQuery != "" || origin.Fragment != "" || origin.Path != "" {
+		return ""
+	}
+	if origin.Scheme == "http" || origin.Scheme == "https" {
+		return origin.Scheme
+	}
+	return ""
 }
 
 func sameOriginHost(a, b, scheme string) bool {
@@ -558,12 +594,22 @@ func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "요청한 경로를 찾을 수 없습니다")
 		return
 	}
+	staticRoot := s.staticRoot
+	if staticRoot == "" {
+		staticRoot = defaultStaticRoot
+	}
 	candidate := filepath.Join(staticRoot, strings.TrimPrefix(clean, "/"))
 	if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+		setStaticCacheHeaders(w, clean)
 		if contentType := mime.TypeByExtension(filepath.Ext(candidate)); contentType != "" {
 			w.Header().Set("Content-Type", contentType)
 		}
 		http.ServeFile(w, r, candidate)
+		return
+	}
+	if strings.HasPrefix(clean, "/assets/") || isRootStaticAsset(clean) {
+		w.Header().Set("Cache-Control", "no-store")
+		writeError(w, http.StatusNotFound, "asset_not_found", "요청한 정적 파일을 찾을 수 없습니다")
 		return
 	}
 	index := filepath.Join(staticRoot, "index.html")
@@ -571,5 +617,23 @@ func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "요청한 경로를 찾을 수 없습니다")
 		return
 	}
+	w.Header().Set("Cache-Control", "no-cache")
 	http.ServeFile(w, r, index)
+}
+
+func setStaticCacheHeaders(w http.ResponseWriter, path string) {
+	if strings.HasPrefix(path, "/assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+}
+
+func isRootStaticAsset(path string) bool {
+	switch path {
+	case "/favicon.ico", "/icon-192.png", "/icon-512.png", "/manifest.webmanifest", "/moina-logo.svg", "/moina-mark.svg":
+		return true
+	default:
+		return false
+	}
 }
