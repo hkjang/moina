@@ -28,6 +28,8 @@ export default function PocketPage() {
   }, [query.data]);
   const updateMoin = (next: (typeof items)[number]) =>
 	setItems((current) => mergePocketMoin(current, next));
+  const removeMoin = (id: string) =>
+    setItems((current) => current.filter((item) => item.id !== id));
   return (
     <div className="page-stack">
       <PageHeader
@@ -41,7 +43,12 @@ export default function PocketPage() {
       ) : items.length ? (
         <div className="feed-list">
           {items.map((moin) => (
-            <MoinCard moin={moin} key={moin.id} onMoinChange={updateMoin} />
+            <MoinCard
+              moin={moin}
+              key={moin.id}
+              onMoinChange={updateMoin}
+              onMoinDelete={removeMoin}
+            />
           ))}
         </div>
       ) : (

@@ -51,6 +51,7 @@ export function AdminSettingsPage() {
   };
   const [general, setGeneral] = useState({
     serviceName: "moina",
+    publicBaseUrl: "",
     sessionMinutes: 720,
     defaultTimezone: "Asia/Seoul",
     allowRegistration: false,
@@ -166,6 +167,22 @@ export function AdminSettingsPage() {
                   onChange={(event) =>
                     setGeneral({ ...general, serviceName: event.target.value })
                   }
+                />
+              </Field>
+              <Field
+                label="사이트 기본 주소"
+                help="외부에서 접근하는 origin이며 OIDC Callback URL 생성에 사용합니다. 비워두면 현재 요청 주소를 사용합니다."
+              >
+                <input
+                  type="url"
+                  value={general.publicBaseUrl}
+                  onChange={(event) =>
+                    setGeneral({
+                      ...general,
+                      publicBaseUrl: event.target.value,
+                    })
+                  }
+                  placeholder={window.location.origin}
                 />
               </Field>
               <Field label="세션 유지 시간(분)">

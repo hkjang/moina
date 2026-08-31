@@ -13,6 +13,7 @@ import {
 } from "../../components/ui";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import {
+  endpointAuthority,
   ensureEndpointHost,
   formatAllowedHosts,
   parseAllowedHosts,
@@ -39,6 +40,7 @@ interface OIDCUpdateSettings {
 
 interface OIDCSettingsView extends OIDCUpdateSettings {
   clientSecretConfigured?: boolean;
+  effectiveRedirectUrl?: string;
 }
 
 export function AdminOIDCPage() {
@@ -57,13 +59,27 @@ export function AdminOIDCPage() {
   const [hostsText, setHostsText] = useState("");
   const [privateHostsText, setPrivateHostsText] = useState("");
   const [clientSecretConfigured, setClientSecretConfigured] = useState(false);
+  const [effectiveRedirectUrl, setEffectiveRedirectUrl] = useState("");
   const [working, setWorking] = useState<"save" | "test" | null>(null);
   const roles = roleRows(rolesQuery.data);
+  const issuerAuthority = endpointAuthority(form.issuerUrl);
+  const issuerPrivateAllowed =
+    typeof issuerAuthority === "string" &&
+    issuerAuthority.length > 0 &&
+    parseAllowedHosts(privateHostsText).includes(issuerAuthority);
+  const displayedRedirectUrl =
+    form.redirectUrl?.trim() ||
+    effectiveRedirectUrl ||
+    `${window.location.origin}/api/v1/auth/oidc/callback`;
   useEffect(() => {
     if (query.data) {
-      const { clientSecretConfigured: configured = false, ...editable } =
-        query.data;
+      const {
+        clientSecretConfigured: configured = false,
+        effectiveRedirectUrl: effectiveRedirect = "",
+        ...editable
+      } = query.data;
       setClientSecretConfigured(configured);
+      setEffectiveRedirectUrl(effectiveRedirect);
       setForm({
         ...editable,
         clientSecret: "",
@@ -302,6 +318,33 @@ export function AdminOIDCPage() {
               placeholder="keycloak.internal"
             />
           </Field>
+          <SwitchField
+            label="Issuer 사설망 연결 허용"
+            description={
+              issuerAuthority
+                ? `사설 IP로 해석되는 신뢰된 내부 OIDC에만 ${issuerAuthority} 접근을 허용하세요.`
+                : "먼저 올바른 Issuer URL을 입력하세요."
+            }
+            checked={issuerPrivateAllowed}
+            disabled={!issuerAuthority}
+            onChange={(checked) => {
+              if (!issuerAuthority) return;
+              const privateHosts = parseAllowedHosts(privateHostsText).filter(
+                (host) => host !== issuerAuthority,
+              );
+              if (checked) privateHosts.push(issuerAuthority);
+              setPrivateHostsText(formatAllowedHosts(privateHosts));
+              if (checked) {
+                const hostResult = ensureEndpointHost(
+                  parseAllowedHosts(hostsText),
+                  form.issuerUrl,
+                );
+                if (!hostResult.invalid) {
+                  setHostsText(formatAllowedHosts(hostResult.hosts));
+                }
+              }
+            }}
+          />
           {clientSecretConfigured && (
             <SwitchField
               label="저장된 Client Secret 삭제"
@@ -334,10 +377,7 @@ export function AdminOIDCPage() {
             <LockKeyhole />
             <span>
               <strong>Keycloak Valid redirect URI</strong>
-              <code>
-                {form.redirectUrl ||
-                  `${window.location.origin}/api/v1/auth/oidc/callback`}
-              </code>
+              <code>{displayedRedirectUrl}</code>
             </span>
           </div>
           <div className="form-actions">

@@ -54,6 +54,20 @@ export function updateMoinInFeed(pages: FeedPageMap, changed: Moin) {
   return matched ? next : pages;
 }
 
+export function removeMoinFromFeed(pages: FeedPageMap, id: string) {
+  let matched = false;
+  const next = new Map<FeedCursor, CursorPage<Moin>>();
+  for (const [cursor, page] of pages) {
+    const items = page.items.filter((item) => {
+      if (item.id !== id) return true;
+      matched = true;
+      return false;
+    });
+    next.set(cursor, items.length === page.items.length ? page : { ...page, items });
+  }
+  return matched ? next : pages;
+}
+
 export function nextUnseenCursor(pages: FeedPageMap, cursor: FeedCursor) {
   const candidate = pages.get(cursor)?.nextCursor;
   return candidate && !feedCursorChain(pages).includes(candidate) ? candidate : undefined;

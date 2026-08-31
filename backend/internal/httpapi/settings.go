@@ -30,6 +30,7 @@ const (
 
 type generalConfig struct {
 	ServiceName       string `json:"serviceName"`
+	PublicBaseURL     string `json:"publicBaseUrl,omitempty"`
 	AllowRegistration bool   `json:"allowRegistration"`
 	SessionMinutes    int    `json:"sessionMinutes"`
 	DefaultTimezone   string `json:"defaultTimezone"`
@@ -109,6 +110,7 @@ func (s *Server) general(r *http.Request) (generalConfig, error) {
 	if err := s.loadSetting(r, settingGeneral, &cfg); err != nil && !store.IsNotFound(err) {
 		return generalConfig{}, err
 	}
+	normalizeGeneral(&cfg)
 	return cfg, validateGeneral(cfg)
 }
 
@@ -168,10 +170,21 @@ func validateGeneral(cfg generalConfig) error {
 	if strings.TrimSpace(cfg.ServiceName) == "" || len([]rune(cfg.ServiceName)) > 80 || cfg.SessionMinutes < 5 || cfg.SessionMinutes > 1440 {
 		return errors.New("서비스 일반 설정이 올바르지 않습니다")
 	}
+	if cfg.PublicBaseURL != "" {
+		parsed, err := url.Parse(cfg.PublicBaseURL)
+		if err != nil || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" || parsed.RawQuery != "" || parsed.RawPath != "" || parsed.Fragment != "" || parsed.ForceQuery || strings.ContainsAny(cfg.PublicBaseURL, "?#") || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Path != "" && parsed.Path != "/" {
+			return errors.New("사이트 기본 주소는 path/query/fragment가 없는 HTTP(S) origin이어야 합니다")
+		}
+	}
 	if _, err := time.LoadLocation(cfg.DefaultTimezone); err != nil {
 		return errors.New("시간대가 올바르지 않습니다")
 	}
 	return nil
+}
+
+func normalizeGeneral(cfg *generalConfig) {
+	cfg.ServiceName = strings.TrimSpace(cfg.ServiceName)
+	cfg.PublicBaseURL = strings.TrimRight(strings.TrimSpace(cfg.PublicBaseURL), "/")
 }
 
 func validateAPI(cfg apiAccessConfig) error {
@@ -245,7 +258,12 @@ func (s *Server) adminPutSetting(w http.ResponseWriter, r *http.Request) {
 	switch key {
 	case settingGeneral:
 		var cfg generalConfig
-		if strictUnmarshal(input.Value, &cfg) != nil || validateGeneral(cfg) != nil {
+		if strictUnmarshal(input.Value, &cfg) != nil {
+			writeError(w, http.StatusBadRequest, "invalid_value", "서비스 일반 설정이 올바르지 않습니다")
+			return
+		}
+		normalizeGeneral(&cfg)
+		if validateGeneral(cfg) != nil {
 			writeError(w, http.StatusBadRequest, "invalid_value", "서비스 일반 설정이 올바르지 않습니다")
 			return
 		}
@@ -305,11 +323,12 @@ func (s *Server) adminGetOIDC(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "storage_error", "OIDC 설정을 불러올 수 없습니다")
 		return
 	}
-	writeData(w, http.StatusOK, oidcView(cfg))
+	effectiveRedirect, _ := s.effectiveOIDCRedirect(r, cfg)
+	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect))
 }
 
-func oidcView(cfg model.OIDCConfig) map[string]any {
-	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
+func oidcView(cfg model.OIDCConfig, effectiveRedirect string) map[string]any {
+	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "effectiveRedirectUrl": effectiveRedirect, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
 }
 
 func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
@@ -347,11 +366,15 @@ func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "oidc.config.update", "setting", settingOIDC, true, map[string]any{"issuerUrl": cfg.IssuerURL, "enabled": cfg.Enabled})
-	writeData(w, http.StatusOK, oidcView(cfg))
+	effectiveRedirect, _ := s.effectiveOIDCRedirect(r, cfg)
+	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect))
 }
 
 func normalizeOIDC(cfg *model.OIDCConfig) {
-	cfg.IssuerURL = strings.TrimRight(strings.TrimSpace(cfg.IssuerURL), "/")
+	// The issuer is an exact identifier. Some providers intentionally advertise
+	// a trailing slash and go-oidc compares that value byte-for-byte with the
+	// discovery document, so only surrounding whitespace is safe to remove.
+	cfg.IssuerURL = strings.TrimSpace(cfg.IssuerURL)
 	cfg.AllowedHosts = outbound.EnsureEndpointHost(cfg.AllowedHosts, cfg.IssuerURL)
 	if normalized, err := outbound.NormalizeHosts(cfg.AllowedHosts); err == nil {
 		cfg.AllowedHosts = normalized
@@ -382,6 +405,10 @@ func validateOIDC(cfg model.OIDCConfig, allowAutomaticRedirect bool) error {
 	if !cfg.Enabled {
 		return nil
 	}
+	return validateConfiguredOIDC(cfg, allowAutomaticRedirect)
+}
+
+func validateConfiguredOIDC(cfg model.OIDCConfig, allowAutomaticRedirect bool) error {
 	if cfg.IssuerURL == "" || cfg.ClientID == "" || cfg.RedirectURL == "" && !allowAutomaticRedirect {
 		return errors.New("활성화하려면 issuerUrl과 clientId가 필요합니다")
 	}

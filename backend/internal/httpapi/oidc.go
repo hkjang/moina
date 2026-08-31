@@ -37,11 +37,12 @@ func (s *Server) oidcStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "oidc_unavailable", "OIDC 설정을 확인할 수 없습니다")
 		return
 	}
-	redirect := cfg.RedirectURL
-	if redirect == "" {
-		redirect = automaticOIDCRedirect(r)
+	general, err := s.general(r)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "oidc_unavailable", "서비스 기본 설정을 확인할 수 없습니다")
+		return
 	}
-	general, _ := s.general(r)
+	redirect := resolveOIDCRedirect(cfg, general.PublicBaseURL, r)
 	writeData(w, http.StatusOK, map[string]any{"enabled": cfg.Enabled, "configured": cfg.IssuerURL != "" && cfg.ClientID != "", "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": redirect, "clientSecretConfigured": cfg.ClientSecret != "", "allowRegistration": general.AllowRegistration, "registrationEnabled": general.AllowRegistration})
 }
 
@@ -55,9 +56,10 @@ func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "oidc_misconfigured", "SSO 설정을 확인해 주세요")
 		return
 	}
-	redirect := cfg.RedirectURL
-	if redirect == "" {
-		redirect = automaticOIDCRedirect(r)
+	redirect, err := s.effectiveOIDCRedirect(r, cfg)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "oidc_unavailable", "서비스 기본 설정을 확인할 수 없습니다")
+		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
@@ -69,7 +71,7 @@ func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 	ctx = oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "oidc_unavailable", "SSO 제공자 discovery에 실패했습니다")
+		writeOIDCDiscoveryError(w, r, err)
 		return
 	}
 	if err := validateOIDCProvider(cfg, provider); err != nil {
@@ -146,7 +148,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	ctx = oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "oidc_unavailable", "SSO 제공자 discovery에 실패했습니다")
+		writeOIDCDiscoveryError(w, r, err)
 		return
 	}
 	if err := validateOIDCProvider(cfg, provider); err != nil {
@@ -243,6 +245,27 @@ func automaticOIDCRedirect(r *http.Request) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host + "/api/v1/auth/oidc/callback"
+}
+
+func resolveOIDCRedirect(cfg model.OIDCConfig, publicBaseURL string, r *http.Request) string {
+	if cfg.RedirectURL != "" {
+		return cfg.RedirectURL
+	}
+	if publicBaseURL != "" {
+		return strings.TrimRight(publicBaseURL, "/") + "/api/v1/auth/oidc/callback"
+	}
+	return automaticOIDCRedirect(r)
+}
+
+func (s *Server) effectiveOIDCRedirect(r *http.Request, cfg model.OIDCConfig) (string, error) {
+	if cfg.RedirectURL != "" {
+		return cfg.RedirectURL, nil
+	}
+	general, err := s.general(r)
+	if err != nil {
+		return "", err
+	}
+	return resolveOIDCRedirect(cfg, general.PublicBaseURL, r), nil
 }
 
 func safeReturnTo(value string) bool {
@@ -343,7 +366,7 @@ func claimStringsAtPath(claims map[string]any, path string) []string {
 
 func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.oidcConfig(r)
-	if err != nil || validateOIDC(cfg, true) != nil || cfg.IssuerURL == "" {
+	if err != nil || validateConfiguredOIDC(cfg, true) != nil {
 		writeError(w, http.StatusBadRequest, "invalid_config", "OIDC 설정을 확인해 주세요")
 		return
 	}
@@ -357,7 +380,7 @@ func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 	ctx = oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "oidc_unavailable", "OIDC discovery에 실패했습니다")
+		writeOIDCDiscoveryError(w, r, err)
 		return
 	}
 	if err := validateOIDCProvider(cfg, provider); err != nil {
@@ -365,5 +388,10 @@ func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	endpoint := provider.Endpoint()
-	writeData(w, http.StatusOK, map[string]any{"connected": true, "authorizationEndpoint": endpoint.AuthURL, "tokenEndpoint": endpoint.TokenURL, "redirectUrl": firstNonemptyString(cfg.RedirectURL, automaticOIDCRedirect(r))})
+	redirect, err := s.effectiveOIDCRedirect(r, cfg)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "oidc_unavailable", "서비스 기본 설정을 확인할 수 없습니다")
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{"connected": true, "authorizationEndpoint": endpoint.AuthURL, "tokenEndpoint": endpoint.TokenURL, "redirectUrl": redirect})
 }

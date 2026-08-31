@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { feedCursorChain, mergeFeedPages, nextUnseenCursor, replaceFeedPage, updateMoinInFeed, type FeedCursor, type FeedPageMap } from './feedCache';
+import { feedCursorChain, mergeFeedPages, nextUnseenCursor, removeMoinFromFeed, replaceFeedPage, updateMoinInFeed, type FeedCursor, type FeedPageMap } from './feedCache';
 import type { CursorPage, Moin } from '../types';
 
 const moin = (id: string, content = id): Moin => ({ id, content, author: { id: 'user', username: 'user', displayName: '사용자' }, createdAt: '2026-01-01T00:00:00Z' });
@@ -47,5 +47,14 @@ describe('feed page cache', () => {
     const updated = updateMoinInFeed(pages, changed);
     expect(updated.get(null)?.items[0]).toBe(changed);
     expect(updated.get('next')).toBe(untouched);
+  });
+
+  it('삭제된 Moin은 모든 cursor page에서 제거한다', () => {
+    const pages: FeedPageMap = new Map<FeedCursor, CursorPage<Moin>>([
+      [null, { items: [moin('target'), moin('a')], nextCursor: 'next' }],
+      ['next', { items: [moin('target'), moin('b')] }],
+    ]);
+    const removed = removeMoinFromFeed(pages, 'target');
+    expect(mergeFeedPages(removed).map((item) => item.id)).toEqual(['a', 'b']);
   });
 });

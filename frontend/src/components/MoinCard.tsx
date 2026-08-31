@@ -8,6 +8,7 @@ import {
   Quote,
   Repeat2,
   Share2,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -77,10 +78,12 @@ function MoinEditDialog({
 export function MoinCard({
   moin,
   onMoinChange,
+  onMoinDelete,
   compact = false,
 }: {
   moin: Moin;
   onMoinChange?: (next: Moin) => void;
+  onMoinDelete?: (id: string) => void;
   compact?: boolean;
 }) {
   const { user } = useAuth();
@@ -90,6 +93,7 @@ export function MoinCard({
   const [current, setCurrent] = useState(moin);
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   const currentRef = useRef(moin);
   const pendingRef = useRef(false);
   const editTriggerRef = useRef<HTMLButtonElement>(null);
@@ -213,6 +217,31 @@ export function MoinCard({
     editLocationRef.current = "";
     setEditing(false);
   };
+  const deleteMoin = async () => {
+    if (
+      pendingRef.current ||
+      !window.confirm(
+        "이 모인을 삭제할까요? 삭제한 내용은 피드에서 사라지며 되돌릴 수 없습니다.",
+      )
+    )
+      return;
+    pendingRef.current = true;
+    setPending(true);
+    try {
+      await apiRequest(`/posts/${encodeURIComponent(current.id)}`, {
+        method: "DELETE",
+      });
+      setDeleted(true);
+      notify("모인을 삭제했습니다.", "success");
+      onMoinDelete?.(current.id);
+    } catch (error) {
+      notify(readableError(error), "error");
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  };
+  if (deleted) return null;
   return (
     <>
       <article
@@ -248,17 +277,29 @@ export function MoinCard({
             </span>
           </Link>
           {editable && (
-            <button
-              ref={editTriggerRef}
-              type="button"
-              className="ui-button ui-button-ghost ui-button-icon moin-edit-button"
-              aria-label="모인 수정"
-              title="모인 수정"
-              onClick={() => changeEditing(true)}
-              disabled={pending}
-            >
-              <Pencil />
-            </button>
+            <div className="moin-owner-actions">
+              <button
+                ref={editTriggerRef}
+                type="button"
+                className="ui-button ui-button-ghost ui-button-icon moin-edit-button"
+                aria-label="모인 수정"
+                title="모인 수정"
+                onClick={() => changeEditing(true)}
+                disabled={pending}
+              >
+                <Pencil />
+              </button>
+              <button
+                type="button"
+                className="ui-button ui-button-ghost ui-button-icon moin-delete-button"
+                aria-label="모인 삭제"
+                title="모인 삭제"
+                onClick={() => void deleteMoin()}
+                disabled={pending}
+              >
+                <Trash2 />
+              </button>
+            </div>
           )}
         </header>
         {current.content && (

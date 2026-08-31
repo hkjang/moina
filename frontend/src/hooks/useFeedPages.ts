@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { normalizeMoin, normalizePage } from '../api/adapters';
 import { apiRequest, readableError } from '../api/client';
-import { mergeFeedPages, nextUnseenCursor, replaceFeedPage, updateMoinInFeed, type FeedCursor, type FeedPageMap } from '../state/feedCache';
+import { mergeFeedPages, nextUnseenCursor, removeMoinFromFeed, replaceFeedPage, updateMoinInFeed, type FeedCursor, type FeedPageMap } from '../state/feedCache';
 import type { Moin } from '../types';
 
 export type FeedMode = 'for_me' | 'following';
@@ -39,6 +39,7 @@ export function useFeedPages(mode: FeedMode) {
   const items = useMemo(() => mergeFeedPages(pages), [pages]);
   const nextCursor = nextUnseenCursor(pages, cursor);
   const updateMoin = useCallback((moin: Moin) => setPages((value) => updateMoinInFeed(value, moin)), []);
+  const removeMoin = useCallback((id: string) => setPages((value) => removeMoinFromFeed(value, id)), []);
   const loadMore = useCallback(() => { if (nextCursor) setCursor(nextCursor); }, [nextCursor]);
   const reload = useCallback(() => load(cursor), [cursor, load]);
   const reloadFirstPage = useCallback(() => {
@@ -47,5 +48,5 @@ export function useFeedPages(mode: FeedMode) {
     return Promise.resolve();
   }, [cursor, load]);
 
-  return { items, pages, cursor, loading, error, nextCursor, loadMore, reload, reloadFirstPage, updateMoin };
+  return { items, pages, cursor, loading, error, nextCursor, loadMore, reload, reloadFirstPage, updateMoin, removeMoin };
 }

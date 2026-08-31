@@ -19,15 +19,19 @@ vi.mock('../auth/AuthContext', () => ({
 
 const mockedRequest = vi.mocked(apiRequest);
 const moin = (): Moin => ({ id: 'm1', content: '테스트 모인', author: { id: 'u1', username: 'user', displayName: '사용자' }, createdAt: '2026-01-01T00:00:00Z', counts: { signals: { like: 0 }, bookmarks: 0, remoins: 0 }, viewer: { signals: [], bookmarked: false, remoined: false } });
-const renderCardWithRouter = (onMoinChange = vi.fn(), value = moin()) => {
+const renderCardWithRouter = (
+  onMoinChange = vi.fn(),
+  value = moin(),
+  onMoinDelete = vi.fn(),
+) => {
   const router = createMemoryRouter([
     {
       path: '*',
-      element: <ToastProvider><MoinCard moin={value} onMoinChange={onMoinChange}/></ToastProvider>,
+      element: <ToastProvider><MoinCard moin={value} onMoinChange={onMoinChange} onMoinDelete={onMoinDelete}/></ToastProvider>,
     },
   ], { initialEntries: ['/flow'] });
   render(<RouterProvider router={router}/>);
-  return { onMoinChange, router };
+  return { onMoinChange, onMoinDelete, router };
 };
 const renderCard = (onMoinChange = vi.fn()) =>
   renderCardWithRouter(onMoinChange).onMoinChange;
@@ -44,6 +48,58 @@ describe('MoinCard optimistic mutation', () => {
     expect(screen.getByRole('button', { name: '포켓' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '모인 주소 복사' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '모인 수정' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '모인 삭제' })).toBeInTheDocument();
+  });
+
+  it('타인이 작성한 모인에는 수정·삭제 동작을 노출하지 않는다', () => {
+    renderCardWithRouter(vi.fn(), {
+      ...moin(),
+      author: { id: 'u2', username: 'other', displayName: '다른 사용자' },
+    });
+    expect(screen.queryByRole('button', { name: '모인 수정' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '모인 삭제' })).not.toBeInTheDocument();
+  });
+
+  it('확인 후 본인 모인을 삭제하고 피드 cache callback에 반영한다', async () => {
+    mockedRequest.mockResolvedValueOnce(undefined);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { onMoinDelete } = renderCardWithRouter();
+
+    fireEvent.click(screen.getByRole('button', { name: '모인 삭제' }));
+
+    await waitFor(() => expect(mockedRequest).toHaveBeenCalledWith(
+      '/posts/m1',
+      expect.objectContaining({ method: 'DELETE' }),
+    ));
+    await waitFor(() => expect(onMoinDelete).toHaveBeenCalledWith('m1'));
+    expect(screen.queryByText('테스트 모인')).not.toBeInTheDocument();
+    expect(screen.getByText('모인을 삭제했습니다.')).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it('삭제 확인을 취소하면 요청하거나 피드에서 제거하지 않는다', () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { onMoinDelete } = renderCardWithRouter();
+
+    fireEvent.click(screen.getByRole('button', { name: '모인 삭제' }));
+
+    expect(mockedRequest).not.toHaveBeenCalled();
+    expect(onMoinDelete).not.toHaveBeenCalled();
+    expect(screen.getByText('테스트 모인')).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it('삭제 요청이 실패하면 모인을 유지하고 오류를 안내한다', async () => {
+    mockedRequest.mockRejectedValueOnce(new Error('삭제 실패'));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { onMoinDelete } = renderCardWithRouter();
+
+    fireEvent.click(screen.getByRole('button', { name: '모인 삭제' }));
+
+    expect(await screen.findByText('삭제 실패')).toBeInTheDocument();
+    expect(screen.getByText('테스트 모인')).toBeInTheDocument();
+    expect(onMoinDelete).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it('승인 대기 중인 모인에는 실패할 수정 동작을 노출하지 않는다', () => {

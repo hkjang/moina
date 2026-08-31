@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     allowedHosts: ["keycloak.internal"],
     privateAllowedHosts: [],
     allowInsecureHttp: false,
+    effectiveRedirectUrl: "https://moina.example/api/v1/auth/oidc/callback",
   },
   ai: {
     enabled: false,
@@ -99,6 +100,7 @@ describe("관리자 공급자 설정 저장 계약", () => {
       );
       const body = updateBody("/admin/oidc");
       expect(body).not.toHaveProperty("clientSecretConfigured");
+      expect(body).not.toHaveProperty("effectiveRedirectUrl");
       expect(body).toMatchObject({
         clientSecret: "",
         issuerUrl: "https://keycloak.internal/realms/moina",
@@ -136,6 +138,56 @@ describe("관리자 공급자 설정 저장 계약", () => {
     expect(updateBody("/admin/oidc")).not.toHaveProperty(
       "clientSecretConfigured",
     );
+    expect(updateBody("/admin/oidc")).not.toHaveProperty(
+      "effectiveRedirectUrl",
+    );
+  });
+
+  it("서버가 계산한 Callback URL을 표시하고 명시적 Redirect URL을 즉시 우선한다", async () => {
+    renderPage(<AdminOIDCPage />);
+
+    expect(
+      await screen.findByText(
+        "https://moina.example/api/v1/auth/oidc/callback",
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: /^Redirect URL/ }), {
+      target: {
+        value: "https://login.moina.example/api/v1/auth/oidc/callback",
+      },
+    });
+
+    expect(
+      screen.getByText("https://login.moina.example/api/v1/auth/oidc/callback"),
+    ).toBeInTheDocument();
+  });
+
+  it("Issuer authority를 명시적으로 사설망 허용 목록에 추가하고 제거한다", async () => {
+    renderPage(<AdminOIDCPage />);
+    const privateHost = await screen.findByRole("switch", {
+      name: /^Issuer 사설망 연결 허용/,
+    });
+    const privateHosts = screen.getByRole("textbox", {
+      name: /^사설망 OIDC Host/,
+    });
+
+    expect(privateHost).not.toBeChecked();
+    fireEvent.click(privateHost);
+    expect(privateHost).toBeChecked();
+    expect(privateHosts).toHaveValue("keycloak.internal");
+
+    fireEvent.click(screen.getByRole("button", { name: "OIDC 설정 저장" }));
+    await waitFor(() =>
+      expect(updateBody("/admin/oidc")).toMatchObject({
+        allowedHosts: ["keycloak.internal"],
+        privateAllowedHosts: ["keycloak.internal"],
+      }),
+    );
+
+    fireEvent.click(privateHost);
+    expect(privateHost).not.toBeChecked();
+    expect(privateHosts).toHaveValue("");
   });
 
   it("AI 조회 전용 필드도 PUT에 재전송하지 않는다", async () => {
