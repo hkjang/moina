@@ -21,7 +21,11 @@ const mocks = vi.hoisted(() => ({
     allowedHosts: ["keycloak.internal"],
     privateAllowedHosts: [],
     allowInsecureHttp: false,
+    redirectUrl: "",
     effectiveRedirectUrl: "https://moina.example/api/v1/auth/oidc/callback",
+    defaultRedirectUrl: "https://moina.example/api/v1/auth/oidc/callback",
+    redirectUrlSource: "publicBaseUrl" as const,
+    defaultRedirectUrlSource: "publicBaseUrl" as const,
   },
   ai: {
     enabled: false,
@@ -79,6 +83,7 @@ describe("관리자 공급자 설정 저장 계약", () => {
     mocks.apiRequest.mockResolvedValue({});
     mocks.reload.mockReset();
     mocks.oidc.clientSecretConfigured = true;
+    mocks.oidc.redirectUrl = "";
   });
 
   afterEach(() => cleanup());
@@ -101,6 +106,9 @@ describe("관리자 공급자 설정 저장 계약", () => {
       const body = updateBody("/admin/oidc");
       expect(body).not.toHaveProperty("clientSecretConfigured");
       expect(body).not.toHaveProperty("effectiveRedirectUrl");
+      expect(body).not.toHaveProperty("defaultRedirectUrl");
+      expect(body).not.toHaveProperty("redirectUrlSource");
+      expect(body).not.toHaveProperty("defaultRedirectUrlSource");
       expect(body).toMatchObject({
         clientSecret: "",
         issuerUrl: "https://keycloak.internal/realms/moina",
@@ -141,6 +149,15 @@ describe("관리자 공급자 설정 저장 계약", () => {
     expect(updateBody("/admin/oidc")).not.toHaveProperty(
       "effectiveRedirectUrl",
     );
+    expect(updateBody("/admin/oidc")).not.toHaveProperty(
+      "defaultRedirectUrl",
+    );
+    expect(updateBody("/admin/oidc")).not.toHaveProperty(
+      "redirectUrlSource",
+    );
+    expect(updateBody("/admin/oidc")).not.toHaveProperty(
+      "defaultRedirectUrlSource",
+    );
   });
 
   it("서버가 계산한 Callback URL을 표시하고 명시적 Redirect URL을 즉시 우선한다", async () => {
@@ -152,15 +169,48 @@ describe("관리자 공급자 설정 저장 계약", () => {
       ),
     ).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("textbox", { name: /^Redirect URL/ }), {
-      target: {
-        value: "https://login.moina.example/api/v1/auth/oidc/callback",
+    fireEvent.change(
+      screen.getByRole("textbox", { name: /^고급 Redirect URI 직접 지정/ }),
+      {
+        target: {
+          value: "https://login.moina.example/api/v1/auth/oidc/callback",
+        },
       },
-    });
+    );
 
     expect(
       screen.getByText("https://login.moina.example/api/v1/auth/oidc/callback"),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/직접 지정한 Redirect URI가 사이트 기본 주소보다 우선/),
+    ).toBeInTheDocument();
+  });
+
+  it("이전에 저장된 Redirect URI override를 사이트 기본 주소로 복원한다", async () => {
+    mocks.oidc.redirectUrl =
+      "https://old-moina.example/api/v1/auth/oidc/callback";
+    renderPage(<AdminOIDCPage />);
+
+    expect(
+      await screen.findByText(
+        "https://old-moina.example/api/v1/auth/oidc/callback",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /사이트 기본 주소 사용/ }),
+    );
+
+    expect(
+      screen.getByRole("textbox", { name: /^고급 Redirect URI 직접 지정/ }),
+    ).toHaveValue("");
+    expect(
+      screen.getByText("https://moina.example/api/v1/auth/oidc/callback"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "OIDC 설정 저장" }));
+    await waitFor(() =>
+      expect(updateBody("/admin/oidc")).toMatchObject({ redirectUrl: "" }),
+    );
   });
 
   it("Issuer authority를 명시적으로 사설망 허용 목록에 추가하고 제거한다", async () => {

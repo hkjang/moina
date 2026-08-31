@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.6`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.7`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.6`는 OIDC discovery 실패를 사설망 허용, DNS, TLS, timeout과 issuer 불일치로 구분해 안내하고 trailing-slash issuer 호환을 복구합니다. 일반 설정에 사이트 기본 주소를 추가해 reverse proxy 뒤에서도 callback URL을 안정적으로 생성하며, 사설망 issuer는 명시적 스위치로 정확한 host를 등록할 수 있습니다. Flow에서는 작성자가 자신의 Moin을 확인 후 삭제하고 모든 페이지 캐시에서 즉시 제거할 수 있습니다.
+`v0.1.7`은 과거에 직접 저장한 OIDC Redirect URI가 사이트 기본 주소를 가리는 상황을 관리자 화면에서 감지하고 한 번에 복원합니다. 실제 로그인 요청 URI를 그대로 복사할 수 있으며, 연결 테스트가 Keycloak authorization endpoint에서 `redirect_uri` 허용 여부까지 사전 검증해 잘못된 Client 등록을 로그인 전에 정확히 안내합니다.
 
 ## 주요 기능
 
@@ -85,7 +85,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.6
+moina:v0.1.7
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -103,20 +103,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.6.tar.gz
-dist/moina-v0.1.6.tar.gz.sha256
+dist/moina-v0.1.7.tar.gz
+dist/moina-v0.1.7.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.6.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.7.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.6.tar.gz
-gzip -dc moina-v0.1.6.tar.gz | docker image load
-docker image inspect moina:v0.1.6
+sha256sum moina-v0.1.7.tar.gz
+gzip -dc moina-v0.1.7.tar.gz | docker image load
+docker image inspect moina:v0.1.7
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -165,15 +165,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.6 -m "moina v0.1.6"
-git push origin v0.1.6
+git tag -a v0.1.7 -m "moina v0.1.7"
+git push origin v0.1.7
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.6
-file:  moina-v버전.tar.gz  예: moina-v0.1.6.tar.gz
+image: moina:v버전          예: moina:v0.1.7
+file:  moina-v버전.tar.gz  예: moina-v0.1.7.tar.gz
 ```
 
 ## 라이선스

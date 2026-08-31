@@ -1,4 +1,4 @@
-import { LockKeyhole } from "lucide-react";
+import { Copy, LockKeyhole, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiRequest, readableError } from "../../api/client";
 import { useToast } from "../../components/ToastProvider";
@@ -41,6 +41,9 @@ interface OIDCUpdateSettings {
 interface OIDCSettingsView extends OIDCUpdateSettings {
   clientSecretConfigured?: boolean;
   effectiveRedirectUrl?: string;
+  defaultRedirectUrl?: string;
+  redirectUrlSource?: "explicit" | "publicBaseUrl" | "request";
+  defaultRedirectUrlSource?: "publicBaseUrl" | "request";
 }
 
 export function AdminOIDCPage() {
@@ -60,6 +63,10 @@ export function AdminOIDCPage() {
   const [privateHostsText, setPrivateHostsText] = useState("");
   const [clientSecretConfigured, setClientSecretConfigured] = useState(false);
   const [effectiveRedirectUrl, setEffectiveRedirectUrl] = useState("");
+  const [defaultRedirectUrl, setDefaultRedirectUrl] = useState("");
+  const [defaultRedirectUrlSource, setDefaultRedirectUrlSource] = useState<
+    OIDCSettingsView["defaultRedirectUrlSource"]
+  >("request");
   const [working, setWorking] = useState<"save" | "test" | null>(null);
   const roles = roleRows(rolesQuery.data);
   const issuerAuthority = endpointAuthority(form.issuerUrl);
@@ -69,17 +76,33 @@ export function AdminOIDCPage() {
     parseAllowedHosts(privateHostsText).includes(issuerAuthority);
   const displayedRedirectUrl =
     form.redirectUrl?.trim() ||
+    defaultRedirectUrl ||
     effectiveRedirectUrl ||
     `${window.location.origin}/api/v1/auth/oidc/callback`;
+  const explicitRedirectUrl = form.redirectUrl?.trim() || "";
+  const hasStaleRedirectOverride =
+    explicitRedirectUrl.length > 0 &&
+    defaultRedirectUrl.length > 0 &&
+    explicitRedirectUrl !== defaultRedirectUrl;
+  const displayedRedirectSource = explicitRedirectUrl
+    ? "직접 지정한 주소"
+    : defaultRedirectUrlSource === "publicBaseUrl"
+      ? "사이트 기본 주소"
+      : "현재 접속 주소";
   useEffect(() => {
     if (query.data) {
       const {
         clientSecretConfigured: configured = false,
         effectiveRedirectUrl: effectiveRedirect = "",
+        defaultRedirectUrl: defaultRedirect = "",
+        redirectUrlSource: _redirectSource,
+        defaultRedirectUrlSource: defaultSource = "request",
         ...editable
       } = query.data;
       setClientSecretConfigured(configured);
       setEffectiveRedirectUrl(effectiveRedirect);
+      setDefaultRedirectUrl(defaultRedirect || effectiveRedirect);
+      setDefaultRedirectUrlSource(defaultSource);
       setForm({
         ...editable,
         clientSecret: "",
@@ -237,8 +260,8 @@ export function AdminOIDCPage() {
               />
             </Field>
             <Field
-              label="Redirect URL"
-              help="비워두면 현재 접속 주소를 기준으로 자동 구성합니다."
+              label="고급 Redirect URI 직접 지정"
+              help="대부분 비워두세요. 비우면 사이트 기본 주소로 Callback URI를 자동 구성합니다."
             >
               <input
                 type="url"
@@ -376,10 +399,49 @@ export function AdminOIDCPage() {
           <div className="callback-box">
             <LockKeyhole />
             <span>
-              <strong>Keycloak Valid redirect URI</strong>
+              <strong>실제 로그인 요청 Redirect URI</strong>
               <code>{displayedRedirectUrl}</code>
+              <small>{displayedRedirectSource}를 사용합니다.</small>
             </span>
+            <div className="callback-actions">
+              <Button
+                size="small"
+                onClick={() => {
+                  if (!navigator.clipboard?.writeText) {
+                    notify("Redirect URI를 복사하지 못했습니다.", "error");
+                    return;
+                  }
+                  void navigator.clipboard
+                    .writeText(displayedRedirectUrl)
+                    .then(() => notify("Redirect URI를 복사했습니다.", "success"))
+                    .catch(() =>
+                      notify("Redirect URI를 복사하지 못했습니다.", "error"),
+                    );
+                }}
+              >
+                <Copy /> 복사
+              </Button>
+              {explicitRedirectUrl && defaultRedirectUrl && (
+                <Button
+                  size="small"
+                  onClick={() => setForm({ ...form, redirectUrl: "" })}
+                >
+                  <RotateCcw /> 사이트 기본 주소 사용
+                </Button>
+              )}
+            </div>
           </div>
+          {hasStaleRedirectOverride && (
+            <div className="redirect-warning" role="status">
+              직접 지정한 Redirect URI가 사이트 기본 주소보다 우선하고 있습니다.
+              이전 주소라면 ‘사이트 기본 주소 사용’을 누른 뒤 저장하세요.
+            </div>
+          )}
+          <p className="callback-guide">
+            위 주소를 Keycloak Client의 <strong>Valid redirect URIs</strong>에
+            공백 없이 그대로 등록해야 합니다. 연결 테스트는 Keycloak의 실제
+            Redirect URI 허용 여부까지 확인합니다.
+          </p>
           <div className="form-actions">
             <Button
               onClick={() => void save(true)}

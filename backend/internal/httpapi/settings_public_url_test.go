@@ -51,6 +51,12 @@ func TestResolveOIDCRedirectPrecedence(t *testing.T) {
 	if got := resolveOIDCRedirect(model.OIDCConfig{}, "", request); got != "http://internal-container:8080/api/v1/auth/oidc/callback" {
 		t.Fatalf("request fallback redirect = %q", got)
 	}
+	if got, source := defaultOIDCRedirect("https://moina.example", request); got != "https://moina.example/api/v1/auth/oidc/callback" || source != "publicBaseUrl" {
+		t.Fatalf("public base fallback = %q (%s)", got, source)
+	}
+	if got, source := defaultOIDCRedirect("", request); got != "http://internal-container:8080/api/v1/auth/oidc/callback" || source != "request" {
+		t.Fatalf("request fallback details = %q (%s)", got, source)
+	}
 }
 
 func TestOIDCIssuerNormalizationPreservesTrailingSlash(t *testing.T) {

@@ -2,7 +2,7 @@ name: moina
 
 services:
   moina:
-    image: moina:v0.1.6
+    image: moina:v0.1.7
     pull_policy: never
     restart: unless-stopped
     init: true

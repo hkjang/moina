@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly archive="${1:-dist/moina-v0.1.6.tar.gz}"
-readonly expected_image="${2:-moina:v0.1.6}"
+readonly archive="${1:-dist/moina-v0.1.7.tar.gz}"
+readonly expected_image="${2:-moina:v0.1.7}"
 readonly checksum_file="${archive}.sha256"
 readonly expected_name="${expected_image%%:*}-${expected_image#*:}.tar.gz"
 

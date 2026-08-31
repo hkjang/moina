@@ -13,6 +13,7 @@
 @import "./styles/discovery.css";
 @import "./styles/ai.css";
 @import "./styles/settings.css";
+@import "./styles/oidc.css";
 @import "./styles/admin.css";
 @import "./styles/misc.css";
 @import "./styles/responsive.css";

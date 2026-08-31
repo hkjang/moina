@@ -1,0 +1,50 @@
+.callback-box small,
+.callback-guide {
+  color: var(--ink-muted);
+}
+
+.callback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.callback-actions svg {
+  width: 16px;
+  height: 16px;
+}
+
+.redirect-warning {
+  margin-top: 10px;
+  padding: 12px 14px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.callback-guide {
+  margin: 10px 2px 0;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 700px) {
+  .callback-box {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .callback-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .callback-actions .ui-button {
+    flex: 1;
+  }
+
+  .callback-guide {
+    line-height: 1.55;
+  }
+}

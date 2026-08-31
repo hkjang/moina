@@ -323,12 +323,12 @@ func (s *Server) adminGetOIDC(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "storage_error", "OIDC 설정을 불러올 수 없습니다")
 		return
 	}
-	effectiveRedirect, _ := s.effectiveOIDCRedirect(r, cfg)
-	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect))
+	effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource, _ := s.oidcRedirectDetails(r, cfg)
+	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource))
 }
 
-func oidcView(cfg model.OIDCConfig, effectiveRedirect string) map[string]any {
-	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "effectiveRedirectUrl": effectiveRedirect, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
+func oidcView(cfg model.OIDCConfig, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource string) map[string]any {
+	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "effectiveRedirectUrl": effectiveRedirect, "defaultRedirectUrl": defaultRedirect, "redirectUrlSource": redirectSource, "defaultRedirectUrlSource": defaultRedirectSource, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
 }
 
 func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
@@ -366,8 +366,8 @@ func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "oidc.config.update", "setting", settingOIDC, true, map[string]any{"issuerUrl": cfg.IssuerURL, "enabled": cfg.Enabled})
-	effectiveRedirect, _ := s.effectiveOIDCRedirect(r, cfg)
-	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect))
+	effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource, _ := s.oidcRedirectDetails(r, cfg)
+	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource))
 }
 
 func normalizeOIDC(cfg *model.OIDCConfig) {

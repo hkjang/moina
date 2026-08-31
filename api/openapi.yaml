@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MOINA API
-  version: 0.1.6
+  version: 0.1.7
   summary: AI 소셜 지식 네트워크 REST·SSE·MCP API
   description: |
     서버에 실제 등록된 canonical route 계약입니다. 브라우저 session 또는 개인 API/MCP key로 인증합니다.
@@ -1322,7 +1322,7 @@ components:
         enabled: {type: boolean}
         issuerUrl: {type: string, format: uri, description: discovery 문서 issuer와 trailing slash까지 정확히 일치하는 식별자}
         clientId: {type: string}
-        redirectUrl: {type: string, format: uri}
+        redirectUrl: {type: string, format: uri, description: 고급 직접 지정값. 비우면 publicBaseUrl 또는 신뢰된 현재 요청 origin에 고정 callback path를 붙여 계산합니다.}
         scopes: {type: array, maxItems: 20, items: {type: string}, default: [openid, profile, email]}
         autoProvision: {type: boolean, default: true}
         defaultRoles: {type: array, maxItems: 20, items: {type: string}, default: [member]}
@@ -1350,6 +1350,9 @@ components:
           properties:
             clientSecretConfigured: {type: boolean}
             effectiveRedirectUrl: {type: string, format: uri, readOnly: true, description: OIDC 전용 redirectUrl, 사이트 publicBaseUrl, 현재 요청 주소 순으로 계산한 실제 callback}
+            defaultRedirectUrl: {type: string, format: uri, readOnly: true, description: 직접 지정 redirectUrl을 제거했을 때 사용할 사이트 기본 callback}
+            redirectUrlSource: {type: string, enum: [explicit, publicBaseUrl, request], readOnly: true, description: effectiveRedirectUrl의 출처}
+            defaultRedirectUrlSource: {type: string, enum: [publicBaseUrl, request], readOnly: true, description: defaultRedirectUrl의 출처}
     AIConfigBase:
       type: object
       properties:

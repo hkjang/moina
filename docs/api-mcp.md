@@ -125,13 +125,13 @@ Content-Type: application/json
 
 OIDC와 AI 관리 설정의 `allowedHosts`에는 정확한 DNS 이름/IP 또는 `host:port`를 넣습니다. port 없는 값은 URL scheme의 기본 port(HTTPS 443, HTTP 80)에만 일치합니다. RFC1918/ULA로 해석되는 내부 DNS hostname은 같은 authority를 `allowedHosts`와 `privateAllowedHosts` 양쪽에 등록합니다. `privateAllowedHosts`에는 IP literal을 넣을 수 없고, loopback·link-local·cloud metadata·CGNAT·unspecified·multicast는 어떤 설정으로도 허용되지 않습니다.
 
-`service.general.publicBaseUrl`은 path/query/fragment 없는 외부 HTTP(S) origin입니다. OIDC의 명시적 `redirectUrl`이 없으면 이 값으로 callback을 만들며, 관리자 OIDC 조회 응답의 `effectiveRedirectUrl`에서 실제 등록할 주소를 확인할 수 있습니다. Discovery 연결 테스트는 `oidc_private_host_denied`, `oidc_egress_denied`, `oidc_dns_failed`, `oidc_tls_failed`, `oidc_timeout`, `oidc_issuer_mismatch`를 구분해 반환합니다.
+`service.general.publicBaseUrl`은 path/query/fragment 없는 외부 HTTP(S) origin입니다. OIDC의 명시적 `redirectUrl`이 없으면 이 값으로 callback을 만들며, 관리자 OIDC 조회 응답의 `effectiveRedirectUrl`에서 실제 등록할 주소를 확인할 수 있습니다. `defaultRedirectUrl`은 직접 지정 override를 제거했을 때의 주소이고 `redirectUrlSource`와 `defaultRedirectUrlSource`는 각각의 계산 출처입니다. 연결 테스트는 Discovery뿐 아니라 authorization endpoint에 PKCE `prompt=none` 사전 요청을 보내 실제 Redirect URI 허용 여부도 확인하며, Keycloak이 거부하면 `oidc_redirect_rejected`를 반환합니다. 그 밖에 `oidc_private_host_denied`, `oidc_egress_denied`, `oidc_dns_failed`, `oidc_tls_failed`, `oidc_timeout`, `oidc_issuer_mismatch`, `oidc_authorization_failed`를 구분합니다.
 
 `v0.1.0`의 기존 사설 OIDC·AI 설정은 업그레이드 후 자동으로 `privateAllowedHosts`를 얻지 않습니다. 로컬 bootstrap 최고 관리자로 로그인해 각 hostname을 명시 저장하고 관리 API 연결 테스트를 통과시켜야 합니다. Bootstrap 환경변수의 비밀번호 변경은 이미 생성된 로컬 계정을 재설정하지 않습니다.
 
 ## WebSocket 알림
 
-브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.6` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
+브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.7` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
 
 ```json
 {
@@ -176,7 +176,7 @@ X-CSRF-Token: ...
 
 MCP Streamable HTTP 요청은 JSON-RPC 2.0과 Bearer key를 사용합니다.
 
-`v0.1.6`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
+`v0.1.7`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
 
 ```bash
 curl --fail --silent http://127.0.0.1:8080/mcp \

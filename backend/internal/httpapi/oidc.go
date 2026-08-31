@@ -5,6 +5,9 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -251,10 +254,15 @@ func resolveOIDCRedirect(cfg model.OIDCConfig, publicBaseURL string, r *http.Req
 	if cfg.RedirectURL != "" {
 		return cfg.RedirectURL
 	}
+	redirect, _ := defaultOIDCRedirect(publicBaseURL, r)
+	return redirect
+}
+
+func defaultOIDCRedirect(publicBaseURL string, r *http.Request) (string, string) {
 	if publicBaseURL != "" {
-		return strings.TrimRight(publicBaseURL, "/") + "/api/v1/auth/oidc/callback"
+		return strings.TrimRight(publicBaseURL, "/") + "/api/v1/auth/oidc/callback", "publicBaseUrl"
 	}
-	return automaticOIDCRedirect(r)
+	return automaticOIDCRedirect(r), "request"
 }
 
 func (s *Server) effectiveOIDCRedirect(r *http.Request, cfg model.OIDCConfig) (string, error) {
@@ -266,6 +274,18 @@ func (s *Server) effectiveOIDCRedirect(r *http.Request, cfg model.OIDCConfig) (s
 		return "", err
 	}
 	return resolveOIDCRedirect(cfg, general.PublicBaseURL, r), nil
+}
+
+func (s *Server) oidcRedirectDetails(r *http.Request, cfg model.OIDCConfig) (effective, fallback, source, fallbackSource string, err error) {
+	general, err := s.general(r)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	fallback, fallbackSource = defaultOIDCRedirect(general.PublicBaseURL, r)
+	if cfg.RedirectURL != "" {
+		return cfg.RedirectURL, fallback, "explicit", fallbackSource, nil
+	}
+	return fallback, fallback, fallbackSource, fallbackSource, nil
 }
 
 func safeReturnTo(value string) bool {
@@ -364,6 +384,62 @@ func claimStringsAtPath(claims map[string]any, path string) []string {
 	}
 }
 
+var errOIDCRedirectRejected = errors.New("OIDC redirect URI rejected")
+
+// probeOIDCAuthorization asks the provider to validate the client and redirect
+// URI without following its response back to MOINA. Keycloak returns a 400 page
+// containing "Invalid parameter: redirect_uri" before it starts a login flow,
+// which discovery alone cannot detect.
+func probeOIDCAuthorization(ctx context.Context, client *http.Client, cfg model.OIDCConfig, endpoint oauth2.Endpoint, redirect string) error {
+	checker := *client
+	checker.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	oauthCfg := &oauth2.Config{
+		ClientID:    cfg.ClientID,
+		RedirectURL: redirect,
+		Endpoint:    endpoint,
+		Scopes:      cfg.Scopes,
+	}
+	authURL := oauthCfg.AuthCodeURL(
+		"moina-redirect-check",
+		oauth2.S256ChallengeOption(oauth2.GenerateVerifier()),
+		oauth2.SetAuthURLParam("nonce", "moina-redirect-check"),
+		oauth2.SetAuthURLParam("prompt", "none"),
+	)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, authURL, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Accept", "text/html,application/json")
+	response, err := checker.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+	if err != nil {
+		return err
+	}
+	if oidcRedirectRejected(response.StatusCode, body) {
+		return errOIDCRedirectRejected
+	}
+	if response.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("OIDC authorization endpoint returned status %d", response.StatusCode)
+	}
+	return nil
+}
+
+func oidcRedirectRejected(status int, body []byte) bool {
+	if status < http.StatusBadRequest {
+		return false
+	}
+	message := strings.ToLower(string(body))
+	mentionsRedirect := strings.Contains(message, "redirect_uri") || strings.Contains(message, "redirect uri") || strings.Contains(message, "redirect url")
+	mentionsRejection := strings.Contains(message, "invalid") || strings.Contains(message, "mismatch") || strings.Contains(message, "not registered") || strings.Contains(message, "not allowed")
+	return mentionsRedirect && (status == http.StatusBadRequest || mentionsRejection)
+}
+
 func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.oidcConfig(r)
 	if err != nil || validateConfiguredOIDC(cfg, true) != nil {
@@ -393,5 +469,15 @@ func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "oidc_unavailable", "서비스 기본 설정을 확인할 수 없습니다")
 		return
 	}
-	writeData(w, http.StatusOK, map[string]any{"connected": true, "authorizationEndpoint": endpoint.AuthURL, "tokenEndpoint": endpoint.TokenURL, "redirectUrl": redirect})
+	probeCtx, cancelProbe := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancelProbe()
+	if err := probeOIDCAuthorization(probeCtx, client, cfg, endpoint, redirect); err != nil {
+		if errors.Is(err, errOIDCRedirectRejected) {
+			writeError(w, http.StatusBadRequest, "oidc_redirect_rejected", "Keycloak이 Redirect URI를 거부했습니다. Client의 Valid redirect URIs에 다음 주소를 그대로 등록해 주세요: "+redirect)
+			return
+		}
+		writeError(w, http.StatusBadGateway, "oidc_authorization_failed", "OIDC 인증 endpoint가 Client ID 또는 Redirect URI를 확인하지 못했습니다")
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{"connected": true, "authorizationEndpoint": endpoint.AuthURL, "tokenEndpoint": endpoint.TokenURL, "redirectUrl": redirect, "redirectValidated": true})
 }

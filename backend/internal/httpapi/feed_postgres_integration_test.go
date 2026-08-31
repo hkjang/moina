@@ -65,7 +65,7 @@ func TestPostgreSQLFlowSQLQueryBudget(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	server := New(repository, secrets, "v0.1.6")
+	server := New(repository, secrets, "v0.1.7")
 	server.SetObservability(metrics)
 	handler := server.Handler()
 
