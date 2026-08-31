@@ -52,6 +52,6 @@
 | PUT | `/admin/settings/{key}` |
 | PUT | `/admin/roles` |
 
-일반 설정 key는 `service.general`, `api.access`, `media.config`입니다. OIDC와 AI 비밀 값은 조회하지 않고 `clientSecretConfigured`, `apiKeyConfigured`만 사용합니다. OIDC는 `redirectUrl`, `roleClaim`, `roleMappings`, `allowInsecureHttp`, AI는 `allowInsecureHttp`, 미디어는 `maxUploadBytes`, `maxPerPost`를 관리 화면에서 편집합니다.
+일반 설정 key는 `service.general`, `api.access`, `media.config`입니다. OIDC와 AI 비밀 값은 조회하지 않고 GET 응답의 `clientSecretConfigured`, `apiKeyConfigured`로 설정 여부만 확인합니다. 두 필드는 조회 전용이므로 PUT 입력에 포함하지 않습니다. OIDC는 `redirectUrl`, `roleClaim`, `roleMappings`, `allowInsecureHttp`, AI는 `allowInsecureHttp`, 미디어는 `maxUploadBytes`, `maxPerPost`를 관리 화면에서 편집합니다.
 
 Streamable HTTP MCP의 서비스 endpoint는 `/mcp`이며 개인 키의 `mcp:use` 권한을 사용합니다.

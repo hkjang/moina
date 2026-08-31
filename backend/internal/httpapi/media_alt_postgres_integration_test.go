@@ -60,7 +60,7 @@ func TestPostgreSQLPostMediaAltTextIsScopedToPost(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(repository, secrets, "v0.1.4").Handler()
+	handler := New(repository, secrets, "v0.1.5").Handler()
 
 	request := func(method, path string, body any, wantStatus int) model.Moin {
 		t.Helper()

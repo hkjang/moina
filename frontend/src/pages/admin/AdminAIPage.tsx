@@ -19,11 +19,10 @@ import {
 } from "../../utils/allowedHosts";
 import { AdminTitle } from "./components";
 
-interface AISettings {
+interface AIUpdateSettings {
   enabled?: boolean;
   baseUrl?: string;
   apiKey?: string;
-  apiKeyConfigured?: boolean;
   clearApiKey?: boolean;
   model?: string;
   apiStyle?: "responses" | "chat_completions";
@@ -34,10 +33,15 @@ interface AISettings {
   allowedHosts?: string[];
   privateAllowedHosts?: string[];
 }
+
+interface AISettingsView extends AIUpdateSettings {
+  apiKeyConfigured?: boolean;
+}
+
 export function AdminAIPage() {
   const { notify } = useToast();
-  const query = useApiQuery<AISettings>("/admin/ai");
-  const [form, setForm] = useState<AISettings>({
+  const query = useApiQuery<AISettingsView>("/admin/ai");
+  const [form, setForm] = useState<AIUpdateSettings>({
     enabled: false,
     apiStyle: "responses",
     defaultMaxTokens: 4096,
@@ -46,10 +50,13 @@ export function AdminAIPage() {
   });
   const [hostsText, setHostsText] = useState("");
   const [privateHostsText, setPrivateHostsText] = useState("");
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [working, setWorking] = useState<"save" | "test" | null>(null);
   useEffect(() => {
     if (query.data) {
-      setForm({ ...query.data, apiKey: "" });
+      const { apiKeyConfigured: configured = false, ...editable } = query.data;
+      setApiKeyConfigured(configured);
+      setForm({ ...editable, apiKey: "" });
       setHostsText(formatAllowedHosts(query.data.allowedHosts));
       setPrivateHostsText(formatAllowedHosts(query.data.privateAllowedHosts));
     }
@@ -66,8 +73,19 @@ export function AdminAIPage() {
     try {
       await apiRequest("/admin/ai", {
         method: "PUT",
+        // GET view의 apiKeyConfigured는 read-only이므로 저장 입력을
+        // 명시적으로 구성한다. 서버는 알 수 없는 필드를 엄격히 거부한다.
         body: {
-          ...form,
+          enabled: form.enabled,
+          baseUrl: form.baseUrl,
+          apiKey: form.apiKey,
+          clearApiKey: form.clearApiKey,
+          model: form.model,
+          apiStyle: form.apiStyle,
+          defaultMaxTokens: form.defaultMaxTokens,
+          maxTokens: form.maxTokens,
+          timeoutSeconds: form.timeoutSeconds,
+          allowInsecureHttp: form.allowInsecureHttp,
           allowedHosts: hostResult.hosts,
           privateAllowedHosts: parseAllowedHosts(privateHostsText),
         },
@@ -137,7 +155,7 @@ export function AdminAIPage() {
                 <Field
                   label="API Key"
                   help={
-                    form.apiKeyConfigured
+                    apiKeyConfigured
                       ? "비워두면 저장된 키를 유지합니다."
                       : "공급자가 요구하는 경우 입력하세요."
                   }
@@ -161,7 +179,7 @@ export function AdminAIPage() {
                     onChange={(event) =>
                       setForm({
                         ...form,
-                        apiStyle: event.target.value as AISettings["apiStyle"],
+                        apiStyle: event.target.value as AIUpdateSettings["apiStyle"],
                       })
                     }
                   >
@@ -246,7 +264,7 @@ export function AdminAIPage() {
                   />
                 </Field>
               </div>
-              {form.apiKeyConfigured && (
+              {apiKeyConfigured && (
                 <SwitchField
                   label="저장된 API Key 삭제"
                   description="저장하면 기존 API Key 암호문을 제거합니다."

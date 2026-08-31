@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.4`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.5`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.4`는 TLS 종료 Reverse Proxy에서 ES module과 로그인 요청이 403으로 막히던 회귀를 해결하고, 정적 asset 재검증·캐시 계약을 강화한 가용성 릴리스입니다. 멘션 알림 원문 이동, 실제 7일 Topic Pulse 점수, 대상별 검색, 공개 프로필 Signal 통계, 실행 가능한 승인 Action 검증과 Dialog 포커스·Moin Action 접근성 개선도 함께 제공합니다.
+`v0.1.5`는 관리자 OIDC 설정을 저장할 때 조회 전용 `clientSecretConfigured`가 PUT 입력에 섞여 `invalid_json`으로 거부되던 문제를 해결한 패치 릴리스입니다. 조회 View와 저장 Input을 분리하고 저장 필드를 명시적으로 구성해 기존 Client Secret 유지·명시적 삭제를 모두 보장합니다. 같은 원인의 AI `apiKeyConfigured` 저장 오류도 함께 수정했습니다.
 
 ## 주요 기능
 
@@ -85,7 +85,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.4
+moina:v0.1.5
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -103,20 +103,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.4.tar.gz
-dist/moina-v0.1.4.tar.gz.sha256
+dist/moina-v0.1.5.tar.gz
+dist/moina-v0.1.5.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.4.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.5.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.4.tar.gz
-gzip -dc moina-v0.1.4.tar.gz | docker image load
-docker image inspect moina:v0.1.4
+sha256sum moina-v0.1.5.tar.gz
+gzip -dc moina-v0.1.5.tar.gz | docker image load
+docker image inspect moina:v0.1.5
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -165,15 +165,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.4 -m "moina v0.1.4"
-git push origin v0.1.4
+git tag -a v0.1.5 -m "moina v0.1.5"
+git push origin v0.1.5
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.4
-file:  moina-v버전.tar.gz  예: moina-v0.1.4.tar.gz
+image: moina:v버전          예: moina:v0.1.5
+file:  moina-v버전.tar.gz  예: moina-v0.1.5.tar.gz
 ```
 
 ## 라이선스

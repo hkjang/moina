@@ -129,7 +129,7 @@ OIDC와 AI 관리 설정의 `allowedHosts`에는 정확한 DNS 이름/IP 또는 
 
 ## WebSocket 알림
 
-브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.4` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
+브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.5` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
 
 ```json
 {
@@ -174,7 +174,7 @@ X-CSRF-Token: ...
 
 MCP Streamable HTTP 요청은 JSON-RPC 2.0과 Bearer key를 사용합니다.
 
-`v0.1.4`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
+`v0.1.5`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
 
 ```bash
 curl --fail --silent http://127.0.0.1:8080/mcp \

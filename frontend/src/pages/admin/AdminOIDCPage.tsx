@@ -20,12 +20,11 @@ import {
 import { AdminTitle } from "./components";
 import { roleRows } from "./helpers";
 
-interface OIDCSettings {
+interface OIDCUpdateSettings {
   enabled?: boolean;
   issuerUrl?: string;
   clientId?: string;
   clientSecret?: string;
-  clientSecretConfigured?: boolean;
   clearClientSecret?: boolean;
   redirectUrl?: string;
   scopes?: string[];
@@ -37,11 +36,16 @@ interface OIDCSettings {
   allowedHosts?: string[];
   privateAllowedHosts?: string[];
 }
+
+interface OIDCSettingsView extends OIDCUpdateSettings {
+  clientSecretConfigured?: boolean;
+}
+
 export function AdminOIDCPage() {
   const { notify } = useToast();
-  const query = useApiQuery<OIDCSettings>("/admin/oidc");
+  const query = useApiQuery<OIDCSettingsView>("/admin/oidc");
   const rolesQuery = useApiQuery<unknown>("/admin/roles");
-  const [form, setForm] = useState<OIDCSettings>({
+  const [form, setForm] = useState<OIDCUpdateSettings>({
     enabled: false,
     scopes: ["openid", "profile", "email"],
     autoProvision: true,
@@ -52,12 +56,16 @@ export function AdminOIDCPage() {
   const [mappingsText, setMappingsText] = useState("{}");
   const [hostsText, setHostsText] = useState("");
   const [privateHostsText, setPrivateHostsText] = useState("");
+  const [clientSecretConfigured, setClientSecretConfigured] = useState(false);
   const [working, setWorking] = useState<"save" | "test" | null>(null);
   const roles = roleRows(rolesQuery.data);
   useEffect(() => {
     if (query.data) {
+      const { clientSecretConfigured: configured = false, ...editable } =
+        query.data;
+      setClientSecretConfigured(configured);
       setForm({
-        ...query.data,
+        ...editable,
         clientSecret: "",
         scopes: query.data.scopes?.length
           ? query.data.scopes
@@ -104,9 +112,21 @@ export function AdminOIDCPage() {
     try {
       await apiRequest("/admin/oidc", {
         method: "PUT",
+        // GET view의 clientSecretConfigured는 read-only이므로 저장 입력을
+        // 명시적으로 구성한다. 서버는 알 수 없는 필드를 엄격히 거부한다.
         body: {
-          ...form,
+          enabled: form.enabled,
+          issuerUrl: form.issuerUrl,
+          clientId: form.clientId,
+          clientSecret: form.clientSecret,
+          clearClientSecret: form.clearClientSecret,
+          redirectUrl: form.redirectUrl,
+          scopes: form.scopes,
+          autoProvision: form.autoProvision,
+          defaultRoles: form.defaultRoles,
+          roleClaim: form.roleClaim,
           roleMappings,
+          allowInsecureHttp: form.allowInsecureHttp,
           allowedHosts: hostResult.hosts,
           privateAllowedHosts: parseAllowedHosts(privateHostsText),
         },
@@ -182,7 +202,7 @@ export function AdminOIDCPage() {
             <Field
               label="Client Secret"
               help={
-                form.clientSecretConfigured
+                clientSecretConfigured
                   ? "비워두면 저장된 Secret을 유지합니다."
                   : "공개 클라이언트라면 비울 수 있습니다."
               }
@@ -282,7 +302,7 @@ export function AdminOIDCPage() {
               placeholder="keycloak.internal"
             />
           </Field>
-          {form.clientSecretConfigured && (
+          {clientSecretConfigured && (
             <SwitchField
               label="저장된 Client Secret 삭제"
               description="저장하면 기존 Secret 암호문을 제거합니다."
