@@ -7,10 +7,12 @@ React 19, TypeScript, Vite, Tailwind CSS와 Radix primitives로 만든 독립 �
 ```bash
 npm ci
 npm test
-VITE_MOINA_VERSION=v0.1.10 npm run build
+VITE_MOINA_VERSION=v0.1.11 npm run build
 ```
 
 개발 서버는 `/api`와 `/mcp`를 `http://127.0.0.1:8080`으로 프록시합니다. 운영에서는 Go 서버가 `dist`를 SPA fallback과 함께 제공합니다.
+
+Moim 상세 작성기는 `visibility: "moim"`과 `moimId`를 고정 전송합니다. 모임 원문을 여는 Echo·인용 작성기도 응답의 `moimId`를 보존하며, 서버가 동일 범위를 다시 강제합니다.
 
 ## 화면 URL
 

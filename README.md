@@ -4,13 +4,14 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.10`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.11`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.10`은 개인 프로필 아이콘의 선택·끌어 놓기·캡처 이미지 Ctrl+V와 안전한 교체·정리를 지원합니다. Moin 작성·수정에서는 `@사용자아이디` 자동완성, 키보드 선택, 프로필 링크와 공개 범위·차단 관계를 반영한 멘션 알림을 제공합니다. 관리자는 암호화된 SMTP 설정과 테스트 메일을 관리하고, 사용자는 알림 종류·요약 정책과 연결된 이메일 채널을 선택할 수 있습니다.
+`v0.1.11`은 Moim 상세 화면에서 가입 회원이 전용 Moin으로 새 대화를 시작하고 Echo로 이어갈 수 있게 합니다. 모임 Moin의 Echo·인용·Remoin은 서버가 원래 `moimId`와 멤버 공개 범위를 강제로 상속해 오래된 클라이언트나 조작된 요청으로 외부에 노출되지 않습니다. 작성기는 `@사용자아이디`, 캡처 이미지 Ctrl+V와 기존 SNS 반응을 그대로 지원합니다.
 
 ## 주요 기능
 
 - 캡처 이미지 붙여넣기·드래그 앤 드롭·첨부 교체, `@사용자아이디` 자동완성·링크와 작성자 삭제를 지원하는 Moin 작성·수정, Echo, Remoin, 반응, Pocket과 Link(팔로우)
+- 가입 회원의 전용 Moin·Echo·인용·Remoin을 같은 멤버 공개 범위로 유지하는 Moim 커뮤니티 대화
 - Following/For Me Flow, Topic과 Pulse, 통합 검색, 실시간 알림
 - 최근 7일 공개 Moin·Signal과 24시간 가중치를 반영한 Topic Pulse
 - 개인 프로필·피드·글자 크기 설정과 URL 기반 메뉴 복원
@@ -85,7 +86,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.10
+moina:v0.1.11
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -103,20 +104,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.10.tar.gz
-dist/moina-v0.1.10.tar.gz.sha256
+dist/moina-v0.1.11.tar.gz
+dist/moina-v0.1.11.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.10.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.11.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.10.tar.gz
-gzip -dc moina-v0.1.10.tar.gz | docker image load
-docker image inspect moina:v0.1.10
+sha256sum moina-v0.1.11.tar.gz
+gzip -dc moina-v0.1.11.tar.gz | docker image load
+docker image inspect moina:v0.1.11
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -165,15 +166,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.10 -m "moina v0.1.10"
-git push origin v0.1.10
+git tag -a v0.1.11 -m "moina v0.1.11"
+git push origin v0.1.11
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.10
-file:  moina-v버전.tar.gz  예: moina-v0.1.10.tar.gz
+image: moina:v버전          예: moina:v0.1.11
+file:  moina-v버전.tar.gz  예: moina-v0.1.11.tar.gz
 ```
 
 ## 라이선스

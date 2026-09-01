@@ -28,10 +28,18 @@ const mockedRequest = vi.mocked(apiRequest);
 
 function renderComposer({
   editMoin,
+  replyToId,
+  moimId,
+  moimName,
+  quoteMoin,
   onCreated = vi.fn(),
   onUpdated = vi.fn(),
 }: {
   editMoin?: Moin;
+  replyToId?: string;
+  moimId?: string;
+  moimName?: string;
+  quoteMoin?: Moin;
   onCreated?: () => void;
   onUpdated?: (next: Moin) => void;
 } = {}) {
@@ -39,6 +47,10 @@ function renderComposer({
     <ToastProvider>
       <MoinComposer
         editMoin={editMoin}
+        replyToId={replyToId}
+        moimId={moimId}
+        moimName={moimName}
+        quoteMoin={quoteMoin}
         onCreated={onCreated}
         onUpdated={onUpdated}
       />
@@ -269,6 +281,130 @@ describe("MoinComposer media upload", () => {
         }),
       }),
     );
+  });
+
+  it("모임 작성기는 공개 범위를 고정하고 moimId를 생성 요청에 포함한다", async () => {
+    const onCreated = vi.fn();
+    renderComposer({
+      moimId: "moim-engineering",
+      moimName: "엔지니어링",
+      onCreated,
+    });
+
+    expect(
+      screen.getByLabelText("공개 범위: 엔지니어링 모임 멤버"),
+    ).toHaveTextContent("모임 공개");
+    expect(screen.queryByRole("combobox", { name: "공개 범위" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("모인 내용"), {
+      target: { value: "모임의 첫 대화를 시작합니다." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "모인하기" }));
+
+    await waitFor(() =>
+      expect(mockedRequest).toHaveBeenCalledWith(
+        "/posts",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.objectContaining({
+            content: "모임의 첫 대화를 시작합니다.",
+            visibility: "moim",
+            moimId: "moim-engineering",
+          }),
+        }),
+      ),
+    );
+    expect(onCreated).toHaveBeenCalledTimes(1);
+  });
+
+  it("모임 Echo도 부모 moimId와 고정 공개 범위를 전송한다", async () => {
+    renderComposer({ replyToId: "moin-parent", moimId: "moim-private" });
+    fireEvent.change(screen.getByLabelText("에코 내용"), {
+      target: { value: "모임 안에서만 보일 답글입니다." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "에코" }));
+
+    await waitFor(() =>
+      expect(mockedRequest).toHaveBeenCalledWith(
+        "/posts",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.objectContaining({
+            visibility: "moim",
+            moimId: "moim-private",
+            replyToId: "moin-parent",
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("모임 Moin 인용도 원문의 모임 공개 범위를 사용한다", async () => {
+    renderComposer({
+      quoteMoin: {
+        id: "moin-source",
+        content: "모임 원문",
+        visibility: "moim",
+        moimId: "moim-source",
+        createdAt: "2026-09-01T00:00:00Z",
+        author: { id: "u2", username: "source", displayName: "원문 작성자" },
+      },
+    });
+    expect(screen.getByText("모임 공개")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("모인 내용"), {
+      target: { value: "모임 안에서만 인용합니다." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "모인하기" }));
+
+    await waitFor(() =>
+      expect(mockedRequest).toHaveBeenCalledWith(
+        "/posts",
+        expect.objectContaining({
+          body: expect.objectContaining({
+            visibility: "moim",
+            moimId: "moim-source",
+            quoteMoinId: "moin-source",
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("모임 인용을 해제하면 기본 공개 범위로 안전하게 돌아간다", async () => {
+    const source: Moin = {
+      id: "moin-source-clear",
+      content: "해제할 모임 원문",
+      visibility: "moim",
+      moimId: "moim-clear",
+      createdAt: "2026-09-01T00:00:00Z",
+      author: { id: "u2", username: "source", displayName: "원문 작성자" },
+    };
+    const rendered = render(
+      <ToastProvider>
+        <MoinComposer quoteMoin={source} onClearQuote={() => undefined} />
+      </ToastProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("모인 내용"), {
+      target: { value: "인용을 해제하고 남길 일반 Moin" },
+    });
+
+    rendered.rerender(
+      <ToastProvider>
+        <MoinComposer onClearQuote={() => undefined} />
+      </ToastProvider>,
+    );
+
+    expect(screen.queryByText("모임 공개")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "공개 범위" })).toHaveValue("public");
+    fireEvent.click(screen.getByRole("button", { name: "모인하기" }));
+    await waitFor(() =>
+      expect(mockedRequest).toHaveBeenCalledWith("/posts", expect.anything()),
+    );
+    const postCall = [...mockedRequest.mock.calls]
+      .reverse()
+      .find(([path]) => path === "/posts");
+    expect(postCall?.[1]?.body).toMatchObject({ visibility: "public" });
+    expect(postCall?.[1]?.body).not.toHaveProperty("moimId");
+    expect(postCall?.[1]?.body).not.toHaveProperty("quoteMoinId");
   });
 
   it("게시 요청 중 재제출과 편집을 잠가 중복 Moin을 만들지 않는다", async () => {

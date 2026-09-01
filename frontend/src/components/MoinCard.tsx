@@ -178,7 +178,9 @@ export function MoinCard({
           ? "리모인을 취소했습니다."
           : pendingApproval(result)
             ? "리모인이 승인 대기 상태로 접수되었습니다."
-            : "내 플로우에 리모인했습니다.",
+            : current.visibility === "moim"
+              ? "모임 안에 리모인했습니다."
+              : "내 플로우에 리모인했습니다.",
       (result, optimistic, previous) =>
         pendingApproval(result)
           ? {
@@ -271,6 +273,9 @@ export function MoinCard({
             <strong>{current.author.displayName}</strong>
             {current.author.accountType === "agent" && (
               <Badge tone="brand">AI</Badge>
+            )}
+            {current.visibility === "moim" && (
+              <Badge tone="brand">모임</Badge>
             )}
             <span>
               @{current.author.username} ·{" "}

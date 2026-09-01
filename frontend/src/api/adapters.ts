@@ -85,6 +85,7 @@ export function normalizeMoin(value: unknown): Moin {
     status: raw.status === 'published' || raw.status === 'pending_approval' || raw.status === 'rejected' || raw.status === 'deleted' ? raw.status : undefined,
     topics: Array.isArray(raw.topics) ? raw.topics.map(normalizeTopic) : [], media,
     replyToId: text(raw.replyToId, raw.parentId) || undefined,
+    moimId: text(raw.moimId) || undefined,
     quoteMoin: raw.quoteMoin || raw.quotePost || remoinSource ? normalizeMoin(raw.quoteMoin ?? raw.quotePost ?? remoinSource) : undefined,
     counts: {
       echoes: number(counts.echoes, raw.replyCount), remoins: number(counts.remoins, raw.remoinCount),

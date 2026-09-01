@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MOINA API
-  version: 0.1.10
+  version: 0.1.11
   summary: AI 소셜 지식 네트워크 REST·SSE·MCP API
   description: |
     서버에 실제 등록된 canonical route 계약입니다. 브라우저 session 또는 개인 API/MCP key로 인증합니다.
@@ -133,14 +133,19 @@ paths:
     get:
       tags: [Posts]
       summary: Moin 목록
-      parameters: [{$ref: '#/components/parameters/Offset'}, {$ref: '#/components/parameters/Limit'}]
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {name: moim, in: query, description: Moim slug로 대화 목록을 제한합니다., schema: {type: string}}
+        - {name: moimId, in: query, description: Moim ID로 대화 목록을 제한합니다., schema: {type: string}}
       responses: {'200': {$ref: '#/components/responses/PostPage'}}
     post:
       tags: [Posts]
       summary: Moin 또는 Echo 작성
       parameters: [{$ref: '#/components/parameters/CSRF'}]
       requestBody: {$ref: '#/components/requestBodies/CreatePost'}
-      responses: {'201': {$ref: '#/components/responses/Post'}, '400': {$ref: '#/components/responses/Error'}}
+      description: 모임 Moin의 Echo·인용·Remoin은 부모의 moimId와 모임 공개 범위를 서버가 강제로 상속합니다.
+      responses: {'201': {$ref: '#/components/responses/Post'}, '400': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
   /api/v1/posts/{postID}:
     parameters: [{$ref: '#/components/parameters/PostID'}]
     get:
@@ -1231,7 +1236,7 @@ components:
         visibility: {type: string, enum: [public, followers, moim]}
         replyToId: {type: string}
         quoteMoinId: {type: string}
-        moimId: {type: string}
+        moimId: {type: string, description: 모임 전용 Moin에 필요한 가입 Moim ID. 모임 Moin의 파생 게시물은 부모 값으로 강제됩니다.}
         media: {type: array, items: {$ref: '#/components/schemas/Media'}}
         topics: {type: array, items: {type: object, additionalProperties: true}}
         counts: {type: object, additionalProperties: {type: integer}}
@@ -1253,7 +1258,7 @@ components:
           description: mediaIds에 포함된 ID별 최종 접근성 대체 텍스트
         replyToId: {type: string}
         quoteMoinId: {type: string}
-        moimId: {type: string}
+        moimId: {type: string, description: 가입한 모임에 새 Moin을 쓸 때 visibility=moim과 함께 지정합니다. 파생 게시물은 부모 값으로 강제됩니다.}
     CreateMoim:
       type: object
       additionalProperties: false

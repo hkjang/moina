@@ -1,10 +1,10 @@
 {
   "name": "moina-browser-e2e",
   "private": true,
-  "version": "0.1.10",
+  "version": "0.1.11",
   "type": "module",
   "scripts": {
-    "test": "npm run test:smoke && npm run test:accessibility && npm run test:visual",
+    "test": "npm run test:visual && npm run test:accessibility && npm run test:smoke",
     "test:smoke": "node browser-smoke.mjs",
     "test:accessibility": "node accessibility-regression.mjs",
     "test:visual": "node visual-regression.mjs",

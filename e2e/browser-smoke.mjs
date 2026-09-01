@@ -12,7 +12,7 @@ const failurePath = join(resultDirectory, 'browser-smoke-failure.png');
 const baseURL = new URL(process.env.MOINA_E2E_BASE_URL || 'http://127.0.0.1:8080');
 const username = process.env.MOINA_E2E_USERNAME || 'e2e-admin';
 const password = process.env.MOINA_E2E_PASSWORD;
-const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.10';
+const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.11';
 const headless = process.env.MOINA_E2E_HEADLESS !== '0';
 const routes = routeCatalogFromEnvironment();
 const clipboardPNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -302,8 +302,74 @@ try {
   assert.equal(deleteAvatarResponse.status(), 204, '교체된 프로필 미디어는 즉시 정리되어야 합니다.');
   assert.equal(summary(), '', `프로필 클립보드 이미지 확인 중 오류\n${summary()}`);
 
+  phase = 'moim-conversation';
+  await page.goto(new URL('/moims', baseURL).toString(), { waitUntil: 'domcontentloaded' });
+  await settle(page);
+  await page.getByRole('button', { name: '모임 만들기', exact: true }).click();
+  const moimDialog = page.getByRole('dialog', { name: '새 Moim 만들기' });
+  await moimDialog.waitFor({ state: 'visible' });
+  const moimName = `스모크 대화 모임 ${Date.now()}`;
+  const moimSlug = `smoke-conversation-${Date.now()}`;
+  await moimDialog.getByLabel('모임 이름').fill(moimName);
+  await moimDialog.getByLabel('고유 주소').fill(moimSlug);
+  await moimDialog.getByLabel('모임 소개').fill('모임 전용 Moin과 Echo 공개 범위를 검증합니다.');
+  const createMoimResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'POST' && target.pathname === '/api/v1/moims';
+  });
+  await moimDialog.getByRole('button', { name: '모임 만들기', exact: true }).click();
+  const createMoimResponse = await createMoimResponsePromise;
+  assert.equal(createMoimResponse.status(), 201, '모임 생성은 201이어야 합니다.');
+  const createdMoim = await createMoimResponse.json();
+  const moimID = createdMoim?.data?.id;
+  assert.ok(typeof moimID === 'string' && moimID, '생성한 모임 ID가 필요합니다.');
+  const moimLink = page.getByRole('link', { name: new RegExp(moimName) });
+  await moimLink.waitFor({ state: 'visible' });
+  await moimLink.click();
+  await page.waitForURL((url) => url.pathname === `/moims/${moimSlug}`);
+  await page.getByRole('heading', { name: moimName, exact: true }).waitFor({ state: 'visible' });
+  await page.getByRole('heading', { name: '새 대화 시작하기', exact: true }).waitFor({ state: 'visible' });
+  const moimComposer = page.getByRole('form', { name: '새 모인 작성' });
+  await moimComposer.getByLabel(`공개 범위: ${moimName} 모임 멤버`).waitFor({ state: 'visible' });
+  assert.equal(await moimComposer.getByRole('combobox', { name: '공개 범위' }).count(), 0, '모임 작성기는 공개 범위를 바꿀 수 없어야 합니다.');
+  const rootConversation = '모임 안에서 시작하는 첫 대화입니다.';
+  await moimComposer.getByRole('textbox', { name: '모인 내용', exact: true }).fill(rootConversation);
+  const createConversationResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'POST' && target.pathname === '/api/v1/posts';
+  });
+  await moimComposer.getByRole('button', { name: '모인하기', exact: true }).click();
+  const createConversationResponse = await createConversationResponsePromise;
+  assert.equal(createConversationResponse.status(), 201, '모임 Moin 생성은 201이어야 합니다.');
+  assert.deepEqual(createConversationResponse.request().postDataJSON(), {
+    content: rootConversation,
+    visibility: 'moim',
+    mediaIds: [],
+    mediaAltTexts: {},
+    moimId: moimID,
+  }, '모임 작성기는 고정 공개 범위와 moimId를 전송해야 합니다.');
+  const conversationCard = page.locator('.moin-card').filter({ hasText: rootConversation });
+  await conversationCard.waitFor({ state: 'visible' });
+  await conversationCard.getByRole('link', { name: /^에코 0개$/ }).click();
+  await page.waitForURL((url) => url.pathname.startsWith('/moin/'));
+  const echoComposer = page.getByRole('form', { name: '새 모인 작성' });
+  await echoComposer.getByLabel('공개 범위: 모임 멤버').waitFor({ state: 'visible' });
+  const echoContent = '원문과 같은 모임에만 남는 Echo입니다.';
+  await echoComposer.getByRole('textbox', { name: '에코 내용', exact: true }).fill(echoContent);
+  const createEchoResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'POST' && target.pathname === '/api/v1/posts';
+  });
+  await echoComposer.getByRole('button', { name: '에코', exact: true }).click();
+  const createEchoResponse = await createEchoResponsePromise;
+  assert.equal(createEchoResponse.status(), 201, '모임 Echo 생성은 201이어야 합니다.');
+  assert.equal(createEchoResponse.request().postDataJSON()?.visibility, 'moim', '모임 Echo는 moim 공개 범위를 전송해야 합니다.');
+  assert.equal(createEchoResponse.request().postDataJSON()?.moimId, moimID, '모임 Echo는 부모 moimId를 전송해야 합니다.');
+  await page.getByText(echoContent, { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(summary(), '', `모임 대화 확인 중 오류\n${summary()}`);
+
   await writeFile(resultPath, `${JSON.stringify({ ok: true, version: expectedVersion, routes: completed, failures, ignored }, null, 2)}\n`);
-  console.log(`브라우저 smoke 통과: ${completed.length}개 route, 새로고침·버전·@멘션·클립보드 Moin·프로필 이미지·외부요청·콘솔 오류 정상`);
+  console.log(`브라우저 smoke 통과: ${completed.length}개 route, 새로고침·버전·@멘션·클립보드 Moin·프로필 이미지·모임 대화·외부요청·콘솔 오류 정상`);
 } catch (error) {
   await page.screenshot({ path: failurePath, fullPage: true }).catch(() => undefined);
   await writeFile(resultPath, `${JSON.stringify({ ok: false, routes: completed, failures, ignored, error: error instanceof Error ? error.stack : String(error) }, null, 2)}\n`).catch(() => undefined);

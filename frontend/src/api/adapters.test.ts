@@ -41,4 +41,11 @@ describe('백엔드 응답 어댑터', () => {
       filename: 'capture.png', mimeType: 'image/png', size: 321,
     });
   });
+
+  it('모임 Moin의 대화 범위 식별자를 보존한다', () => {
+    expect(normalizeMoin({
+      id: 'p-moim', content: '모임 대화', visibility: 'moim', moimId: 'moim-1',
+      author: { id: 'u1', username: 'jang' },
+    })).toMatchObject({ visibility: 'moim', moimId: 'moim-1' });
+  });
 });

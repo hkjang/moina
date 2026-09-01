@@ -4,6 +4,7 @@ import {
   ClipboardPaste,
   ImagePlus,
   LoaderCircle,
+  Network,
   Quote,
   RefreshCw,
   Upload,
@@ -110,6 +111,8 @@ const initialMedia = (moin?: Moin): MediaUpload[] =>
 
 export function MoinComposer({
   replyToId,
+  moimId,
+  moimName,
   quoteMoin,
   onClearQuote,
   placeholder = "지금 어떤 생각을 나누고 싶나요?",
@@ -120,6 +123,8 @@ export function MoinComposer({
   onStateChange,
 }: {
   replyToId?: string;
+  moimId?: string;
+  moimName?: string;
   quoteMoin?: Moin;
   onClearQuote?: () => void;
   placeholder?: string;
@@ -131,6 +136,9 @@ export function MoinComposer({
 }) {
   const { user } = useAuth();
   const { notify } = useToast();
+  const conversationMoimId =
+    moimId ||
+    (quoteMoin?.visibility === "moim" ? quoteMoin.moimId : undefined);
   const mediaHintDetailsID = useId();
   const mediaHintLimitID = useId();
   const mediaConfig = useApiQuery<MediaConfig>("/media/config", {
@@ -141,6 +149,7 @@ export function MoinComposer({
   const [visibility, setVisibility] = useState<string>(
     editMoin?.visibility || "public",
   );
+  const effectiveVisibility = conversationMoimId ? "moim" : visibility;
   const [media, setMedia] = useState<MediaUpload[]>(() =>
     initialMedia(editMoin),
   );
@@ -686,10 +695,11 @@ export function MoinComposer({
         method: "POST",
         body: {
           content: content.trim(),
-          visibility,
+          visibility: effectiveVisibility,
           mediaIds,
           mediaAltTexts,
           ...(replyToId ? { replyToId } : {}),
+          ...(conversationMoimId ? { moimId: conversationMoimId } : {}),
           ...(quoteMoin ? { quoteMoinId: quoteMoin.id } : {}),
         },
       });
@@ -700,7 +710,11 @@ export function MoinComposer({
       mediaRef.current = [];
       setMedia([]);
       notify(
-        replyToId ? "에코를 남겼습니다." : "모인을 플로우에 보냈습니다.",
+        replyToId
+          ? "에코를 남겼습니다."
+          : conversationMoimId
+            ? "모임에 모인을 게시했습니다."
+            : "모인을 플로우에 보냈습니다.",
         "success",
       );
       onCreated?.();
@@ -1037,7 +1051,16 @@ export function MoinComposer({
             >
               <ImagePlus />
             </IconButton>
-            {!editMoin && (
+            {!editMoin && conversationMoimId ? (
+              <span
+                className="composer-scope"
+                aria-label={`공개 범위: ${moimName ? `${moimName} ` : ""}모임 멤버`}
+                title="이 대화는 모임 멤버에게만 공개됩니다."
+              >
+                <Network />
+                모임 공개
+              </span>
+            ) : !editMoin ? (
               <select
                 aria-label="공개 범위"
                 value={visibility}
@@ -1047,7 +1070,7 @@ export function MoinComposer({
                 <option value="public">전체 공개</option>
                 <option value="followers">연결한 사람</option>
               </select>
-            )}
+            ) : null}
           </div>
           <span className={remaining < 0 ? "counter error" : "counter"}>
             {remaining.toLocaleString("ko-KR")}

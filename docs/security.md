@@ -28,7 +28,7 @@ MOINA는 신뢰되지 않은 브라우저 사용자, 악성 콘텐츠, 탈취된
 
 `MOINA_ENCRYPTION_KEY`는 정확히 32바이트이며 PostgreSQL의 OIDC/AI 비밀과 승인 snapshot 같은 보호 대상 값을 AEAD로 암호화합니다. setting key나 approval ID 같은 용도 문맥을 associated data로 결합해 ciphertext 이동 공격을 방지합니다.
 
-Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.10`에는 key version이나 online re-encryption 기능이 없으므로 값을 임의로 교체하면 저장 비밀 복호화와 기존 session/API key 검증이 실패합니다. DB backup과 함께 사용한 원래 key를 별도 보안 영역에 보관하고, 복구 시 같은 값을 사용합니다.
+Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.11`에는 key version이나 online re-encryption 기능이 없으므로 값을 임의로 교체하면 저장 비밀 복호화와 기존 session/API key 검증이 실패합니다. DB backup과 함께 사용한 원래 key를 별도 보안 영역에 보관하고, 복구 시 같은 값을 사용합니다.
 
 ## 개인 API·MCP 키
 
@@ -48,6 +48,7 @@ Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.10`에�
 ## 콘텐츠와 웹 보안
 
 - Moin/Echo 본문은 React text node로 렌더링하며 임의 HTML markup을 실행하지 않습니다.
+- 모임 Moin의 Echo·인용·Remoin은 요청의 공개 범위를 신뢰하지 않고 서버가 부모의 `moim_id`와 `moim` 공개 범위를 강제합니다. 작성자도 현재 모임 회원이어야 하며 비회원 조회에는 존재 여부를 숨깁니다.
 - SQL은 parameter binding을 사용합니다.
 - 업로드는 body 크기를 제한하고 실제 바이트의 MIME을 식별해 허용된 이미지·영상 형식만 PostgreSQL Large Object에 고정 크기 buffer로 streaming 저장합니다.
 - Content-Security-Policy, frame-ancestors, nosniff와 referrer policy를 reverse proxy와 앱에서 설정합니다.
@@ -56,7 +57,7 @@ Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.10`에�
 - 인증된 작성 client에는 `GET /api/v1/media/config`로 현재 크기·개수·허용 MIME만 제공하고 관리자 전용 orphan TTL은 노출하지 않습니다. Client의 사전 검사는 편의 기능이며 업로드 API가 같은 정책을 다시 강제합니다.
 - 사용자별 미첨부 media 100개·512 MiB quota를 advisory lock 안에서 검사해 병렬 업로드 우회를 막습니다. Large Object read는 인스턴스당 최대 8개이고 DB pool이 작으면 일반 API용 연결 5개를 남기도록 더 줄입니다.
 
-이미지 재인코딩, EXIF 제거, 악성 파일 검사와 미디어 전용 origin은 `v0.1.10`에 포함되지 않습니다. 업로드 콘텐츠에는 기관의 별도 malware 검사 계층과 보존 정책을 적용하세요.
+이미지 재인코딩, EXIF 제거, 악성 파일 검사와 미디어 전용 origin은 `v0.1.11`에 포함되지 않습니다. 업로드 콘텐츠에는 기관의 별도 malware 검사 계층과 보존 정책을 적용하세요.
 
 ## OIDC·AI·SMTP outbound 보호
 

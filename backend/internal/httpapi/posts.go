@@ -190,6 +190,13 @@ func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind s
 		}
 		related = &value
 	}
+	// Derivatives of a Moim post are always part of the same member-only
+	// conversation. Do not trust a client-provided public visibility or a
+	// different moimId, otherwise Echo, Quote, or Remoin could leak the source.
+	if related != nil && related.Visibility == "moim" && (kind == "echo" || kind == "quote" || kind == "remoin") {
+		input.Visibility = "moim"
+		input.MoimID = related.MoimID
+	}
 	if input.MoimID != "" || input.Visibility == "moim" {
 		if input.MoimID == "" {
 			return model.Moin{}, &publicError{400, "moim_required", "Moim 공개 Moin에는 moimId가 필요합니다"}

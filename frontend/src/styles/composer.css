@@ -25,3 +25,4 @@
 .composer-mentions strong,.composer-mentions small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer-mentions small { color: var(--ink-muted); }
 .composer-mention-state { display: flex; align-items: center; min-height: 54px; padding: 10px 14px; gap: 8px; color: var(--ink-muted); font-size: .86rem; }
+.composer-scope { display: inline-flex; align-items: center; min-height: 38px; padding: 4px 9px; gap: 5px; color: var(--ai-fg); background: var(--ai-soft); border-radius: 9px; font-size: .82rem; font-weight: 720; white-space: nowrap; }.composer-scope svg { width: 16px; height: 16px; }

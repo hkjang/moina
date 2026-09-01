@@ -41,6 +41,8 @@
 
 게시물 작성 body는 `content`, `visibility`, `mediaIds`와 선택적인 `replyToId`, `quoteMoinId`를 사용합니다. 수정 PATCH는 `content`와 선택적인 `mediaIds`, `mediaAltTexts`를 사용합니다. `mediaIds` 생략은 기존 첨부 유지, 빈 배열은 전체 제거, 배열 제공은 표시 순서를 포함한 전체 교체이며 본인이 업로드한 media만 허용합니다. 개인 프로필 이미지는 `/media`에 올린 본인 이미지 ID를 `PATCH /profile`의 `avatarId`로 저장하고 빈 문자열로 제거합니다. 브라우저 세션은 프로필 media를 관리할 수 있고 API key에는 기존 `posts:read`·`posts:write` 범위가 필요합니다. `/notifications/email/status`는 SMTP 세부 값 대신 `available`, `smtpConfigured`, `recipientConfigured`로 현재 사용자의 메일 수신 준비 상태만 제공합니다. AI 응답은 기본 SSE 스트리밍이며 `maxTokens`는 관리자가 정한 범위에서 최대 262,144입니다. WebSocket의 최초 `{type:"connected"}` 이벤트는 알림으로 표시하지 않습니다.
 
+모임 전용 Moin은 `visibility: "moim"`과 가입한 모임의 `moimId`를 함께 보냅니다. 모임 Moin에서 파생되는 Echo·인용·Remoin은 클라이언트 값과 관계없이 서버가 부모의 `moimId`와 모임 공개 범위를 상속해 외부 공개를 차단합니다. 모임 상세 작성기는 이 고정 범위를 표시하고 선택 UI를 제공하지 않습니다.
+
 `@username`은 작성·수정 모두 공개 범위와 차단 관계를 확인한 뒤 post 단위 멱등 멘션 알림을 만듭니다. 작성 UI는 `/search?type=users` 자동완성 결과를 키보드나 포인터로 삽입하며, 피드의 멘션과 해시태그는 각각 프로필·토픽 링크로 렌더링합니다.
 
 ## 서비스 관리자

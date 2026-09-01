@@ -64,4 +64,8 @@
   .composer-intake-hint { grid-template-columns: auto minmax(0,1fr); }
   .composer-intake-hint > small { grid-column: 2; text-align: left; }
   .composer-mentions { top: 112px; left: 0; }
+  .moim-conversation { padding: 16px 13px; }
+  .moim-conversation > header { align-items: flex-start; flex-direction: column; }
+  .moim-join-prompt { align-items: flex-start; flex-wrap: wrap; }
+  .moim-join-prompt .ui-button { width: 100%; }
 }

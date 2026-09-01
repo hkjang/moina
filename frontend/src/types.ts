@@ -74,6 +74,7 @@ export interface Moin {
     size?: number;
   }>;
   replyToId?: string;
+  moimId?: string;
   quoteMoin?: Moin;
   counts?: {
     echoes?: number;

@@ -239,6 +239,16 @@ describe('MoinCard optimistic mutation', () => {
     expect(button).toHaveTextContent('0');
   });
 
+  it('모임 Moin의 범위를 표시하고 Remoin도 모임 안에서 처리됨을 안내한다', async () => {
+    mockedRequest.mockResolvedValueOnce({ id: 'moim-remoin', visibility: 'moim' });
+    renderCardWithRouter(vi.fn(), { ...moin(), visibility: 'moim', moimId: 'moim-1' });
+
+    expect(screen.getByText('모임', { exact: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /리모인/ }));
+
+    expect(await screen.findByText('모임 안에 리모인했습니다.')).toBeInTheDocument();
+  });
+
 	it('승인 대기 Remoin은 활성 상태를 유지하되 공개 count는 늘리지 않는다', async () => {
 		mockedRequest.mockResolvedValueOnce({ id: 'pending-remoin', status: 'pending_approval' });
 		renderCard();
