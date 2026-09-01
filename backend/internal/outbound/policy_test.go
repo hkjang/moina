@@ -67,6 +67,11 @@ func TestPolicyValidateURL(t *testing.T) {
 	parsed, _ := url.Parse("https://evil.internal/v1")
 	if err := policy.ValidateURL(parsed); !errors.Is(err, ErrHostNotAllowed) {
 		t.Fatalf("unexpected error: %v", err)
+	} else {
+		var policyError *PolicyError
+		if !errors.As(err, &policyError) || policyError.Authority != "evil.internal" || policyError.Reason != PolicyReasonHostNotAllowed {
+			t.Fatalf("host diagnostic = %#v", policyError)
+		}
 	}
 	parsed, _ = url.Parse("http://keycloak.internal/realms/moina")
 	if err := (Policy{AllowedHosts: []string{"keycloak.internal"}}).ValidateURL(parsed); err == nil {
@@ -103,12 +108,42 @@ func TestPolicyPrivateHostValidation(t *testing.T) {
 		if validResolvedIP(ip, false) || !validResolvedIP(ip, true) {
 			t.Fatalf("%s must require explicit private permission", raw)
 		}
+		if allowed, reason, canAllow := resolvedIPDecision(ip, false); allowed || reason != PolicyReasonPrivateNotAllowed || !canAllow {
+			t.Fatalf("%s decision = allowed:%t reason:%q canAllow:%t", raw, allowed, reason, canAllow)
+		}
+	}
+	for raw, wantReason := range map[string]string{
+		"127.0.0.1":       PolicyReasonLoopback,
+		"169.254.1.10":    PolicyReasonLinkLocal,
+		"169.254.169.254": PolicyReasonMetadata,
+		"100.64.0.1":      PolicyReasonCarrierGradeNAT,
+		"192.0.2.1":       PolicyReasonSpecialUse,
+	} {
+		allowed, reason, canAllow := resolvedIPDecision(net.ParseIP(raw), true)
+		if allowed || reason != wantReason || canAllow {
+			t.Fatalf("%s decision = allowed:%t reason:%q canAllow:%t, want %q", raw, allowed, reason, canAllow, wantReason)
+		}
 	}
 	if !validResolvedIP(net.ParseIP("8.8.8.8"), false) {
 		t.Fatal("public global unicast address should be allowed")
 	}
 	if !validResolvedIP(net.ParseIP("2606:4700:4700::1111"), false) {
 		t.Fatal("public IPv6 global unicast address should be allowed")
+	}
+}
+
+func TestDialContextReturnsActionableLoopbackDiagnostic(t *testing.T) {
+	policy := Policy{AllowedHosts: []string{"127.0.0.1"}, Dialer: &net.Dialer{}}
+	_, err := policy.dialContext(t.Context(), "tcp", "127.0.0.1:443")
+	if !errors.Is(err, ErrUnsafeAddress) {
+		t.Fatalf("dial error = %v", err)
+	}
+	var policyError *PolicyError
+	if !errors.As(err, &policyError) {
+		t.Fatalf("dial error type = %T", err)
+	}
+	if policyError.Authority != "127.0.0.1" || policyError.Reason != PolicyReasonLoopback || policyError.CanAllowPrivate || !reflect.DeepEqual(policyError.ResolvedAddresses, []string{"127.0.0.1"}) {
+		t.Fatalf("dial diagnostic = %+v", policyError)
 	}
 }
 

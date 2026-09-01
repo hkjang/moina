@@ -39,6 +39,20 @@ describe('API 클라이언트', () => {
     expect(error).toMatchObject({ status: 429, retryAfterMs: 2_000 });
   });
 
+  it('구조화된 관리자 오류 details를 보존한다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 'oidc_private_host_required',
+      message: '정확한 Host를 추가하세요.',
+      details: { targetHost: 'keycloak.internal:8443', action: 'add_private_host' },
+    }), { status: 502, headers: { 'content-type': 'application/json' } })));
+    const error = await apiRequest('/admin/oidc/test', { method: 'POST' }).catch((cause) => cause);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: 'oidc_private_host_required',
+      details: { targetHost: 'keycloak.internal:8443', action: 'add_private_host' },
+    });
+  });
+
   it('성공한 mutation은 resource invalidation event를 보낸다', async () => {
     const listener = vi.fn();
     window.addEventListener('moina:api-mutated', listener);

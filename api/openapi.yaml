@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MOINA API
-  version: 0.1.8
+  version: 0.1.9
   summary: AI 소셜 지식 네트워크 REST·SSE·MCP API
   description: |
     서버에 실제 등록된 canonical route 계약입니다. 브라우저 session 또는 개인 API/MCP key로 인증합니다.
@@ -1401,6 +1401,18 @@ components:
       properties:
         code: {type: string}
         message: {type: string}
+        details: {description: 권한으로 보호된 일부 관리자 진단 API가 제공하는 구조화된 해결 정보}
+    OIDCPolicyDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [stage, action, canAllowPrivate]
+      properties:
+        stage: {type: string, enum: [discovery, discovery_endpoint, authorization_endpoint, token_endpoint]}
+        targetHost: {type: string, description: OIDC Host 입력란에 그대로 사용할 정확한 hostname 또는 host:port}
+        resolvedAddresses: {type: array, items: {type: string}, description: settings:manage 권한의 연결 테스트에만 반환되는 MOINA 컨테이너 DNS 결과}
+        addressReason: {type: string}
+        action: {type: string, enum: [add_allowed_host, add_private_host, change_dns_or_endpoint, review_network_policy]}
+        canAllowPrivate: {type: boolean}
     JSONRPCRequest:
       type: object
       required: [jsonrpc, method]

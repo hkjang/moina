@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../../components/ToastProvider";
+import { ApiError } from "../../api/client";
 import { AdminAIPage } from "./AdminAIPage";
 import { AdminOIDCPage } from "./AdminOIDCPage";
 
@@ -160,6 +161,38 @@ describe("관리자 공급자 설정 저장 계약", () => {
     );
     expect(updateBody("/admin/oidc")).not.toHaveProperty(
       "defaultRedirectUrlSource",
+    );
+  });
+
+  it("OIDC 연결 테스트가 요구한 정확한 사설 Host를 양쪽 목록에 자동 입력한다", async () => {
+    mocks.apiRequest
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new ApiError(
+        "OIDC Discovery 대상 ‘login.internal:8443’의 DNS 결과(10.0.0.8)가 사설망 주소입니다.",
+        502,
+        "oidc_private_host_required",
+        {
+          stage: "discovery",
+          targetHost: "login.internal:8443",
+          resolvedAddresses: ["10.0.0.8"],
+          addressReason: "private_network_not_allowed",
+          action: "add_private_host",
+        },
+      ));
+    renderPage(<AdminOIDCPage />);
+    await screen.findByDisplayValue("https://keycloak.internal/realms/moina");
+
+    fireEvent.click(screen.getByRole("button", { name: "저장 후 연결 테스트" }));
+
+    expect(await screen.findByText("login.internal:8443")).toBeInTheDocument();
+    expect(screen.getByText(/MOINA 컨테이너의 DNS 결과: 10.0.0.8/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "이 Host 자동 입력" }));
+
+    expect(screen.getByRole("textbox", { name: /^OIDC 허용 Host/ })).toHaveValue(
+      "keycloak.internal\nlogin.internal:8443",
+    );
+    expect(screen.getByRole("textbox", { name: /^사설망 OIDC Host/ })).toHaveValue(
+      "login.internal:8443",
     );
   });
 

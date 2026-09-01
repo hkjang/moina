@@ -106,6 +106,13 @@ func writeOIDCDiscoveryError(w http.ResponseWriter, r *http.Request, err error) 
 	writeError(w, failure.Status, failure.Code, failure.Message)
 }
 
+func writeAdminOIDCDiscoveryError(w http.ResponseWriter, r *http.Request, err error) {
+	if writeAdminOIDCPolicyError(w, r, err, "discovery") {
+		return
+	}
+	writeOIDCDiscoveryError(w, r, err)
+}
+
 func deepestOIDCDiscoveryErrorType(err error) string {
 	if err == nil {
 		return "<nil>"

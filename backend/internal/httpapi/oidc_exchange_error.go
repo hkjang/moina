@@ -173,3 +173,10 @@ func writeOIDCExchangeError(w http.ResponseWriter, r *http.Request, err error) {
 	)
 	writeError(w, failure.Status, failure.Code, failure.Message)
 }
+
+func writeAdminOIDCExchangeError(w http.ResponseWriter, r *http.Request, err error) {
+	if writeAdminOIDCPolicyError(w, r, err, "token_endpoint") {
+		return
+	}
+	writeOIDCExchangeError(w, r, err)
+}

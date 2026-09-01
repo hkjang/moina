@@ -23,6 +23,50 @@ var (
 	ErrUnsafeAddress  = errors.New("아웃바운드 대상 주소가 안전하지 않습니다")
 )
 
+const (
+	PolicyReasonHostNotAllowed    = "host_not_allowed"
+	PolicyReasonPrivateNotAllowed = "private_network_not_allowed"
+	PolicyReasonLoopback          = "loopback"
+	PolicyReasonLinkLocal         = "link_local"
+	PolicyReasonMetadata          = "cloud_metadata"
+	PolicyReasonCarrierGradeNAT   = "carrier_grade_nat"
+	PolicyReasonSpecialUse        = "special_use"
+	PolicyReasonNonGlobal         = "non_global"
+	PolicyReasonInvalidAddress    = "invalid_address"
+	PolicyReasonMixedUnsafe       = "mixed_unsafe_addresses"
+)
+
+// PolicyError preserves safe, actionable network-policy diagnostics. Callers
+// must still avoid exposing ResolvedAddresses to unauthenticated endpoints;
+// MOINA only returns them from permission-protected admin connection tests.
+type PolicyError struct {
+	Cause             error
+	Authority         string
+	ResolvedAddresses []string
+	Reason            string
+	CanAllowPrivate   bool
+}
+
+func (e *PolicyError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.Cause == nil {
+		return "아웃바운드 정책 오류"
+	}
+	if e.Authority == "" {
+		return e.Cause.Error()
+	}
+	return fmt.Sprintf("%s: %s (%s)", e.Cause, e.Authority, e.Reason)
+}
+
+func (e *PolicyError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
 // Policy contains exact DNS names or IP literals, optionally with a port.
 // Wildcards are deliberately unsupported because they weaken rebinding checks.
 type Policy struct {
@@ -146,7 +190,7 @@ func (p Policy) ValidateURL(target *url.URL) error {
 		return errors.New("허용되지 않은 아웃바운드 URL scheme입니다")
 	}
 	if !policy.allows(target.Hostname(), target.Port(), target.Scheme) {
-		return ErrHostNotAllowed
+		return &PolicyError{Cause: ErrHostNotAllowed, Authority: EndpointAuthority(target.String()), Reason: PolicyReasonHostNotAllowed}
 	}
 	return nil
 }
@@ -246,29 +290,51 @@ func (p Policy) dialContext(ctx context.Context, network, address string) (net.C
 		return nil, fmt.Errorf("아웃바운드 주소 형식: %w", err)
 	}
 	if !p.allows(host, port, schemeForPort(port)) {
-		return nil, ErrHostNotAllowed
+		return nil, &PolicyError{Cause: ErrHostNotAllowed, Authority: dialAuthority(host, port), Reason: PolicyReasonHostNotAllowed}
 	}
 	addresses, err := p.resolve(ctx, host)
 	if err != nil {
 		return nil, err
 	}
-	var lastErr error
+	var lastDialErr error
+	var rejectedAddresses []string
+	var rejectedReasons []string
+	canAllowPrivate := false
 	allowPrivate := p.allowsPrivate(host, port, schemeForPort(port))
 	for _, ip := range addresses {
-		if !validResolvedIP(ip, allowPrivate) {
-			lastErr = ErrUnsafeAddress
+		allowed, reason, privateOptIn := resolvedIPDecision(ip, allowPrivate)
+		if !allowed {
+			rejectedAddresses = append(rejectedAddresses, ip.String())
+			rejectedReasons = append(rejectedReasons, reason)
+			canAllowPrivate = canAllowPrivate || privateOptIn
 			continue
 		}
 		connection, dialErr := p.Dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
 		if dialErr == nil {
 			return connection, nil
 		}
-		lastErr = dialErr
+		lastDialErr = dialErr
 	}
-	if lastErr == nil {
-		lastErr = errors.New("아웃바운드 호스트에서 사용할 수 있는 IP를 찾지 못했습니다")
+	if lastDialErr != nil {
+		return nil, lastDialErr
 	}
-	return nil, lastErr
+	if len(rejectedAddresses) > 0 {
+		reason := rejectedReasons[0]
+		for _, candidate := range rejectedReasons[1:] {
+			if candidate != reason {
+				reason = PolicyReasonMixedUnsafe
+				break
+			}
+		}
+		return nil, &PolicyError{
+			Cause:             ErrUnsafeAddress,
+			Authority:         dialAuthority(host, port),
+			ResolvedAddresses: rejectedAddresses,
+			Reason:            reason,
+			CanAllowPrivate:   canAllowPrivate,
+		}
+	}
+	return nil, errors.New("아웃바운드 호스트에서 사용할 수 있는 IP를 찾지 못했습니다")
 }
 
 func (p Policy) resolve(ctx context.Context, host string) ([]net.IP, error) {
@@ -287,25 +353,51 @@ func (p Policy) resolve(ctx context.Context, host string) ([]net.IP, error) {
 }
 
 func validResolvedIP(ip net.IP, allowPrivate bool) bool {
-	if ip == nil || !ip.IsGlobalUnicast() || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || isCarrierGradeNAT(ip) || isMetadataIP(ip) {
-		return false
+	allowed, _, _ := resolvedIPDecision(ip, allowPrivate)
+	return allowed
+}
+
+func resolvedIPDecision(ip net.IP, allowPrivate bool) (allowed bool, reason string, canAllowPrivate bool) {
+	if ip == nil {
+		return false, PolicyReasonInvalidAddress, false
+	}
+	if isMetadataIP(ip) {
+		return false, PolicyReasonMetadata, false
+	}
+	if ip.IsLoopback() {
+		return false, PolicyReasonLoopback, false
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return false, PolicyReasonLinkLocal, false
+	}
+	if isCarrierGradeNAT(ip) {
+		return false, PolicyReasonCarrierGradeNAT, false
+	}
+	if !ip.IsGlobalUnicast() || ip.IsUnspecified() || ip.IsMulticast() {
+		return false, PolicyReasonNonGlobal, false
 	}
 	address, ok := netip.AddrFromSlice(ip)
 	if !ok {
-		return false
+		return false, PolicyReasonInvalidAddress, false
 	}
 	address = address.Unmap()
 	if address.IsPrivate() {
-		return allowPrivate
+		if allowPrivate {
+			return true, "", false
+		}
+		return false, PolicyReasonPrivateNotAllowed, true
 	}
 	if isSpecialUseAddress(address) {
-		return false
+		return false, PolicyReasonSpecialUse, false
 	}
 	// The currently allocated public IPv6 unicast space is 2000::/3. net.IP's
 	// IsGlobalUnicast also returns true for discard, translation, deprecated
 	// site-local and other non-public special-purpose ranges, so it is not a
 	// sufficient SSRF boundary by itself.
-	return !address.Is6() || publicIPv6Prefix.Contains(address)
+	if address.Is6() && !publicIPv6Prefix.Contains(address) {
+		return false, PolicyReasonSpecialUse, false
+	}
+	return true, "", false
 }
 
 var (
@@ -416,4 +508,12 @@ func schemeForPort(port string) string {
 		return "https"
 	}
 	return "http"
+}
+
+func dialAuthority(host, port string) string {
+	host = canonicalHostname(strings.Trim(host, "[]"))
+	if port == "80" || port == "443" || port == "" {
+		return host
+	}
+	return net.JoinHostPort(host, port)
 }

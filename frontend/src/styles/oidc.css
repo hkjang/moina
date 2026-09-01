@@ -24,6 +24,30 @@
   border-radius: 11px;
 }
 
+.oidc-network-diagnostic {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding: 14px;
+  gap: 7px;
+  flex-direction: column;
+  color: var(--warning);
+  background: var(--warning-soft);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.oidc-network-diagnostic p,
+.oidc-network-diagnostic small {
+  margin: 0;
+  color: var(--ink);
+}
+
+.oidc-network-diagnostic code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .callback-guide {
   margin: 10px 2px 0;
   font-size: 0.86rem;

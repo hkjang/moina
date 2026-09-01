@@ -458,11 +458,13 @@ func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 	ctx = oidc.ClientContext(ctx, client)
 	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
 	if err != nil {
-		writeOIDCDiscoveryError(w, r, err)
+		writeAdminOIDCDiscoveryError(w, r, err)
 		return
 	}
 	if err := validateOIDCProvider(cfg, provider); err != nil {
-		writeError(w, http.StatusBadGateway, "oidc_egress_denied", "SSO discovery가 허용되지 않은 호스트를 반환했습니다")
+		if !writeAdminOIDCPolicyError(w, r, err, "discovery_endpoint") {
+			writeError(w, http.StatusBadGateway, "oidc_egress_denied", "SSO discovery가 허용되지 않은 호스트를 반환했습니다")
+		}
 		return
 	}
 	endpoint := provider.Endpoint()
@@ -478,7 +480,9 @@ func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "oidc_redirect_rejected", "Keycloak이 Redirect URI를 거부했습니다. Client의 Valid redirect URIs에 다음 주소를 그대로 등록해 주세요: "+redirect)
 			return
 		}
-		writeError(w, http.StatusBadGateway, "oidc_authorization_failed", "OIDC 인증 endpoint가 Client ID 또는 Redirect URI를 확인하지 못했습니다")
+		if !writeAdminOIDCPolicyError(w, r, err, "authorization_endpoint") {
+			writeError(w, http.StatusBadGateway, "oidc_authorization_failed", "OIDC 인증 endpoint가 Client ID 또는 Redirect URI를 확인하지 못했습니다")
+		}
 		return
 	}
 	tokenProbeCtx, cancelTokenProbe := context.WithTimeout(r.Context(), 10*time.Second)
@@ -486,7 +490,7 @@ func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 	tokenProbeCtx = oidc.ClientContext(tokenProbeCtx, client)
 	tokenConfig := oauthConfig(cfg, provider, redirect)
 	if err := probeOIDCTokenExchange(tokenProbeCtx, tokenConfig); err != nil {
-		writeOIDCExchangeError(w, r, err)
+		writeAdminOIDCExchangeError(w, r, err)
 		return
 	}
 	writeData(w, http.StatusOK, map[string]any{"connected": true, "authorizationEndpoint": endpoint.AuthURL, "tokenEndpoint": endpoint.TokenURL, "redirectUrl": redirect, "redirectValidated": true, "clientAuthenticationValidated": true, "tokenAuthMethod": oidcTokenAuthMethod(cfg.ClientSecret, tokenConfig.Endpoint.AuthStyle)})

@@ -67,11 +67,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (!response.ok) {
     if (response.status === 401 && !options.suppressUnauthorized) window.dispatchEvent(new CustomEvent('moina:unauthorized'));
     const code = payload && typeof payload === 'object' && typeof (payload as Record<string, unknown>).code === 'string' ? String((payload as Record<string, unknown>).code) : 'request_failed';
+    const details = payload && typeof payload === 'object' && 'details' in payload
+      ? (payload as Record<string, unknown>).details
+      : payload;
     throw new ApiError(
       errorMessage(payload, `요청을 처리하지 못했습니다. (${response.status})`),
       response.status,
       code,
-      payload,
+      details,
       retryAfterMilliseconds(response.headers.get('retry-after')),
     );
   }

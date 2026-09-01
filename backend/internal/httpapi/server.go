@@ -544,6 +544,12 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"code": code, "message": message})
 }
 
+func writeErrorDetails(w http.ResponseWriter, status int, code, message string, details any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{"code": code, "message": message, "details": details})
+}
+
 func decodeJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	decoder := json.NewDecoder(r.Body)

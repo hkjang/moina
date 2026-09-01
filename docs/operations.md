@@ -2,7 +2,7 @@
 
 ## 책임 경계
 
-GitHub Release에는 `linux/amd64`용 `moina:v0.1.8` 서비스 이미지 하나를 저장한 `moina-v0.1.8.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
+GitHub Release에는 `linux/amd64`용 `moina:v0.1.9` 서비스 이미지 하나를 저장한 `moina-v0.1.9.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
 
 ## 반입과 설치
 
@@ -13,10 +13,10 @@ GitHub Release에는 `linux/amd64`용 `moina:v0.1.8` 서비스 이미지 하나�
 5. `pull never`, read-only, dropped capabilities로 시작합니다.
 
 ```bash
-sha256sum moina-v0.1.8.tar.gz
-gzip -t moina-v0.1.8.tar.gz
-gzip -dc moina-v0.1.8.tar.gz | docker image load
-docker image inspect moina:v0.1.8
+sha256sum moina-v0.1.9.tar.gz
+gzip -t moina-v0.1.9.tar.gz
+gzip -dc moina-v0.1.9.tar.gz | docker image load
+docker image inspect moina:v0.1.9
 cp .env.example .env
 chmod 600 .env
 docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull never
@@ -76,7 +76,7 @@ Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 
 
 ## 미디어 업로드 계약 확인
 
-인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.8` 관리자 설정이 아닙니다.
+인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.9` 관리자 설정이 아닙니다.
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/v1/media/config \
@@ -125,7 +125,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 
 - root encryption key는 application 관리자 계정과 분리해 vault/HSM 수준으로 보관합니다.
 - 개인 API/MCP key는 사용자 화면에서 회전하고 이전 token은 즉시 폐기합니다.
-- `v0.1.8`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
+- `v0.1.9`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
 - 유출이 의심되면 관련 key 폐기, session 종료, audit 조사와 downstream secret rotation을 함께 수행합니다.
 
 ## 장애 분류
@@ -140,7 +140,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 | 로그인·가입·API key 요청 503 | `rate_limit_unavailable` 확인 → PostgreSQL 연결·lock·용량과 `rate_limit_buckets` migration 확인 |
 | JS asset 403·빈 화면 | 응답의 `invalid_origin` 확인 → v0.1.4 이상 배포 → proxy의 원래 Host 전달 → index `no-cache`와 asset 200/immutable 확인 |
 | 감사 Client IP 이상 | 직접 Peer가 신뢰 Proxy IP/CIDR인지 확인 → `socketIp`·`clientIp`·`proxyChain` 비교 → 임의 Forwarded header 차단 확인 |
-| OIDC 실패 | 연결 테스트 → `oidc_client_auth_failed`면 Secret/Public client 설정 → `oidc_code_rejected`면 Standard flow·PKCE·redirect URI·clock skew → issuer·host·DNS·CA 확인 |
+| OIDC 실패 | 연결 테스트의 정확한 대상·DNS 결과 확인 → `oidc_private_host_required`는 자동 입력 → `oidc_address_forbidden`은 DNS/endpoint 변경 → Client Secret·Standard flow·PKCE·redirect URI·clock skew 확인 |
 | AI streaming 지연 | endpoint → `allowedHosts`/`privateAllowedHosts`와 port → DNS/CA → reverse proxy buffering/timeout |
 | WebSocket 끊김 | upgrade header → idle timeout → origin 정책 → slow-client 재연결과 60초 REST reconcile |
 | Outbox 지연·Dead Letter 증가 | `/metrics` → 관리자 실패 이벤트 → PostgreSQL lock/오류 → 원인 해결 뒤 재처리 |

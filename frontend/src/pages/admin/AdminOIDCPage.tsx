@@ -1,6 +1,6 @@
 import { Copy, LockKeyhole, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { apiRequest, readableError } from "../../api/client";
+import { ApiError, apiRequest, readableError } from "../../api/client";
 import { useToast } from "../../components/ToastProvider";
 import {
   Button,
@@ -46,6 +46,32 @@ interface OIDCSettingsView extends OIDCUpdateSettings {
   defaultRedirectUrlSource?: "publicBaseUrl" | "request";
 }
 
+interface OIDCConnectionDiagnostic {
+  message: string;
+  stage?: string;
+  targetHost?: string;
+  resolvedAddresses?: string[];
+  addressReason?: string;
+  action?: "add_allowed_host" | "add_private_host" | "change_dns_or_endpoint" | "review_network_policy";
+}
+
+function oidcConnectionDiagnostic(error: unknown): OIDCConnectionDiagnostic | null {
+  if (!(error instanceof ApiError) || !error.details || typeof error.details !== "object") return null;
+  const value = error.details as Record<string, unknown>;
+  const action = typeof value.action === "string" ? value.action : undefined;
+  if (!["add_allowed_host", "add_private_host", "change_dns_or_endpoint", "review_network_policy"].includes(action || "")) return null;
+  return {
+    message: error.message,
+    stage: typeof value.stage === "string" ? value.stage : undefined,
+    targetHost: typeof value.targetHost === "string" ? value.targetHost : undefined,
+    resolvedAddresses: Array.isArray(value.resolvedAddresses)
+      ? value.resolvedAddresses.filter((item): item is string => typeof item === "string")
+      : undefined,
+    addressReason: typeof value.addressReason === "string" ? value.addressReason : undefined,
+    action: action as OIDCConnectionDiagnostic["action"],
+  };
+}
+
 export function AdminOIDCPage() {
   const { notify } = useToast();
   const query = useApiQuery<OIDCSettingsView>("/admin/oidc");
@@ -67,6 +93,7 @@ export function AdminOIDCPage() {
   const [defaultRedirectUrlSource, setDefaultRedirectUrlSource] = useState<
     OIDCSettingsView["defaultRedirectUrlSource"]
   >("request");
+  const [connectionDiagnostic, setConnectionDiagnostic] = useState<OIDCConnectionDiagnostic | null>(null);
   const [working, setWorking] = useState<"save" | "test" | null>(null);
   const roles = roleRows(rolesQuery.data);
   const issuerAuthority = endpointAuthority(form.issuerUrl);
@@ -147,6 +174,7 @@ export function AdminOIDCPage() {
       return;
     }
     if (hostResult.added) setHostsText(formatAllowedHosts(hostResult.hosts));
+    if (test) setConnectionDiagnostic(null);
     setWorking(test ? "test" : "save");
     try {
       await apiRequest("/admin/oidc", {
@@ -177,6 +205,7 @@ export function AdminOIDCPage() {
       );
       query.reload();
     } catch (error) {
+      if (test) setConnectionDiagnostic(oidcConnectionDiagnostic(error));
       notify(readableError(error), "error");
     } finally {
       setWorking(null);
@@ -368,6 +397,43 @@ export function AdminOIDCPage() {
               }
             }}
           />
+          {connectionDiagnostic && (
+            <div className="oidc-network-diagnostic" role="alert">
+              <strong>연결 테스트가 차단된 정확한 대상</strong>
+              <p>{connectionDiagnostic.message}</p>
+              {connectionDiagnostic.targetHost && (
+                <code>{connectionDiagnostic.targetHost}</code>
+              )}
+              {connectionDiagnostic.resolvedAddresses?.length ? (
+                <small>
+                  MOINA 컨테이너의 DNS 결과: {connectionDiagnostic.resolvedAddresses.join(", ")}
+                </small>
+              ) : null}
+              {(connectionDiagnostic.action === "add_allowed_host" ||
+                connectionDiagnostic.action === "add_private_host") &&
+                connectionDiagnostic.targetHost && (
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      const target = connectionDiagnostic.targetHost;
+                      if (!target) return;
+                      const allowed = parseAllowedHosts(hostsText);
+                      if (!allowed.includes(target)) allowed.push(target);
+                      setHostsText(formatAllowedHosts(allowed));
+                      if (connectionDiagnostic.action === "add_private_host") {
+                        const privateHosts = parseAllowedHosts(privateHostsText);
+                        if (!privateHosts.includes(target)) privateHosts.push(target);
+                        setPrivateHostsText(formatAllowedHosts(privateHosts));
+                      }
+                      setConnectionDiagnostic(null);
+                      notify(`${target}을 필요한 Host 입력란에 반영했습니다. 저장 후 연결 테스트를 다시 실행하세요.`, "success");
+                    }}
+                  >
+                    이 Host 자동 입력
+                  </Button>
+                )}
+            </div>
+          )}
           {clientSecretConfigured && (
             <SwitchField
               label="저장된 Client Secret 삭제"
