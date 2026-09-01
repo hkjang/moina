@@ -20,7 +20,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { APP_DISPLAY_NAME, rememberRoute } from "../config";
+import { APP_DISPLAY_NAME, rememberRecentRoute, rememberRoute } from "../config";
 import { useApiQuery } from "../hooks/useApiQuery";
 import {
   adminNavigation,
@@ -38,6 +38,7 @@ import { websocketURL } from "../api/client";
 import { cn } from "../lib/cn";
 import { Avatar, Badge, Button, IconButton } from "./ui";
 import { ProfileMenu } from "./ProfileMenu";
+import { QuickNavigation } from "./QuickNavigation";
 import { useToast } from "./ToastProvider";
 import { topicLabel } from "../utils/format";
 import {
@@ -175,6 +176,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [quickNavigationOpen, setQuickNavigationOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const capabilities = useApiQuery<ServiceCapabilities>("/workflow/status");
   const preferences = useApiQuery<UserPreferences>("/profile/preferences");
@@ -198,7 +200,9 @@ export function AppShell() {
 
   useEffect(() => {
     if (!user) return;
-    rememberRoute(user.id, `${location.pathname}${location.search}`);
+    const currentRoute = `${location.pathname}${location.search}`;
+    rememberRoute(user.id, currentRoute);
+    rememberRecentRoute(user.id, currentRoute);
     const title = [...primaryNavigation, ...adminNavigation].find(
       (item) => item.path === location.pathname,
     )?.label;
@@ -299,6 +303,16 @@ export function AppShell() {
           </ScrollArea.Scrollbar>
         </ScrollArea.Root>
         <Button
+          className="quick-navigation-trigger"
+          variant="secondary"
+          aria-keyshortcuts="Control+K Meta+K"
+          onClick={() => setQuickNavigationOpen(true)}
+        >
+          <Search />
+          <span>빠른 이동</span>
+          <kbd>Ctrl K</kbd>
+        </Button>
+        <Button
           className="compose-button"
           variant="primary"
           onClick={() => navigate("/flow?compose=1")}
@@ -366,7 +380,11 @@ export function AppShell() {
           </IconButton>
           <strong>{mobileTitle}</strong>
           <div>
-            <IconButton label="검색" onClick={() => navigate("/search")}>
+            <IconButton
+              label="빠른 이동"
+              aria-keyshortcuts="Control+K Meta+K"
+              onClick={() => setQuickNavigationOpen(true)}
+            >
               <Search />
             </IconButton>
             <ProfileMenu />
@@ -423,6 +441,16 @@ export function AppShell() {
             <small>개인 설정과 분리된 운영 영역</small>
           </span>
         </aside>
+      )}
+      {user && (
+        <QuickNavigation
+          open={quickNavigationOpen}
+          onOpenChange={setQuickNavigationOpen}
+          userId={user.id}
+          username={user.username}
+          permissions={user.permissions}
+          approvalVisible={approvalVisible}
+        />
       )}
     </div>
   );

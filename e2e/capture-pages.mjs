@@ -10,7 +10,7 @@ const output = resolve(process.env.MOINA_CAPTURE_OUTPUT || join(root, 'dist/scre
 const baseURL = new URL(process.env.MOINA_CAPTURE_BASE_URL || 'http://127.0.0.1:18080');
 const username = process.env.MOINA_CAPTURE_USERNAME || 'capture-admin';
 const password = process.env.MOINA_CAPTURE_PASSWORD;
-const version = process.env.MOINA_CAPTURE_VERSION || 'v0.1.11';
+const version = process.env.MOINA_CAPTURE_VERSION || 'v0.1.12';
 const staticRoutes = routeCatalogFromEnvironment();
 let routes = staticRoutes;
 const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(baseURL.hostname);
@@ -385,6 +385,27 @@ try {
       assert.equal(await profileMenu.isVisible(), true, `${theme.label} ${viewport.name} 프로필 메뉴가 캡처 중 열린 상태를 유지해야 합니다.`);
       screenshots.push({ slug: profileSlug, title: `${theme.label} 테마 ${viewport.name === 'desktop' ? '데스크톱' : '모바일'} 프로필 버전 메뉴`, route: '/flow', viewport, theme: theme.name, fullPage: false });
 
+      phase = `capture:${theme.name}:${viewport.name}:quick-navigation`;
+      await page.keyboard.press('Escape');
+      await profileMenu.waitFor({ state: 'hidden' });
+      await page.getByRole('button', { name: /빠른 이동/ }).click();
+      const quickNavigation = page.getByRole('dialog', { name: '빠른 이동' });
+      await quickNavigation.waitFor({ state: 'visible' });
+      const quickNavigationInput = quickNavigation.getByRole('combobox', { name: '빠른 이동 검색' });
+      await quickNavigationInput.fill('모임');
+      await quickNavigationInput.press('ArrowDown');
+      const quickNavigationBounds = await quickNavigation.boundingBox();
+      assert.ok(quickNavigationBounds, `${theme.label} ${viewport.name} 빠른 이동의 화면 위치를 확인할 수 있어야 합니다.`);
+      assert.ok(quickNavigationBounds.x >= 0 && quickNavigationBounds.x + quickNavigationBounds.width <= viewport.width, `${theme.label} ${viewport.name} 빠른 이동 전체가 화면 너비 안에 있어야 합니다.`);
+      assert.ok(quickNavigationBounds.y >= 0 && quickNavigationBounds.y + quickNavigationBounds.height <= viewport.height, `${theme.label} ${viewport.name} 빠른 이동 전체가 화면 높이 안에 있어야 합니다.`);
+      await assertSafe(page, phase);
+      const quickNavigationSlug = themedSlug(theme, `${viewport.name}-quick-navigation`);
+      await page.screenshot({ path: join(output, `${quickNavigationSlug}.png`), fullPage: false, animations: 'disabled', caret: 'hide', scale: 'css' });
+      assert.equal(await quickNavigation.isVisible(), true, `${theme.label} ${viewport.name} 빠른 이동이 캡처 중 열린 상태를 유지해야 합니다.`);
+      screenshots.push({ slug: quickNavigationSlug, title: `${theme.label} 테마 ${viewport.name === 'desktop' ? '데스크톱' : '모바일'} 빠른 이동`, route: '/flow', viewport, theme: theme.name, fullPage: false });
+      await page.keyboard.press('Escape');
+      await quickNavigation.waitFor({ state: 'hidden' });
+
       // 로그인 화면은 별도 무세션 context로 캡처하고, 실제 route는 하나의 검증 세션을 재사용한다.
     }
   }
@@ -402,7 +423,7 @@ try {
     ignoredExpectedConsoleMessages: ignored,
   };
   await writeFile(join(output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log(`실제 화면 캡처 완료: ${screenshots.length}개 (${routes.length}개 route × ${themes.length} themes × ${viewports.length} viewports + 로그인/버전 메뉴)`);
+  console.log(`실제 화면 캡처 완료: ${screenshots.length}개 (${routes.length}개 route × ${themes.length} themes × ${viewports.length} viewports + 로그인/버전/빠른 이동)`);
 } finally {
   await context.close();
   await browser.close();

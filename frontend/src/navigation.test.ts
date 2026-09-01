@@ -16,6 +16,14 @@ describe('한국어 내비게이션', () => {
     expect(adminNavigation.every((item) => item.admin && item.path.startsWith('/admin'))).toBe(true);
   });
 
+  it('주요 화면의 빠른 이동 단축키가 중복되지 않는다', () => {
+    const shortcuts = [...primaryNavigation, ...adminNavigation]
+      .flatMap((item) => item.shortcut ? [item.shortcut] : []);
+    expect(shortcuts.length).toBeGreaterThan(0);
+    expect(new Set(shortcuts).size).toBe(shortcuts.length);
+    expect(shortcuts.every((shortcut) => /^G [A-Z]$/.test(shortcut))).toBe(true);
+  });
+
   it('정확한 권한, 전역 와일드카드와 도메인 와일드카드를 해석한다', () => {
     expect(hasPermission(['posts:manage'], 'posts:manage')).toBe(true);
     expect(hasPermission(['posts:*'], 'posts:manage')).toBe(true);

@@ -135,7 +135,7 @@ func TestPostgreSQLDigestPreferenceTransitionIsAtomic(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(repository, secrets, "v0.1.11-test").Handler()
+	handler := New(repository, secrets, "v0.1.12-test").Handler()
 	request := httptest.NewRequest(http.MethodPut, "/api/v1/profile/preferences", bytes.NewBufferString(`{"notifications":{"digest":{"mode":"hourly"}}}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-CSRF-Token", csrf)

@@ -59,7 +59,7 @@ func TestPostgreSQLMoimDerivativesInheritParentConversationScope(t *testing.T) {
 		_, _ = repository.Pool().Exec(ctx, `DELETE FROM users WHERE id=ANY($1)`, userIDs)
 	})
 
-	server := New(repository, nil, "v0.1.11-test")
+	server := New(repository, nil, "v0.1.12-test")
 	permissions := []string{"posts:read", "posts:write", "social:write"}
 	requestFor := func(userID string) *http.Request {
 		request := httptest.NewRequest(http.MethodPost, "/api/v1/posts", nil)

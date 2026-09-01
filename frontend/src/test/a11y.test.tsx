@@ -4,6 +4,7 @@ import { afterEach, describe, it } from 'vitest';
 import type { Moin } from '../types';
 import { AuthProvider } from '../auth/AuthContext';
 import { MoinCard } from '../components/MoinCard';
+import { QuickNavigation } from '../components/QuickNavigation';
 import { ToastProvider } from '../components/ToastProvider';
 import { Button, Card, Field, PageHeader, SwitchField } from '../components/ui';
 import { NotFoundPage } from '../pages/StatePages';
@@ -47,5 +48,21 @@ describe('대표 DOM 접근성', () => {
   it('대표 fallback route가 axe-core 규칙을 만족한다', async () => {
     const { container } = render(<MemoryRouter><main><NotFoundPage /></main></MemoryRouter>);
     await expectNoA11yViolations(container);
+  });
+
+  it('빠른 이동 combobox와 결과 목록이 axe-core 규칙을 만족한다', async () => {
+    const { container } = render(
+      <MemoryRouter>
+        <QuickNavigation
+          open
+          onOpenChange={() => undefined}
+          userId="a11y-quick-navigation"
+          username="tester"
+          permissions={['*']}
+          approvalVisible
+        />
+      </MemoryRouter>,
+    );
+    await expectNoA11yViolations(container.ownerDocument.body);
   });
 });

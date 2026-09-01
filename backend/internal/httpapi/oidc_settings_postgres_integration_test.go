@@ -62,7 +62,7 @@ func TestPostgreSQLOIDCSettingsSecretAndInputContract(t *testing.T) {
 		}
 	})
 
-	server := New(repository, secrets, "v0.1.11-test")
+	server := New(repository, secrets, "v0.1.12-test")
 	principal := principal{
 		User:        model.User{ID: actorID, Roles: []string{model.RoleSuperAdmin}},
 		Permissions: []string{"*"},

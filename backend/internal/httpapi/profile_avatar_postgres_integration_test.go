@@ -67,7 +67,7 @@ func TestPostgreSQLProfileAvatarRequiresOwnedImageAndSupportsRemoval(t *testing.
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(repository, secrets, "v0.1.11-test").Handler()
+	handler := New(repository, secrets, "v0.1.12-test").Handler()
 	patchAvatar := func(avatarID string, wantStatus int) map[string]any {
 		t.Helper()
 		body, _ := json.Marshal(map[string]string{"avatarId": avatarID})

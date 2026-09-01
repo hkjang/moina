@@ -64,7 +64,7 @@ func TestPostgreSQLMentionsHonorVisibilityBlocksAndEditIdempotency(t *testing.T)
 	if _, err := repository.Pool().Exec(t.Context(), `INSERT INTO blocks(blocker_id,blocked_id) VALUES($1,$2)`, blockedID, actorID); err != nil {
 		t.Fatal(err)
 	}
-	server := New(repository, nil, "v0.1.11-test")
+	server := New(repository, nil, "v0.1.12-test")
 	actor := model.User{ID: actorID, Username: actorName, DisplayName: actorName, Roles: []string{model.RoleMember}, Active: true}
 	permissions := []string{"posts:read", "posts:write", "social:write"}
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/posts", nil)

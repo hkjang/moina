@@ -13,17 +13,19 @@ export interface NavItem {
   permission?: string;
   admin?: boolean;
   approvalOnly?: boolean;
+  shortcut?: string;
+  keywords?: string[];
 }
 
 export const primaryNavigation: NavItem[] = [
-  { label: '플로우', path: '/flow', icon: Waves, description: '나를 위한 피드와 팔로잉 피드' },
-  { label: '탐색', path: '/explore', icon: Compass, description: '새로운 사람과 관심사 발견' },
-  { label: '검색', path: '/search', icon: Search, description: '모인, 사람, 토픽 통합 검색' },
-  { label: '펄스', path: '/pulse', icon: Activity, description: '지금 주목받는 주제' },
-  { label: '알림', path: '/notifications', icon: Bell, description: '내 활동과 실시간 알림' },
-  { label: '포켓', path: '/pocket', icon: Bookmark, description: '나중에 볼 모인' },
-  { label: '모임', path: '/moims', icon: Network, description: '관심사 기반 커뮤니티' },
-  { label: 'AI', path: '/ai', icon: Sparkles, description: '스트리밍 AI 어시스턴트', permission: 'ai:use' },
+  { label: '플로우', path: '/flow', icon: Waves, description: '나를 위한 피드와 팔로잉 피드', shortcut: 'G F', keywords: ['홈', '피드', 'following', 'for me'] },
+  { label: '탐색', path: '/explore', icon: Compass, description: '새로운 사람과 관심사 발견', shortcut: 'G E', keywords: ['발견', '둘러보기'] },
+  { label: '검색', path: '/search', icon: Search, description: '모인, 사람, 토픽 통합 검색', shortcut: 'G S', keywords: ['찾기', 'search'] },
+  { label: '펄스', path: '/pulse', icon: Activity, description: '지금 주목받는 주제', shortcut: 'G U', keywords: ['인기', '트렌드', 'trend'] },
+  { label: '알림', path: '/notifications', icon: Bell, description: '내 활동과 실시간 알림', shortcut: 'G N', keywords: ['소식', 'notification'] },
+  { label: '포켓', path: '/pocket', icon: Bookmark, description: '나중에 볼 모인', shortcut: 'G K', keywords: ['저장', '북마크', 'bookmark'] },
+  { label: '모임', path: '/moims', icon: Network, description: '관심사 기반 커뮤니티', shortcut: 'G M', keywords: ['커뮤니티', 'community'] },
+  { label: 'AI', path: '/ai', icon: Sparkles, description: '스트리밍 AI 어시스턴트', permission: 'ai:use', shortcut: 'G I', keywords: ['assistant', '어시스턴트'] },
 ];
 
 export const personalNavigation: NavItem[] = [
@@ -36,7 +38,7 @@ export const personalNavigation: NavItem[] = [
 ];
 
 export const adminNavigation: NavItem[] = [
-  { label: '관리 대시보드', path: '/admin', icon: CircleGauge, description: '서비스 운영 현황', admin: true, permission: 'admin:access' },
+  { label: '관리 대시보드', path: '/admin', icon: CircleGauge, description: '서비스 운영 현황', admin: true, permission: 'admin:access', shortcut: 'G A', keywords: ['관리자', '운영'] },
   { label: '사용자 관리', path: '/admin/users', icon: Users, description: '사용자 상태와 역할', admin: true, permission: 'users:manage' },
   { label: '콘텐츠 관리', path: '/admin/content', icon: MessageCircleMore, description: '모인과 모임 운영', admin: true, permission: 'posts:manage' },
   { label: '신고·제재', path: '/admin/reports', icon: Flag, description: '신고 검토와 제재', admin: true, permission: 'moderation:manage' },

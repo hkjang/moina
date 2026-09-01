@@ -183,6 +183,25 @@ async function runKeyboardChecks(context, page) {
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'main-content', '본문 바로가기는 main-content로 포커스를 옮겨야 합니다.');
   keyboardChecks.push('skip-link');
 
+  await page.keyboard.press('Control+K');
+  const quickNavigationDialog = page.getByRole('dialog', { name: '빠른 이동' });
+  await quickNavigationDialog.waitFor({ state: 'visible' });
+  const quickNavigationInput = quickNavigationDialog.getByRole('combobox', { name: '빠른 이동 검색' });
+  await page.waitForFunction((element) => document.activeElement === element, await quickNavigationInput.elementHandle(), { timeout: 5_000 });
+  await quickNavigationInput.fill('포켓');
+  await page.keyboard.press('ArrowDown');
+  const activeOption = await quickNavigationInput.getAttribute('aria-activedescendant');
+  assert.ok(activeOption, '방향키 이동 시 빠른 이동의 활성 결과가 지정되어야 합니다.');
+  assert.match(await page.locator(`#${activeOption}`).innerText(), /포켓/, '방향키로 포켓 결과를 선택해야 합니다.');
+  for (let index = 0; index < 4; index += 1) {
+    await page.keyboard.press('Tab');
+    await assertFocusInside(page, '.quick-navigation-dialog', '빠른 이동 Tab 순환 중 포커스가 Dialog 밖으로 빠지면 안 됩니다.');
+  }
+  await page.keyboard.press('Escape');
+  await quickNavigationDialog.waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'main-content', '빠른 이동이 닫히면 원래 본문 포커스로 돌아가야 합니다.');
+  keyboardChecks.push('quick-navigation');
+
   const profileTrigger = page.locator('button[aria-label="프로필 메뉴"]:visible').last();
   await profileTrigger.focus();
   await page.keyboard.press('Enter');

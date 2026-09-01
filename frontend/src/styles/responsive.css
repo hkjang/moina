@@ -19,6 +19,7 @@
   .main-content > .page-stack,.main-content > .settings-page,.main-content > .ai-page { padding: 20px 15px; }
   .sticky-feed-header { top: 0; }
   .admin-context-badge { display: none; }
+  .quick-navigation-dialog { top: 72px; max-height: calc(100vh - 144px); }
   .settings-grid { grid-template-columns: 1fr; }.settings-nav { position: static; display: flex; max-height: none; padding: 5px; overflow-x: auto; flex-direction: row; }.settings-nav a { min-width: 170px; }.settings-nav small { display: none; }
   .topic-grid,.person-grid,.moim-grid { grid-template-columns: 1fr; }
   .key-list article { grid-template-columns: 1fr 1fr; }.key-list article > div:last-child { justify-content: flex-end; }
@@ -37,6 +38,13 @@
   .login-panel { justify-content: flex-start; padding: 18px; }.login-card { padding: 25px 20px; box-shadow: none; }.login-footer { flex-wrap: wrap; justify-content: center; }
   .profile-cover { height: 145px; }.profile-actions { min-height: 48px; }.avatar-large { width: 78px; height: 78px; }.profile-avatar-wrap { transform: translateY(-39px); }
   .dialog-content { padding: 18px; }
+  .quick-navigation-dialog { top: 8px; width: calc(100vw - 16px); max-height: calc(100vh - 16px); border-radius: 16px; }
+  .quick-navigation-heading { padding: 14px 12px 9px 15px; }
+  .quick-navigation-heading p { display: none; }
+  .quick-navigation-search { margin: 0 10px 7px; }
+  .quick-navigation-footer { padding: 8px 11px; }
+  .quick-navigation-footer > span:last-child { display: none; }
+  .quick-navigation-chord { right: 12px; bottom: 78px; }
 }
 
 @media (max-width: 390px) { .metric-grid { grid-template-columns: 1fr; }.mobile-bottom-nav { height: 64px; } }
@@ -47,6 +55,9 @@
   .ui-button,
   .surface-card,
   .dialog-content,
+  .quick-navigation-dialog,
+  .quick-navigation-option,
+  .quick-navigation-search,
   .mobile-nav-panel,
   .profile-popover,
   .toast,

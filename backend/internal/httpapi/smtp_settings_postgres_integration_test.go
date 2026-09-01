@@ -61,7 +61,7 @@ func TestPostgreSQLSMTPPasswordIsEncryptedAndWriteOnly(t *testing.T) {
 		}
 	})
 
-	server := New(repository, secrets, "v0.1.11-test")
+	server := New(repository, secrets, "v0.1.12-test")
 	admin := principal{User: model.User{ID: actorID, Roles: []string{model.RoleSuperAdmin}}, Permissions: []string{"*"}}
 	request := func(input map[string]any) *httptest.ResponseRecorder {
 		raw, marshalErr := json.Marshal(input)

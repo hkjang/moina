@@ -12,7 +12,7 @@ const failurePath = join(resultDirectory, 'browser-smoke-failure.png');
 const baseURL = new URL(process.env.MOINA_E2E_BASE_URL || 'http://127.0.0.1:8080');
 const username = process.env.MOINA_E2E_USERNAME || 'e2e-admin';
 const password = process.env.MOINA_E2E_PASSWORD;
-const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.11';
+const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.12';
 const headless = process.env.MOINA_E2E_HEADLESS !== '0';
 const routes = routeCatalogFromEnvironment();
 const clipboardPNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -134,6 +134,31 @@ try {
   await page.getByText(new RegExp(`^moina\\s+${expectedVersion.replaceAll('.', '\\.')}\$`, 'i')).waitFor({ state: 'visible' });
   assert.equal(summary(), '', `프로필 버전 확인 중 오류\n${summary()}`);
 
+  phase = 'quick-navigation';
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+K');
+  const quickNavigationDialog = page.getByRole('dialog', { name: '빠른 이동' });
+  await quickNavigationDialog.waitFor({ state: 'visible' });
+  const quickNavigationInput = quickNavigationDialog.getByRole('combobox', { name: '빠른 이동 검색' });
+  await quickNavigationInput.fill('포켓');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await page.waitForURL((url) => url.pathname === '/pocket', { timeout: 10_000 });
+  await settle(page);
+  await page.goto(new URL('/flow', baseURL).toString(), { waitUntil: 'domcontentloaded' });
+  await settle(page);
+  await page.keyboard.press('g');
+  await page.keyboard.press('m');
+  await page.waitForURL((url) => url.pathname === '/moims', { timeout: 10_000 });
+  await page.goto(new URL('/flow', baseURL).toString(), { waitUntil: 'domcontentloaded' });
+  await settle(page);
+  await page.keyboard.press('c');
+  const shortcutComposer = page.getByRole('dialog', { name: '새 모인' });
+  await shortcutComposer.waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await shortcutComposer.waitFor({ state: 'hidden' });
+  assert.equal(summary(), '', `빠른 이동 확인 중 오류\n${summary()}`);
+
   phase = 'mobile-admin-navigation';
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(new URL('/admin', baseURL).toString(), { waitUntil: 'domcontentloaded' });
@@ -157,6 +182,17 @@ try {
   }
   await page.keyboard.press('Escape');
   assert.equal(await panel.isVisible(), false, 'Escape로 모바일 관리자 메뉴가 닫혀야 합니다.');
+
+  const mobileQuickTrigger = page.getByRole('button', { name: '빠른 이동', exact: true });
+  await mobileQuickTrigger.click();
+  const mobileQuickDialog = page.getByRole('dialog', { name: '빠른 이동' });
+  await mobileQuickDialog.waitFor({ state: 'visible' });
+  const quickBounds = await mobileQuickDialog.boundingBox();
+  assert.ok(quickBounds, '모바일 빠른 이동 창의 화면 위치를 확인할 수 있어야 합니다.');
+  assert.ok(quickBounds.x >= 0 && quickBounds.x + quickBounds.width <= 390, '모바일 빠른 이동 창 전체가 화면 너비 안에 있어야 합니다.');
+  assert.ok(quickBounds.y >= 0 && quickBounds.y + quickBounds.height <= 844, '모바일 빠른 이동 창 전체가 화면 높이 안에 있어야 합니다.');
+  await page.keyboard.press('Escape');
+  await mobileQuickDialog.waitFor({ state: 'hidden' });
 
   await page.goto(new URL('/flow', baseURL).toString(), { waitUntil: 'domcontentloaded' });
   await settle(page);
