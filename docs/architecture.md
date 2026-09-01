@@ -2,7 +2,7 @@
 
 ## 선택
 
-MOINA `v0.1.9`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
+MOINA `v0.1.10`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
 
 ```text
 Browser (React, REST/SSE/WebSocket)
@@ -61,13 +61,15 @@ Snapshot 생성은 사용자 단위 `pg_try_advisory_xact_lock`으로 직렬화�
 
 ## 실시간과 비동기
 
-게시·Signal·Link·승인과 알림 이벤트는 업무 데이터와 같은 transaction에서 `outbox_events`에 기록합니다. 단일 Go binary 안의 worker가 `FOR UPDATE SKIP LOCKED`로 claim하고 지수 백오프, idempotency key와 Dead Letter를 적용합니다. PostgreSQL `LISTEN/NOTIFY`는 여러 인스턴스를 즉시 깨우고 polling은 연결 장애 시 복구 경로가 됩니다.
+게시·Signal·Link·승인과 알림 이벤트는 업무 데이터와 같은 transaction에서 `outbox_events`에 기록합니다. 단일 Go binary 안의 worker가 `FOR UPDATE SKIP LOCKED`로 claim하고 지수 백오프, idempotency key와 Dead Letter를 적용합니다. PostgreSQL `LISTEN/NOTIFY`는 여러 인스턴스를 즉시 깨우고 polling은 연결 장애 시 복구 경로가 됩니다. 사용자 이메일 채널이 켜진 알림은 notification row와 같은 transaction에서 별도 `notification.email` 이벤트를 생성해 SMTP 장애가 원래 업무 transaction이나 인앱 전달을 막지 않게 합니다.
+
+SMTP worker는 전달 시점의 사용자 수신 설정, 활성 계정과 관리자 SMTP 설정을 다시 확인합니다. 일반 활동은 Digest 정책에 따라 즉시 메일 대신 요약 알림으로 모으고 멘션·승인·보안은 즉시 전달합니다. SMTP password가 포함된 설정 document는 AEAD로 암호화하고, 정확한 `host:port`의 DNS 결과를 연결 직전에 재검증합니다. 성공 후 `notifications.emailed_at`을 기록하며 실패는 독립 Outbox 재시도·Dead Letter로 이동합니다.
 
 WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 source of truth입니다. 각 인스턴스의 LISTEN consumer는 bounded channel이 가득 차면 다음 signal 전달을 기다리는 backpressure를 적용하고, durable notification row를 읽은 뒤 자신의 Hub로 전파합니다. Browser별 queue가 가득 찬 느린 socket은 연결을 취소해 client의 지수 backoff 재연결 경로로 보냅니다. Client는 연결 시 즉시, 연결 중에도 60초마다 REST unread summary를 다시 읽어 signal·socket 공백을 보완합니다. 사용자 설정과 서비스 시간대를 적용한 `inApp`·`toast`·`desktop` flag가 각 frame에 포함되고, 조용한 시간에는 실시간 표시만 보류합니다. In App 비활성 유형도 `in_app=false`와 읽음 상태의 durable 전달 row로 저장해 다른 인스턴스의 fanout을 유지하며 REST 목록·미확인 수에서는 제외합니다. 시간별·일별 Digest worker는 PostgreSQL advisory lock과 `notification_digest_state`로 여러 인스턴스의 중복 요약을 막습니다. `notifications.delivered_at` 순서와 `digested_at IS NULL` marker로 실제 저장된 미처리 전달 row만 집계하고 처리 표시도 같은 transaction에서 갱신하므로 지연 Outbox와 worker 집계 도중 commit된 알림을 다음 실행에서 이어서 처리합니다. `config_signature`은 끔·시간별·일별+시각 전환을 감지해 새 구독 경계를 만들고 이전 일정의 backlog 재생을 막습니다. 사용자별 nested transaction은 손상된 설정을 격리해 전체 batch 진행을 보장합니다. 승인·보안 알림은 In App 운영 기록으로 항상 유지합니다. Dead Letter는 관리자 감사 화면에서 원인을 확인하고 재처리할 수 있습니다.
 
 ## 검색
 
-`v0.1.9` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. `type`을 지정하면 해당 대상의 SQL만 실행하고, 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다. 공개 프로필의 Moin·Signal 통계는 공개·게시 상태의 Moin만 집계합니다. Topic Pulse는 최근 7일의 공개 Moin과 Signal을 집계하고 최근 24시간 활동에 더 큰 가중치를 적용하며, 비공개·삭제·승인 대기 Moin은 제외합니다.
+`v0.1.10` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. `type`을 지정하면 해당 대상의 SQL만 실행하고, 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다. 공개 프로필의 Moin·Signal 통계는 공개·게시 상태의 Moin만 집계합니다. Topic Pulse는 최근 7일의 공개 Moin과 Signal을 집계하고 최근 24시간 활동에 더 큰 가중치를 적용하며, 비공개·삭제·승인 대기 Moin은 제외합니다.
 
 ## 인증과 설정
 
@@ -94,7 +96,7 @@ Large Object read는 인스턴스당 최대 8개를 동시에 유지합니다. D
 ## 오프라인 runtime
 
 ```text
-moina:v0.1.9 (linux/amd64, distroless, non-root, read-only)
+moina:v0.1.10 (linux/amd64, distroless, non-root, read-only)
   ├─ /app/moina
   └─ /app/web/dist
 

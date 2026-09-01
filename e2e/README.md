@@ -4,7 +4,7 @@
 
 ## 애플리케이션 smoke
 
-먼저 `moina:v0.1.9`과 테스트 PostgreSQL을 시작한 뒤 실행합니다.
+먼저 `moina:v0.1.10`과 테스트 PostgreSQL을 시작한 뒤 실행합니다.
 
 ```bash
 npm ci --prefix e2e
@@ -12,11 +12,11 @@ npm --prefix e2e exec -- playwright install chromium
 MOINA_E2E_BASE_URL=http://127.0.0.1:18080 \
 MOINA_E2E_USERNAME=e2e-admin \
 MOINA_E2E_PASSWORD='test-password-12345' \
-MOINA_E2E_VERSION=v0.1.9 \
+MOINA_E2E_VERSION=v0.1.10 \
 npm test --prefix e2e
 ```
 
-기본 테스트는 전체 route 브라우저 smoke 뒤에 핵심 화면의 실제 DOM을 Light·Dark 및 Desktop·Mobile 조합으로 Axe 검사하고, 승인된 핵심 화면 12개의 48개 시각 베이스라인을 비교합니다. Serious·Critical 위반, 키보드 Focus Trap, 200% 확대 Reflow, Forced Colors, Reduced Motion 또는 시각 회귀가 있으면 실패하며 결과는 `e2e/test-results`에 저장됩니다.
+기본 테스트는 전체 route 브라우저 smoke 뒤에 핵심 화면의 실제 DOM을 Light·Dark 및 Desktop·Mobile 조합으로 Axe 검사하고, 승인된 핵심 화면 13개의 52개 시각 베이스라인을 비교합니다. Serious·Critical 위반, 키보드 Focus Trap, 200% 확대 Reflow, Forced Colors, Reduced Motion 또는 시각 회귀가 있으면 실패하며 결과는 `e2e/test-results`에 저장됩니다.
 
 접근성 검사만 다시 실행하려면 다음 명령을 사용합니다.
 
@@ -30,13 +30,13 @@ npm --prefix e2e run test:accessibility
 
 ## 실제 화면 캡처
 
-빈 캡처 전용 DB를 준비한 후 실행합니다. 스크립트가 로그인 session과 CSRF token을 사용해 공개 Moim과 `#MOINA #AI` 샘플 Moin을 정상 API로 생성하고, 반환된 ID/slug로 `/profile/{username}`, `/moin/{id}`, `/topics/moina`, `/moims/{slug}`를 catalog에 추가합니다.
+빈 캡처 전용 DB를 준비한 후 실행합니다. 스크립트가 로그인 session과 CSRF token을 사용해 공개 Moim과 `#MOINA #AI` 샘플 Moin을 정상 API로 생성하고, 반환된 ID/slug로 `/profile/{username}`, `/moin/{id}`, `/topics/moina`, `/moims/{slug}`를 catalog에 추가합니다. Browser smoke는 `@사용자아이디` 자동완성·키보드 삽입, Moin과 프로필의 캡처 이미지 Ctrl+V도 실제 Chromium에서 확인합니다.
 
 ```bash
 MOINA_CAPTURE_BASE_URL=http://127.0.0.1:18080 \
 MOINA_CAPTURE_USERNAME=capture-admin \
 MOINA_CAPTURE_PASSWORD='capture-password-12345' \
-MOINA_CAPTURE_VERSION=v0.1.9 \
+MOINA_CAPTURE_VERSION=v0.1.10 \
 npm --prefix e2e run capture:web
 ```
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MOINA API
-  version: 0.1.9
+  version: 0.1.10
   summary: AI 소셜 지식 네트워크 REST·SSE·MCP API
   description: |
     서버에 실제 등록된 canonical route 계약입니다. 브라우저 session 또는 개인 API/MCP key로 인증합니다.
@@ -283,9 +283,10 @@ paths:
     patch:
       tags: [Profile]
       summary: 내 프로필 수정
+      description: 본인이 업로드한 이미지 media ID를 avatarId로 지정하며 빈 문자열은 현재 프로필 이미지를 제거합니다.
       parameters: [{$ref: '#/components/parameters/CSRF'}]
-      requestBody: {$ref: '#/components/requestBodies/Object'}
-      responses: {'200': {$ref: '#/components/responses/User'}}
+      requestBody: {$ref: '#/components/requestBodies/Profile'}
+      responses: {'200': {$ref: '#/components/responses/User'}, '400': {$ref: '#/components/responses/Error'}}
   /api/v1/profile/preferences:
     get:
       tags: [Profile]
@@ -392,6 +393,12 @@ paths:
       parameters: [{$ref: '#/components/parameters/CSRF'}]
       requestBody: {$ref: '#/components/requestBodies/ReadNotifications'}
       responses: {'200': {$ref: '#/components/responses/Data'}, '400': {$ref: '#/components/responses/Error'}}
+  /api/v1/notifications/email/status:
+    get:
+      tags: [Notifications]
+      summary: 사용자 이메일 알림 사용 가능 여부
+      description: 관리자 SMTP 설정의 세부 값은 노출하지 않고 SMTP와 현재 사용자 프로필 이메일의 준비 여부만 반환합니다. Browser session 전용입니다.
+      responses: {'200': {$ref: '#/components/responses/NotificationEmailStatus'}, '401': {$ref: '#/components/responses/Error'}}
   /api/v1/ws/notifications:
     get:
       tags: [Notifications]
@@ -448,7 +455,7 @@ paths:
     post:
       tags: [Posts]
       summary: 이미지·동영상 media 업로드
-      description: 사용자별 미첨부 media는 최대 100개·512 MiB입니다. 한도를 넘으면 `media_quota_exceeded`를 반환하며 기존 media를 Moin·프로필에 연결하거나 TTL 정리를 기다린 뒤 재시도합니다. 업로드의 `altText`는 재사용 시 기본값이며 Moin 문맥의 최종 대체 텍스트는 게시물 작성·수정 요청의 `mediaAltTexts`로 각 `post_media` 관계에 저장합니다.
+      description: 브라우저 세션은 개인 프로필 이미지에도 사용할 수 있으며 API key는 `posts:write`가 필요합니다. 사용자별 미첨부 media는 최대 100개·512 MiB입니다. 한도를 넘으면 `media_quota_exceeded`를 반환하며 기존 media를 Moin·프로필에 연결하거나 TTL 정리를 기다린 뒤 재시도합니다. 업로드의 `altText`는 재사용 시 기본값이며 Moin 문맥의 최종 대체 텍스트는 게시물 작성·수정 요청의 `mediaAltTexts`로 각 `post_media` 관계에 저장합니다.
       parameters: [{$ref: '#/components/parameters/CSRF'}]
       requestBody:
         required: true
@@ -467,19 +474,20 @@ paths:
     get:
       tags: [Posts]
       summary: 현재 사용자용 media 업로드 계약
-      description: 관리자가 설정한 현재 파일 크기·Moin당 개수 제한과 서버가 허용하는 MIME type을 반환합니다. 미사용 업로드 TTL 같은 관리자 전용 값은 포함하지 않습니다.
+      description: 브라우저 세션 또는 `posts:write` API key에 관리자가 설정한 현재 파일 크기·Moin당 개수 제한과 서버가 허용하는 MIME type을 반환합니다. 미사용 업로드 TTL 같은 관리자 전용 값은 포함하지 않습니다.
       x-required-permissions: [posts:write]
       responses: {'200': {$ref: '#/components/responses/MediaClientConfig'}, '403': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
   /api/v1/media/{mediaID}:
     get:
       tags: [Posts]
       summary: media 조회
+      description: 브라우저 세션은 본인 소유 media를 항상 조회할 수 있고 다른 사용자의 게시물·프로필 media에는 `posts:read` 최종 권한이 필요합니다. API key도 `posts:read`가 필요하며 서버는 차단 관계와 공개 범위를 별도로 검사합니다.
       parameters: [{$ref: '#/components/parameters/MediaID'}]
       responses: {'200': {description: 저장된 image/video bytes, content: {image/*: {schema: {type: string, format: binary}}, video/*: {schema: {type: string, format: binary}}}}, '206': {description: 동영상·미디어 byte range}, '404': {$ref: '#/components/responses/Error'}}
     delete:
       tags: [Posts]
       summary: 연결되지 않은 내 media 즉시 삭제
-      description: 본인이 소유하고 Moin 첨부 또는 프로필 avatar로 사용되지 않는 media만 삭제합니다. 존재 여부와 사용 상태는 구분해 노출하지 않습니다.
+      description: 브라우저 세션 또는 `posts:write` API key로 본인이 소유하고 Moin 첨부 또는 프로필 avatar로 사용되지 않는 media만 삭제합니다. 존재 여부와 사용 상태는 구분해 노출하지 않습니다.
       parameters: [{$ref: '#/components/parameters/MediaID'}, {$ref: '#/components/parameters/CSRF'}]
       x-required-permissions: [posts:write]
       responses: {'204': {$ref: '#/components/responses/NoContent'}, '409': {$ref: '#/components/responses/Error'}}
@@ -621,7 +629,7 @@ paths:
         - name: settingKey
           in: path
           required: true
-          description: 알려진 키는 service.general, api.access, media.config, network.proxy입니다. auth.oidc, ai.config, workflow.approval은 전용 API를 사용합니다.
+          description: 알려진 키는 service.general, api.access, media.config, network.proxy입니다. auth.oidc, ai.config, workflow.approval, notifications.smtp는 전용 API를 사용합니다.
           schema: {type: string, pattern: '^[a-z][a-z0-9_.-]{1,127}$', examples: [network.proxy]}
         - {$ref: '#/components/parameters/CSRF'}
       requestBody: {$ref: '#/components/requestBodies/AdminSetting'}
@@ -652,6 +660,25 @@ paths:
       responses: {'200': {$ref: '#/components/responses/AIConfig'}, '400': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
   /api/v1/admin/ai/test:
     post: {$ref: '#/components/pathItems/AdminAction'}
+  /api/v1/admin/smtp:
+    get:
+      tags: [Admin]
+      summary: SMTP 메일 설정 조회
+      description: 저장된 password 원문은 반환하지 않고 passwordConfigured만 반환합니다.
+      responses: {'200': {$ref: '#/components/responses/SMTPConfig'}, '403': {$ref: '#/components/responses/Error'}}
+    put:
+      tags: [Admin]
+      summary: 암호화된 SMTP 메일 설정 저장
+      description: 정확한 SMTP host:port만 연결하며, 사설망 허용 시에도 설정한 DNS 이름만 RFC1918·ULA로 해석할 수 있습니다. loopback·link-local·metadata·CGNAT은 항상 차단합니다.
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {$ref: '#/components/requestBodies/SMTPConfig'}
+      responses: {'200': {$ref: '#/components/responses/SMTPConfig'}, '400': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
+  /api/v1/admin/smtp/test:
+    post:
+      tags: [Admin]
+      summary: 현재 관리자 프로필 이메일로 SMTP 테스트 발송
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      responses: {'200': {$ref: '#/components/responses/Data'}, '409': {$ref: '#/components/responses/Error'}, '502': {$ref: '#/components/responses/Error'}}
   /api/v1/admin/workflow:
     get:
       tags: [Admin]
@@ -776,6 +803,19 @@ components:
     CreateMoim:
       required: true
       content: {application/json: {schema: {$ref: '#/components/schemas/CreateMoim'}}}
+    Profile:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            minProperties: 1
+            properties:
+              displayName: {type: string, minLength: 1, maxLength: 80}
+              email: {type: string, maxLength: 254}
+              bio: {type: string, maxLength: 500}
+              avatarId: {type: string, description: 본인 소유 이미지 media ID. 빈 문자열은 현재 프로필 이미지 제거}
     Object:
       required: true
       content: {application/json: {schema: {type: object, additionalProperties: true}}}
@@ -836,6 +876,9 @@ components:
     AIConfig:
       required: true
       content: {application/json: {schema: {$ref: '#/components/schemas/AIConfigInput'}}}
+    SMTPConfig:
+      required: true
+      content: {application/json: {schema: {$ref: '#/components/schemas/SMTPConfigInput'}}}
     AIChat:
       required: true
       content:
@@ -947,6 +990,15 @@ components:
                   unreadCount: {type: integer, format: int64, minimum: 0}
                   limit: {type: integer, minimum: 1, maximum: 100}
                   offset: {type: integer, minimum: 0}
+    NotificationEmailStatus:
+      description: 이메일 알림 준비 상태. SMTP 세부 설정과 수신 주소는 노출하지 않습니다.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: {$ref: '#/components/schemas/NotificationEmailStatus'}
     WorkflowConfig:
       description: 현재 검토·승인 정책
       content: {application/json: {schema: {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/WorkflowConfig'}}}}}
@@ -956,6 +1008,9 @@ components:
     AIConfig:
       description: secret 원문을 제외한 AI 설정
       content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/AIConfigView'}}}}}
+    SMTPConfig:
+      description: password 원문을 제외한 SMTP 설정
+      content: {application/json: {schema: {type: object, properties: {data: {$ref: '#/components/schemas/SMTPConfigView'}}}}}
     OutboxPage:
       description: Dead Letter 이벤트 목록
       content:
@@ -1051,6 +1106,7 @@ components:
                 approvals: {type: boolean, description: 입력값과 관계없이 운영상 필수 알림으로 true가 저장·반환됩니다.}
             toast: {$ref: '#/components/schemas/NotificationChannelPreferencesPatch'}
             desktop: {$ref: '#/components/schemas/NotificationChannelPreferencesPatch'}
+            email: {$ref: '#/components/schemas/NotificationChannelPreferencesPatch'}
             digest:
               type: object
               additionalProperties: false
@@ -1089,7 +1145,7 @@ components:
     NotificationPreferences:
       type: object
       additionalProperties: false
-      required: [inApp, toast, desktop, digest, quietHours]
+      required: [inApp, toast, desktop, email, digest, quietHours]
       properties:
         inApp:
           type: object
@@ -1103,6 +1159,7 @@ components:
             approvals: {type: boolean, const: true, description: 승인·보안 운영 알림은 끌 수 없습니다.}
         toast: {$ref: '#/components/schemas/NotificationChannelPreferences'}
         desktop: {$ref: '#/components/schemas/NotificationChannelPreferences'}
+        email: {$ref: '#/components/schemas/NotificationChannelPreferences'}
         digest:
           type: object
           additionalProperties: false
@@ -1130,6 +1187,14 @@ components:
       additionalProperties: false
       properties:
         enabled: {type: boolean}
+    NotificationEmailStatus:
+      type: object
+      additionalProperties: false
+      required: [available, smtpConfigured, recipientConfigured]
+      properties:
+        available: {type: boolean, description: SMTP가 활성화되고 현재 사용자의 수신 이메일이 올바를 때 true}
+        smtpConfigured: {type: boolean}
+        recipientConfigured: {type: boolean}
     ClockTime:
       type: string
       pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'
@@ -1381,6 +1446,34 @@ components:
         - type: object
           properties:
             apiKeyConfigured: {type: boolean}
+    SMTPConfigBase:
+      type: object
+      required: [enabled, host, port, security, username, fromAddress, fromName, timeoutSeconds, allowPrivateNetwork]
+      properties:
+        enabled: {type: boolean}
+        host: {type: string, maxLength: 253, description: port 없는 정확한 DNS 이름 또는 공개 IP. 사설망 opt-in은 DNS 이름만 허용합니다.}
+        port: {type: integer, minimum: 1, maximum: 65535, default: 587}
+        security: {type: string, enum: [starttls, tls, none], default: starttls, description: none은 폐쇄망의 무인증 SMTP에서만 사용할 수 있습니다.}
+        username: {type: string, maxLength: 320}
+        fromAddress: {type: string, format: email, maxLength: 320}
+        fromName: {type: string, maxLength: 80}
+        timeoutSeconds: {type: integer, minimum: 3, maximum: 60, default: 15}
+        allowPrivateNetwork: {type: boolean, default: false, description: host와 port로 지정한 정확한 DNS authority만 RFC1918·ULA 연결을 허용합니다.}
+    SMTPConfigInput:
+      unevaluatedProperties: false
+      allOf:
+        - {$ref: '#/components/schemas/SMTPConfigBase'}
+        - type: object
+          properties:
+            password: {type: string, maxLength: 4096, writeOnly: true, description: 빈 값이면 기존 password 유지}
+            clearPassword: {type: boolean, default: false, writeOnly: true, description: 저장된 password를 명시적으로 삭제}
+    SMTPConfigView:
+      unevaluatedProperties: false
+      allOf:
+        - {$ref: '#/components/schemas/SMTPConfigBase'}
+        - type: object
+          properties:
+            passwordConfigured: {type: boolean, readOnly: true}
     DeadLetterEvent:
       type: object
       required: [id, type, aggregateId, attempts, maxAttempts, lastError, createdAt, deadLetteredAt]

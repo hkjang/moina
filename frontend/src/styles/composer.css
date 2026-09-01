@@ -18,3 +18,10 @@
 .counter small { color: var(--ink-soft); font-size: .68rem; white-space: nowrap; }
 .composer-media-fields > div .ui-button-icon { margin-left: 0; }
 .composer-media-fields > div .ui-button-icon:last-child { margin-left: auto; }
+.composer-mentions { position: absolute; z-index: 30; top: 118px; right: 0; left: 56px; overflow: hidden; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 13px; box-shadow: var(--shadow); }
+.composer-mentions > button { display: flex; align-items: center; width: 100%; min-height: 54px; padding: 8px 12px; gap: 10px; color: var(--ink); background: transparent; border: 0; text-align: left; }
+.composer-mentions > button:hover,.composer-mentions > button.active { background: var(--brand-soft); }
+.composer-mentions > button > span:last-child { display: flex; min-width: 0; flex-direction: column; }
+.composer-mentions strong,.composer-mentions small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-mentions small { color: var(--ink-muted); }
+.composer-mention-state { display: flex; align-items: center; min-height: 54px; padding: 10px 14px; gap: 8px; color: var(--ink-muted); font-size: .86rem; }

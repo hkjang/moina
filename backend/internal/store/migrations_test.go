@@ -95,6 +95,18 @@ func TestNotificationDigestConfigMigrationTracksSubscriptionTransitions(t *testi
 	}
 }
 
+func TestNotificationEmailMigrationTracksDelivery(t *testing.T) {
+	body, err := migrationFiles.ReadFile("migrations/012_notification_email.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{"ADD COLUMN IF NOT EXISTS emailed_at", "notifications_email_delivery_idx"} {
+		if !strings.Contains(string(body), fragment) {
+			t.Fatalf("notification email migration missing %q", fragment)
+		}
+	}
+}
+
 func TestSearchCursorMigrationContainsOfflineIndexesAndMediaAlt(t *testing.T) {
 	body, err := migrationFiles.ReadFile("migrations/002_search_cursor.sql")
 	if err != nil {

@@ -158,3 +158,13 @@ func TestEndpointAuthorityAndLegacyDefault(t *testing.T) {
 		t.Fatalf("existing list was broadened: %v", got)
 	}
 }
+
+func TestRawDialRequiresExactPort(t *testing.T) {
+	policy := Policy{AllowedHosts: []string{"smtp.internal:587"}}
+	if _, err := policy.DialContext(t.Context(), "tcp", "smtp.internal:465"); !errors.Is(err, ErrHostNotAllowed) {
+		t.Fatalf("wrong SMTP port should be blocked, got %v", err)
+	}
+	if _, err := (Policy{AllowedHosts: []string{"smtp.internal"}}).DialContext(t.Context(), "tcp", "smtp.internal:587"); !errors.Is(err, ErrHostNotAllowed) {
+		t.Fatalf("portless raw allow entry should be blocked, got %v", err)
+	}
+}

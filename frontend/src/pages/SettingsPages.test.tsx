@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
       inApp: { mentions: true, signals: true, follows: true, echoes: true, approvals: true },
       toast: { enabled: true },
       desktop: { enabled: false },
+      email: { enabled: false },
       digest: { mode: 'off' as const, time: '08:00' },
       quietHours: { enabled: false, start: '22:00', end: '07:00' },
     },
@@ -24,8 +25,8 @@ vi.mock('../api/client', async () => {
 });
 
 vi.mock('../hooks/useApiQuery', () => ({
-  useApiQuery: () => ({
-    data: mocks.preferences,
+  useApiQuery: (path: string) => ({
+    data: path === '/notifications/email/status' ? { available: true } : mocks.preferences,
     loading: false,
     error: null,
     reload: mocks.reload,
@@ -76,6 +77,17 @@ describe('알림 개인화 설정', () => {
     await waitFor(() => expect(mocks.apiRequest).toHaveBeenCalledWith('/profile/preferences', expect.objectContaining({
       method: 'PUT',
       body: expect.objectContaining({ notifications: expect.objectContaining({ desktop: { enabled: true } }) }),
+    })));
+  });
+
+  it('SMTP가 준비되면 이메일 알림 채널을 저장한다', async () => {
+    mocks.apiRequest.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(screen.getByRole('switch', { name: /^이메일 알림/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^저장$/ }));
+    await waitFor(() => expect(mocks.apiRequest).toHaveBeenCalledWith('/profile/preferences', expect.objectContaining({
+      method: 'PUT',
+      body: expect.objectContaining({ notifications: expect.objectContaining({ email: { enabled: true } }) }),
     })));
   });
 });

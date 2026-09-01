@@ -4,18 +4,18 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.9`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.10`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.9`는 OIDC 연결 테스트가 차단된 정확한 hostname·port와 MOINA 컨테이너의 DNS 결과를 보여줍니다. 등록 가능한 RFC1918/ULA hostname은 버튼 하나로 전체·사설망 Host 목록에 입력하고, loopback·link-local·CGNAT처럼 등록해도 항상 차단되는 주소는 endpoint/DNS를 바꾸도록 명확히 구분합니다. 상세 내부 주소는 권한이 있는 관리자 테스트에만 제공됩니다.
+`v0.1.10`은 개인 프로필 아이콘의 선택·끌어 놓기·캡처 이미지 Ctrl+V와 안전한 교체·정리를 지원합니다. Moin 작성·수정에서는 `@사용자아이디` 자동완성, 키보드 선택, 프로필 링크와 공개 범위·차단 관계를 반영한 멘션 알림을 제공합니다. 관리자는 암호화된 SMTP 설정과 테스트 메일을 관리하고, 사용자는 알림 종류·요약 정책과 연결된 이메일 채널을 선택할 수 있습니다.
 
 ## 주요 기능
 
-- 캡처 이미지 붙여넣기·드래그 앤 드롭·첨부 교체와 작성자 삭제를 지원하는 Moin 작성·수정, Echo, Remoin, 반응, Pocket과 Link(팔로우)
+- 캡처 이미지 붙여넣기·드래그 앤 드롭·첨부 교체, `@사용자아이디` 자동완성·링크와 작성자 삭제를 지원하는 Moin 작성·수정, Echo, Remoin, 반응, Pocket과 Link(팔로우)
 - Following/For Me Flow, Topic과 Pulse, 통합 검색, 실시간 알림
 - 최근 7일 공개 Moin·Signal과 24시간 가중치를 반영한 Topic Pulse
 - 개인 프로필·피드·글자 크기 설정과 URL 기반 메뉴 복원
 - Keycloak 등 표준 OIDC Provider의 Authorization Code + PKCE 연동
-- 관리자 UI에서 OIDC, AI, 승인 정책과 역할·권한을 설정하고 신고·제재를 운영
+- 관리자 UI에서 OIDC, AI, SMTP 메일, 승인 정책과 역할·권한을 설정하고 신고·제재를 운영
 - 개인별 API/MCP 키 생성, 권한 변경, 즉시 회전·폐기·만료
 - 선택형 팀장 검토·승인·반려 정책(꺼져 있으면 관련 절차와 메뉴 제외)
 - OpenAI-compatible AI streaming과 최대 262,144 output token 정책
@@ -29,7 +29,7 @@ MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관�
 - PostgreSQL Large Object 스트리밍 미디어, 미첨부 100개·512 MiB quota와 인스턴스당 시간당 최대 10,000개 orphan drain
 - 페이지별 Flow cache·ID 병합, optimistic update와 route lazy loading
 - 알림 LISTEN backpressure, slow WebSocket 재연결과 60초 REST 정합성 보완
-- In App·Toast·Desktop·Digest·조용한 시간 알림 개인화와 필수 승인 알림 정책
+- In App·Toast·Desktop·SMTP Email·Digest·조용한 시간 알림 개인화와 필수 승인 알림 정책
 - 신뢰 Proxy IP/CIDR 기반 실제 Client IP 계산, 감사 Proxy Chain과 다중 인스턴스 공용 PostgreSQL 요청 한도
 - TLS Proxy bootstrap용 Fetch Metadata Origin 검증, immutable hash asset과 stale chunk 404
 - Moin 관계별 대체 텍스트와 엄격한 승인 Action 패턴·승인자 최종 권한 검증
@@ -57,7 +57,7 @@ MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관�
 | `MOINA_BOOTSTRAP_ADMIN_PASSWORD` | 최초 관리자 비밀번호 |
 | `MOINA_ENCRYPTION_KEY` | 저장 비밀값을 보호하는 32바이트 root key |
 
-Keycloak client ID/secret, AI endpoint/key/model/token 상한, 승인 정책, 역할과 권한 등 나머지는 bootstrap 후 **서비스 관리자 화면**에서 설정합니다. OIDC client secret과 AI API key 같은 민감한 자격 증명은 암호화하고, 일반·승인·권한 설정은 PostgreSQL에서 revision과 감사 이력을 함께 관리합니다.
+Keycloak client ID/secret, AI endpoint/key/model/token 상한, SMTP endpoint/password, 승인 정책, 역할과 권한 등 나머지는 bootstrap 후 **서비스 관리자 화면**에서 설정합니다. OIDC client secret, AI API key와 SMTP password 같은 민감한 자격 증명은 암호화하고, 일반·승인·권한 설정은 PostgreSQL에서 revision과 감사 이력을 함께 관리합니다.
 
 ```bash
 cp .env.example .env
@@ -85,7 +85,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.9
+moina:v0.1.10
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -103,20 +103,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.9.tar.gz
-dist/moina-v0.1.9.tar.gz.sha256
+dist/moina-v0.1.10.tar.gz
+dist/moina-v0.1.10.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.9.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.10.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.9.tar.gz
-gzip -dc moina-v0.1.9.tar.gz | docker image load
-docker image inspect moina:v0.1.9
+sha256sum moina-v0.1.10.tar.gz
+gzip -dc moina-v0.1.10.tar.gz | docker image load
+docker image inspect moina:v0.1.10
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -165,15 +165,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.9 -m "moina v0.1.9"
-git push origin v0.1.9
+git tag -a v0.1.10 -m "moina v0.1.10"
+git push origin v0.1.10
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.9
-file:  moina-v버전.tar.gz  예: moina-v0.1.9.tar.gz
+image: moina:v버전          예: moina:v0.1.10
+file:  moina-v버전.tar.gz  예: moina-v0.1.10.tar.gz
 ```
 
 ## 라이선스

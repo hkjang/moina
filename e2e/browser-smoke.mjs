@@ -12,7 +12,7 @@ const failurePath = join(resultDirectory, 'browser-smoke-failure.png');
 const baseURL = new URL(process.env.MOINA_E2E_BASE_URL || 'http://127.0.0.1:8080');
 const username = process.env.MOINA_E2E_USERNAME || 'e2e-admin';
 const password = process.env.MOINA_E2E_PASSWORD;
-const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.9';
+const expectedVersion = process.env.MOINA_E2E_VERSION || 'v0.1.10';
 const headless = process.env.MOINA_E2E_HEADLESS !== '0';
 const routes = routeCatalogFromEnvironment();
 const clipboardPNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -181,6 +181,19 @@ try {
   await composerTextarea.waitFor({ state: 'visible' });
   await page.waitForFunction((element) => document.activeElement === element, await composerTextarea.elementHandle(), { timeout: 5_000 });
   assert.equal(await composerTextarea.evaluate((element) => document.activeElement === element), true, '새 모인 Dialog가 열리면 내용 입력란에 포커스가 가야 합니다.');
+  const mentionSearchRoute = '**/api/v1/search?q=smoke&type=users&limit=6';
+  await page.route(mentionSearchRoute, async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: { users: [{ id: 'usr-mention-smoke', username: 'smoke_user', displayName: '멘션 테스트 사용자' }] } }),
+  }));
+  await composerTextarea.fill('안녕하세요 @smoke');
+  const mentionOption = composerDialog.getByRole('option', { name: /멘션 테스트 사용자.*@smoke_user/ });
+  await mentionOption.waitFor({ state: 'visible' });
+  await mentionOption.click();
+  assert.equal(await composerTextarea.inputValue(), '안녕하세요 @smoke_user ', '@ 자동완성은 선택한 사용자 ID와 뒤 공백을 삽입해야 합니다.');
+  await composerTextarea.fill('');
+  await page.unroute(mentionSearchRoute);
   const composerFileInput = composerDialog.locator('input[type="file"]');
   assert.equal(await composerFileInput.count(), 1, '새 모인 Dialog에는 파일 입력이 하나여야 합니다.');
   assert.equal(await composerFileInput.evaluate((element) => element.tabIndex), -1, '숨겨진 파일 입력은 Tab 순서에서 제외되어야 합니다.');
@@ -237,8 +250,60 @@ try {
   await composerDialog.waitFor({ state: 'hidden' });
   assert.equal(summary(), '', `클립보드 미디어 확인 중 오류\n${summary()}`);
 
+  phase = 'profile-avatar-clipboard';
+  await page.goto(new URL('/settings/profile', baseURL).toString(), { waitUntil: 'domcontentloaded' });
+  await settle(page);
+  const avatarTarget = page.getByRole('button', { name: '프로필 이미지 선택', exact: true });
+  await avatarTarget.waitFor({ state: 'visible' });
+  await page.waitForFunction((element) => !element.disabled, await avatarTarget.elementHandle(), { timeout: 5_000 });
+  const avatarUploadResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'POST' && target.pathname === '/api/v1/media';
+  });
+  const avatarPasteResult = await avatarTarget.evaluate((element, png) => {
+    const bytes = Uint8Array.from(atob(png), (value) => value.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], 'profile-clipboard-smoke.png', { type: 'image/png' }));
+    const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  }, clipboardPNG);
+  assert.equal(avatarPasteResult, true, '프로필 이미지 영역은 PNG ClipboardEvent를 처리해야 합니다.');
+  const avatarUploadResponse = await avatarUploadResponsePromise;
+  assert.equal(avatarUploadResponse.status(), 201, '프로필 클립보드 PNG 업로드는 201이어야 합니다.');
+  const avatarUploadBody = await avatarUploadResponse.json();
+  const avatarMediaID = avatarUploadBody?.data?.id;
+  assert.ok(typeof avatarMediaID === 'string' && avatarMediaID, '프로필 업로드 응답에 미디어 ID가 있어야 합니다.');
+  await page.getByText(/업로드 완료 · 저장하면/).waitFor({ state: 'visible' });
+  const saveAvatarResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'PATCH' && target.pathname === '/api/v1/profile';
+  });
+  await page.getByRole('button', { name: '프로필 저장', exact: true }).click();
+  const saveAvatarResponse = await saveAvatarResponsePromise;
+  assert.equal(saveAvatarResponse.status(), 200, '프로필 avatarId 저장은 200이어야 합니다.');
+  const savedProfile = await saveAvatarResponse.json();
+  assert.equal(savedProfile?.data?.avatarId, avatarMediaID, '저장 응답은 업로드한 avatarId를 반환해야 합니다.');
+  await page.locator('.profile-avatar-target img').waitFor({ state: 'visible' });
+
+  await page.getByRole('button', { name: '이미지 제거', exact: true }).click();
+  await page.locator('.profile-avatar-target img').waitFor({ state: 'hidden' });
+  const removeAvatarResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'PATCH' && target.pathname === '/api/v1/profile';
+  });
+  const deleteAvatarResponsePromise = page.waitForResponse((response) => {
+    const target = new URL(response.url());
+    return response.request().method() === 'DELETE' && target.pathname === `/api/v1/media/${encodeURIComponent(avatarMediaID)}`;
+  });
+  await page.getByRole('button', { name: '프로필 저장', exact: true }).click();
+  const [removeAvatarResponse, deleteAvatarResponse] = await Promise.all([removeAvatarResponsePromise, deleteAvatarResponsePromise]);
+  assert.equal(removeAvatarResponse.status(), 200, '프로필 이미지 제거 저장은 200이어야 합니다.');
+  assert.equal(deleteAvatarResponse.status(), 204, '교체된 프로필 미디어는 즉시 정리되어야 합니다.');
+  assert.equal(summary(), '', `프로필 클립보드 이미지 확인 중 오류\n${summary()}`);
+
   await writeFile(resultPath, `${JSON.stringify({ ok: true, version: expectedVersion, routes: completed, failures, ignored }, null, 2)}\n`);
-  console.log(`브라우저 smoke 통과: ${completed.length}개 route, 새로고침·버전·클립보드 미디어·외부요청·콘솔 오류 정상`);
+  console.log(`브라우저 smoke 통과: ${completed.length}개 route, 새로고침·버전·@멘션·클립보드 Moin·프로필 이미지·외부요청·콘솔 오류 정상`);
 } catch (error) {
   await page.screenshot({ path: failurePath, fullPage: true }).catch(() => undefined);
   await writeFile(resultPath, `${JSON.stringify({ ok: false, routes: completed, failures, ignored, error: error instanceof Error ? error.stack : String(error) }, null, 2)}\n`).catch(() => undefined);

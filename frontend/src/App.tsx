@@ -29,6 +29,7 @@ const AdminApprovalsPage = lazy(() => import('./pages/admin/AdminApprovalsPage')
 const AdminAuditPage = lazy(() => import('./pages/admin/AdminAuditPage').then((module) => ({ default: module.AdminAuditPage })));
 const AdminContentPage = lazy(() => import('./pages/admin/AdminContentPage').then((module) => ({ default: module.AdminContentPage })));
 const AdminOIDCPage = lazy(() => import('./pages/admin/AdminOIDCPage').then((module) => ({ default: module.AdminOIDCPage })));
+const AdminSMTPPage = lazy(() => import('./pages/admin/AdminSMTPPage').then((module) => ({ default: module.AdminSMTPPage })));
 const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage').then((module) => ({ default: module.AdminOverviewPage })));
 const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then((module) => ({ default: module.AdminReportsPage })));
 const AdminRolesPage = lazy(() => import('./pages/admin/AdminRolesPage').then((module) => ({ default: module.AdminRolesPage })));
@@ -74,6 +75,7 @@ export default function App() {
       <Route path="admin/approvals" element={<Admin permission="approvals:review"><AdminApprovalsPage/></Admin>}/>
       <Route path="admin/roles" element={<Admin permission="roles:manage"><AdminRolesPage/></Admin>}/>
       <Route path="admin/oidc" element={<Admin permission="settings:manage"><AdminOIDCPage/></Admin>}/>
+      <Route path="admin/smtp" element={<Admin permission="settings:manage"><AdminSMTPPage/></Admin>}/>
       <Route path="admin/ai" element={<Admin permission="settings:manage"><AdminAIPage/></Admin>}/>
       <Route path="admin/settings" element={<Admin permission="settings:manage"><AdminSettingsPage/></Admin>}/>
       <Route path="admin/audit" element={<Admin permission="audit:read"><AdminAuditPage/></Admin>}/>

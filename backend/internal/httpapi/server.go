@@ -164,6 +164,7 @@ func (s *Server) Handler() http.Handler {
 
 			auth.With(s.requireBrowserSession).Get("/notifications", s.listNotifications)
 			auth.With(s.requireBrowserSession).Post("/notifications/read", s.readNotifications)
+			auth.With(s.requireBrowserSession).Get("/notifications/email/status", s.notificationEmailStatus)
 			auth.With(s.requireBrowserSession).Get("/ws/notifications", s.notificationsWebSocket)
 
 			auth.With(s.requirePermission("posts:read")).Get("/moims", s.listMoims)
@@ -174,10 +175,13 @@ func (s *Server) Handler() http.Handler {
 			auth.With(s.requirePermission("social:write")).Post("/moims/{slug}/members", s.joinMoim)
 			auth.With(s.requirePermission("social:write")).Delete("/moims/{slug}/members", s.leaveMoim)
 
-			auth.With(s.requirePermission("posts:write")).Post("/media", s.uploadMedia)
-			auth.With(s.requirePermission("posts:write")).Get("/media/config", s.mediaConfigStatus)
-			auth.With(s.requirePermission("posts:read")).Get("/media/{mediaID}", s.getMedia)
-			auth.With(s.requirePermission("posts:write")).Delete("/media/{mediaID}", s.deleteMedia)
+			// Browser sessions may manage personal profile media even when a
+			// custom role does not grant post permissions. API keys retain the
+			// explicit post scopes used by media automation.
+			auth.With(s.requireBrowserSessionOrPermission("posts:write")).Post("/media", s.uploadMedia)
+			auth.With(s.requireBrowserSessionOrPermission("posts:write")).Get("/media/config", s.mediaConfigStatus)
+			auth.Get("/media/{mediaID}", s.getMedia)
+			auth.With(s.requireBrowserSessionOrPermission("posts:write")).Delete("/media/{mediaID}", s.deleteMedia)
 			auth.With(s.requirePermission("social:write")).Post("/reports", s.createReport)
 
 			auth.With(s.requirePermission("posts:read")).Get("/workflow/status", s.workflowStatus)
@@ -223,6 +227,9 @@ func (s *Server) Handler() http.Handler {
 				admin.With(s.requirePermission("settings:manage")).Get("/ai", s.adminGetAI)
 				admin.With(s.requirePermission("settings:manage")).Put("/ai", s.adminPutAI)
 				admin.With(s.requirePermission("settings:manage")).Post("/ai/test", s.adminTestAI)
+				admin.With(s.requirePermission("settings:manage")).Get("/smtp", s.adminGetSMTP)
+				admin.With(s.requirePermission("settings:manage")).Put("/smtp", s.adminPutSMTP)
+				admin.With(s.requirePermission("settings:manage")).Post("/smtp/test", s.adminTestSMTP)
 				admin.With(s.requirePermission("settings:manage")).Get("/workflow", s.adminGetWorkflow)
 				admin.With(s.requirePermission("settings:manage")).Put("/workflow", s.adminPutWorkflow)
 				admin.With(s.requirePermission("audit:read")).Get("/audit", s.adminListAudit)
@@ -432,6 +439,19 @@ func (s *Server) requirePermission(permission string) func(http.Handler) http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !hasPermission(getPrincipal(r).Permissions, permission) {
+				writeError(w, http.StatusForbidden, "forbidden", "이 작업을 수행할 권한이 없습니다")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func (s *Server) requireBrowserSessionOrPermission(permission string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			principal := getPrincipal(r)
+			if principal.APIKey && !hasPermission(principal.Permissions, permission) {
 				writeError(w, http.StatusForbidden, "forbidden", "이 작업을 수행할 권한이 없습니다")
 				return
 			}

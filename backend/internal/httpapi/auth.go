@@ -243,6 +243,10 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &input) {
 		return
 	}
+	if input.DisplayName == nil && input.Email == nil && input.Bio == nil && input.AvatarID == nil {
+		writeError(w, http.StatusBadRequest, "invalid_profile", "변경할 프로필 항목을 하나 이상 입력해 주세요")
+		return
+	}
 	if input.DisplayName != nil {
 		value := strings.TrimSpace(*input.DisplayName)
 		if !validDisplayName(value) {

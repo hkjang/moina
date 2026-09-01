@@ -24,6 +24,7 @@ import { formatRelativeTime, topicLabel } from "../utils/format";
 import { useToast } from "./ToastProvider";
 import { DraftNavigationGuard } from "./DraftNavigationGuard";
 import { MoinComposer } from "./MoinComposer";
+import { MoinContent } from "./MoinContent";
 import { Avatar, Badge, Modal } from "./ui";
 
 const signalLabels: Record<SignalType, string> = {
@@ -303,12 +304,7 @@ export function MoinCard({
           )}
         </header>
         {current.content && (
-          <Link
-            to={`/moin/${encodeURIComponent(current.id)}`}
-            className="moin-content"
-          >
-            {current.content}
-          </Link>
+          <MoinContent content={current.content} moinId={current.id}/>
         )}
         {current.media && current.media.length > 0 && (
           <div

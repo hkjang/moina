@@ -20,7 +20,7 @@ const pixelThreshold = numberFromEnvironment('MOINA_VISUAL_PIXEL_THRESHOLD', 24,
 const maxDiffRatio = numberFromEnvironment('MOINA_VISUAL_MAX_DIFF_RATIO', 0.005, { minimum: 0, maximum: 1 });
 const loopbackHosts = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
-// 핵심 제품 경험 12개를 각 테마와 viewport에서 동일하게 비교합니다.
+// 핵심 제품 경험 13개를 각 테마와 viewport에서 동일하게 비교합니다.
 // 상세 데이터 route는 seed 상태에 따라 달라지므로 문서용 전체 캡처에서 다루고,
 // 여기서는 빈 전용 DB에서도 결정적으로 렌더링되는 route만 사용합니다.
 const screens = [
@@ -35,6 +35,7 @@ const screens = [
   { slug: 'settings-notifications', path: '/settings/notifications' },
   { slug: 'settings-accessibility', path: '/settings/accessibility' },
   { slug: 'admin-dashboard', path: '/admin' },
+  { slug: 'admin-smtp', path: '/admin/smtp' },
   { slug: 'admin-settings', path: '/admin/settings' },
 ];
 
@@ -113,7 +114,7 @@ try {
             caret: 'hide',
             fullPage: false,
             scale: 'css',
-            mask: [page.locator('[class*="avatar"], img[data-user-avatar], [data-visual-mask]')],
+            mask: [page.locator('.avatar, .moin-avatar, img[data-user-avatar], [data-visual-mask]')],
             maskColor: '#806B65',
           });
           const baselinePath = join(baselineDirectory, `${entry.id}.png`);

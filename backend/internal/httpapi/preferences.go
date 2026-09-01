@@ -52,6 +52,7 @@ type notificationPreferences struct {
 	InApp      notificationTypePreferences       `json:"inApp"`
 	Toast      notificationChannelPreferences    `json:"toast"`
 	Desktop    notificationChannelPreferences    `json:"desktop"`
+	Email      notificationChannelPreferences    `json:"email"`
 	Digest     notificationDigestPreferences     `json:"digest"`
 	QuietHours notificationQuietHoursPreferences `json:"quietHours"`
 }
@@ -106,6 +107,7 @@ type notificationPreferencesPatch struct {
 	InApp      *notificationTypePreferencesPatch       `json:"inApp"`
 	Toast      *notificationChannelPreferencesPatch    `json:"toast"`
 	Desktop    *notificationChannelPreferencesPatch    `json:"desktop"`
+	Email      *notificationChannelPreferencesPatch    `json:"email"`
 	Digest     *notificationDigestPreferencesPatch     `json:"digest"`
 	QuietHours *notificationQuietHoursPreferencesPatch `json:"quietHours"`
 }
@@ -122,7 +124,7 @@ func defaultPreferencesDocument() preferencesDocument {
 		Feed:       defaultFeedPreferences(),
 		Notifications: notificationPreferences{
 			InApp: notificationTypePreferences{Mentions: true, Signals: true, Follows: true, Echoes: true, Approvals: true},
-			Toast: notificationChannelPreferences{Enabled: true}, Desktop: notificationChannelPreferences{Enabled: false},
+			Toast: notificationChannelPreferences{Enabled: true}, Desktop: notificationChannelPreferences{Enabled: false}, Email: notificationChannelPreferences{Enabled: false},
 			Digest:     notificationDigestPreferences{Mode: "off", Time: "08:00"},
 			QuietHours: notificationQuietHoursPreferences{Enabled: false, Start: "22:00", End: "07:00"},
 		},
@@ -371,6 +373,9 @@ func applyPreferencesPatch(current preferencesDocument, patch preferencesPatch) 
 		if patch.Notifications.Desktop != nil && patch.Notifications.Desktop.Enabled != nil {
 			current.Notifications.Desktop.Enabled = *patch.Notifications.Desktop.Enabled
 		}
+		if patch.Notifications.Email != nil && patch.Notifications.Email.Enabled != nil {
+			current.Notifications.Email.Enabled = *patch.Notifications.Email.Enabled
+		}
 		if patch.Notifications.Digest != nil {
 			if patch.Notifications.Digest.Mode != nil {
 				current.Notifications.Digest.Mode = *patch.Notifications.Digest.Mode
@@ -467,6 +472,16 @@ func notificationInAppEnabled(value notificationPreferences, kind string) bool {
 		// category is introduced, preventing a rollout from silently losing data.
 		return true
 	}
+}
+
+func notificationEmailEnabled(value notificationPreferences, kind string) bool {
+	if !value.Email.Enabled {
+		return false
+	}
+	if kind == "digest" {
+		return value.Digest.Mode != "off"
+	}
+	return notificationInAppEnabled(value, kind) && !notificationBatched(value, kind)
 }
 
 func notificationQuietAt(value notificationQuietHoursPreferences, now time.Time) bool {

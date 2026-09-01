@@ -37,6 +37,32 @@ func TestRecommendationReasonsMatchRankingScore(t *testing.T) {
 	}
 }
 
+func TestBrowserSessionOrPermissionAllowsProfileMediaWithoutPostRole(t *testing.T) {
+	server := &Server{}
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	handler := server.requireBrowserSessionOrPermission("posts:write")(next)
+	tests := []struct {
+		name       string
+		principal  principal
+		wantStatus int
+	}{
+		{name: "browser session", principal: principal{}, wantStatus: http.StatusNoContent},
+		{name: "scoped API key", principal: principal{APIKey: true, Permissions: []string{"posts:write"}}, wantStatus: http.StatusNoContent},
+		{name: "unscoped API key", principal: principal{APIKey: true, Permissions: []string{"posts:read"}}, wantStatus: http.StatusForbidden},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/media", nil)
+			request = request.WithContext(withPrincipal(request, test.principal))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
 func TestRecommendationDiscoveryAndRecencyAreExplicit(t *testing.T) {
 	post := model.Moin{Signals: map[string]int64{}, CreatedAt: time.Now()}
 	reasons, _ := recommendationComponents(post, defaultFeedPreferences())
@@ -55,6 +81,9 @@ func TestExtractHashtagsAndMentionsDeduplicates(t *testing.T) {
 	}
 	if got := extractMentions("@Alice 안녕하세요 @alice @홍길동"); !slices.Equal(got, []string{"alice", "홍길동"}) {
 		t.Fatalf("mentions=%v", got)
+	}
+	if got := extractMentions("mail@example.com 붙여쓴@alice 정상 @bob_user"); !slices.Equal(got, []string{"bob_user"}) {
+		t.Fatalf("email/embedded text must not become mentions: %v", got)
 	}
 }
 

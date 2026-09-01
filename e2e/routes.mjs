@@ -22,6 +22,7 @@ export const appRoutes = [
   { slug: 'admin-approvals', path: '/admin/approvals', title: '검토·승인', admin: true, approvalOnly: true },
   { slug: 'admin-roles', path: '/admin/roles', title: '역할·권한', admin: true },
   { slug: 'admin-oidc', path: '/admin/oidc', title: 'Keycloak OIDC', admin: true },
+  { slug: 'admin-smtp', path: '/admin/smtp', title: 'SMTP 메일 설정', admin: true },
   { slug: 'admin-ai', path: '/admin/ai', title: 'AI 설정', admin: true },
   { slug: 'admin-settings', path: '/admin/settings', title: '일반 설정', admin: true },
   { slug: 'admin-audit', path: '/admin/audit', title: '감사 로그', admin: true },

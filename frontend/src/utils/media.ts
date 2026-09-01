@@ -1,5 +1,7 @@
 export const MEDIA_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm';
 export const MEDIA_TYPES = new Set(MEDIA_ACCEPT.split(','));
+export const IMAGE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp';
+export const IMAGE_TYPES = new Set(IMAGE_ACCEPT.split(','));
 
 export type ComposerMediaType = 'image' | 'video';
 export type ComposerUploadStatus = 'queued' | 'uploading' | 'uploaded' | 'error' | 'cancelled';
@@ -7,6 +9,16 @@ export type ComposerUploadStatus = 'queued' | 'uploading' | 'uploaded' | 'error'
 export function mediaTypeFor(file: Pick<File, 'type'>): ComposerMediaType | undefined {
   if (!MEDIA_TYPES.has(file.type)) return undefined;
   return file.type.startsWith('video/') ? 'video' : 'image';
+}
+
+export function clipboardImages(clipboardData: DataTransfer | null) {
+  if (!clipboardData) return [];
+  const itemFiles = Array.from(clipboardData.items || [])
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+  return (itemFiles.length > 0 ? itemFiles : Array.from(clipboardData.files || []))
+    .filter((file) => file.type.startsWith('image/'));
 }
 
 export function uploadStatusLabel(status: ComposerUploadStatus) {

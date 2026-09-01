@@ -1,11 +1,13 @@
-import { Bell, KeyRound, Monitor, RefreshCw, Save, ShieldCheck, UserRoundCog } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Bell, KeyRound, Mail, Monitor, RefreshCw, Save, ShieldCheck, UserRoundCog } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { NavLink } from 'react-router-dom';
 import { apiRequest, readableError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { ProfileAvatarEditor } from '../components/ProfileAvatarEditor';
 import { useToast } from '../components/ToastProvider';
 import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingState, Modal, PageHeader, SectionHeader, SwitchField } from '../components/ui';
 import { useApiQuery } from '../hooks/useApiQuery';
+import { invalidateApiQueries } from '../hooks/apiQueryClient';
 import { hasPermission, personalNavigation } from '../navigation';
 import type { PersonalKey, UserPreferences } from '../types';
 import { formatDate, listFrom } from '../utils/format';
@@ -21,11 +23,58 @@ export function ProfileSettingsPage() {
   const { user, refresh } = useAuth();
   const { notify } = useToast();
   const query = useApiQuery<Record<string, unknown>>('/profile');
-  const [form, setForm] = useState({ displayName: '', bio: '', email: '' });
+  const initializedProfile = useRef('');
+  const [form, setForm] = useState({ displayName: '', bio: '', email: '', avatarId: '' });
+  const [savedAvatar, setSavedAvatar] = useState({ id: '', url: '' });
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [saving, setSaving] = useState(false);
-  useEffect(() => { const data = query.data; if (data) setForm({ displayName: String(data.displayName || data.name || user?.displayName || ''), bio: String(data.bio || ''), email: String(data.email || user?.email || '') }); }, [query.data, user]);
-  const save = async (event: FormEvent) => { event.preventDefault(); setSaving(true); try { await apiRequest('/profile', { method: 'PATCH', body: form }); await refresh(); notify('프로필을 저장했습니다.', 'success'); } catch (error) { notify(readableError(error), 'error'); } finally { setSaving(false); } };
-  return <SettingsLayout title="프로필 설정" description="다른 사람에게 보이는 이름, 소개와 전문 분야를 관리합니다.">{query.loading ? <LoadingState/> : query.error ? <ErrorState message={query.error} onRetry={query.reload}/> : <Card><SectionHeader title="기본 프로필" description={`고유 사용자 이름 @${user?.username}`}/><form className="settings-form" onSubmit={save}><Field label="표시 이름"><input required maxLength={80} value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })}/></Field><Field label="이메일"><input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })}/></Field><Field label="소개" help="관심사와 전문성을 300자 이내로 알려주세요."><textarea rows={5} maxLength={300} value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })}/></Field><div className="form-actions"><Button type="submit" variant="primary" disabled={saving}><Save/>{saving ? '저장 중…' : '프로필 저장'}</Button></div></form></Card>}</SettingsLayout>;
+  useEffect(() => {
+    const data = query.data;
+    if (!data) return;
+    const profileID = String(data.id || user?.id || user?.username || 'profile');
+    if (initializedProfile.current === profileID) return;
+    initializedProfile.current = profileID;
+    const avatar = {
+      id: String(data.avatarId || ''),
+      url: String(data.avatarUrl || user?.avatarUrl || ''),
+    };
+    setSavedAvatar(avatar);
+    setForm({
+      displayName: String(data.displayName || data.name || user?.displayName || ''),
+      bio: String(data.bio || ''),
+      email: String(data.email || user?.email || ''),
+      avatarId: avatar.id,
+    });
+  }, [query.data, user]);
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (avatarBusy) {
+      notify('프로필 이미지 업로드가 끝난 뒤 저장해 주세요.', 'info');
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await apiRequest<Record<string, unknown>>('/profile', { method: 'PATCH', body: form });
+      const nextAvatar = {
+        id: String(updated.avatarId || ''),
+        url: String(updated.avatarUrl || ''),
+      };
+      const previousAvatarID = savedAvatar.id;
+      setSavedAvatar(nextAvatar);
+      setForm((current) => ({ ...current, avatarId: nextAvatar.id }));
+      await refresh();
+      invalidateApiQueries(['/feed', '/posts', '/users', '/profiles', '/search', '/notifications']);
+      if (previousAvatarID && previousAvatarID !== nextAvatar.id) {
+        void apiRequest(`/media/${encodeURIComponent(previousAvatarID)}`, { method: 'DELETE' }).catch(() => undefined);
+      }
+      notify('프로필을 저장했습니다.', 'success');
+    } catch (error) {
+      notify(readableError(error), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <SettingsLayout title="프로필 설정" description="다른 사람에게 보이는 프로필 이미지, 이름과 소개를 관리합니다.">{query.loading ? <LoadingState/> : query.error ? <ErrorState message={query.error} onRetry={query.reload}/> : <Card><SectionHeader title="기본 프로필" description={`고유 사용자 이름 @${user?.username}`}/><form className="settings-form" onSubmit={save}><ProfileAvatarEditor name={form.displayName || user?.displayName || '사용자'} initialAvatarId={savedAvatar.id} initialAvatarUrl={savedAvatar.url} value={form.avatarId} disabled={saving} onBusyChange={setAvatarBusy} onChange={(avatarId) => setForm((current) => ({ ...current, avatarId }))}/><Field label="표시 이름"><input required maxLength={80} value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })}/></Field><Field label="이메일"><input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })}/></Field><Field label="소개" help="관심사와 전문성을 500자 이내로 알려주세요."><textarea rows={5} maxLength={500} value={form.bio} onChange={(event) => setForm({ ...form, bio: event.target.value })}/></Field><div className="form-actions"><Button type="submit" variant="primary" disabled={saving || avatarBusy}><Save/>{saving ? '저장 중…' : avatarBusy ? '이미지 업로드 중…' : '프로필 저장'}</Button></div></form></Card>}</SettingsLayout>;
 }
 
 function usePreferences() {
@@ -54,12 +103,13 @@ export function NotificationSettingsPage() {
   const { query, value, setValue } = usePreferences();
   const [saving, setSaving] = useState(false);
   const [desktopPermission, setDesktopPermission] = useState<DesktopPermission>(currentDesktopPermission);
+  const emailStatus = useApiQuery<{ available?: boolean; smtpConfigured?: boolean; recipientConfigured?: boolean }>('/notifications/email/status');
   const notifications = value.notifications;
   const updateInApp = (key: keyof typeof notifications.inApp, enabled: boolean) => setValue({
     ...value,
     notifications: { ...notifications, inApp: { ...notifications.inApp, [key]: key === 'approvals' ? true : enabled } },
   });
-  const updateChannel = (channel: 'toast' | 'desktop', enabled: boolean) => setValue({
+  const updateChannel = (channel: 'toast' | 'desktop' | 'email', enabled: boolean) => setValue({
     ...value,
     notifications: { ...notifications, [channel]: { enabled } },
   });
@@ -106,9 +156,16 @@ export function NotificationSettingsPage() {
       : desktopPermission === 'unsupported'
         ? { label: '지원 안 함', tone: 'warning' as const, description: '현재 브라우저에서는 앱 내 알림과 토스트를 이용해 주세요.' }
         : { label: '확인 전', tone: 'neutral' as const, description: '데스크톱 알림을 켤 때 브라우저 권한을 요청합니다.' };
+  const smtpConfigured = emailStatus.data?.smtpConfigured ?? emailStatus.data?.available === true;
+  const recipientConfigured = emailStatus.data?.recipientConfigured ?? emailStatus.data?.available === true;
+  const emailStatusCopy = !smtpConfigured
+    ? 'SMTP 설정이 아직 준비되지 않았습니다.'
+    : !recipientConfigured
+      ? '프로필 설정에 메일을 받을 이메일 주소를 먼저 저장해 주세요.'
+      : '관리자 SMTP 설정이 준비되어 있습니다.';
 
   return <SettingsLayout title="알림 개인화" description="알림 종류와 표시 방식, 요약 주기와 방해 금지 시간을 관리합니다.">{query.loading ? <LoadingState/> : query.error ? <ErrorState message={query.error} onRetry={query.reload}/> : <>
-    <Card><SectionHeader title="앱 내 알림" description="알림 센터에 보관할 활동을 선택합니다." action={<Button variant="primary" onClick={() => void save()} disabled={saving}><Save/>{saving ? '저장 중…' : '저장'}</Button>}/>
+    <Card><SectionHeader title="알림 받을 활동" description="알림 센터와 이메일에 공통으로 적용할 활동을 선택합니다." action={<Button variant="primary" onClick={() => void save()} disabled={saving}><Save/>{saving ? '저장 중…' : '저장'}</Button>}/>
       <SwitchField label="멘션" description="다른 사용자가 나를 언급하면 알립니다." checked={notifications.inApp.mentions} onChange={(checked) => updateInApp('mentions', checked)}/>
       <SwitchField label="Signal" description="내 모인에 새로운 Signal이 생기면 알립니다." checked={notifications.inApp.signals} onChange={(checked) => updateInApp('signals', checked)}/>
       <SwitchField label="새로운 Link" description="다른 사용자가 나와 Link하면 알립니다." checked={notifications.inApp.follows} onChange={(checked) => updateInApp('follows', checked)}/>
@@ -119,6 +176,8 @@ export function NotificationSettingsPage() {
       <SwitchField label="앱 내 토스트" description="MOINA를 사용하는 동안 화면에 짧은 알림을 표시합니다." checked={notifications.toast.enabled} onChange={(checked) => updateChannel('toast', checked)}/>
       <SwitchField label="데스크톱 알림" description="브라우저가 백그라운드에 있어도 운영체제 알림을 표시합니다." checked={notifications.desktop.enabled} onChange={(checked) => void toggleDesktop(checked)}/>
       <div className="account-auth"><Bell/><span><strong>브라우저 알림 권한</strong><small>{permissionCopy.description}</small></span><Badge tone={permissionCopy.tone}>{permissionCopy.label}</Badge></div>
+      <SwitchField label="이메일 알림" description={emailStatus.data?.available ? '프로필 이메일로 알림을 보냅니다. 요약을 켜면 반복 활동은 묶어서 보냅니다.' : '관리자가 SMTP 메일 설정을 활성화하면 사용할 수 있습니다.'} checked={notifications.email.enabled} disabled={!emailStatus.data?.available && !notifications.email.enabled} onChange={(checked) => updateChannel('email', checked)}/>
+      <div className="account-auth"><Mail/><span><strong>메일 전달 서버</strong><small>{emailStatusCopy}</small></span><Badge tone={emailStatus.data?.available ? 'positive' : 'neutral'}>{emailStatus.data?.available ? '사용 가능' : '대기'}</Badge></div>
     </Card>
     <Card><SectionHeader title="요약과 조용한 시간" description="반복 알림은 모아서 보고, 집중 시간에는 실시간 표시를 잠시 멈춥니다."/>
       <div className="form-grid"><Field label="알림 요약"><select value={notifications.digest.mode} onChange={(event) => setValue({ ...value, notifications: { ...notifications, digest: { ...notifications.digest, mode: event.target.value as typeof notifications.digest.mode } } })}><option value="off">사용 안 함</option><option value="hourly">매시간</option><option value="daily">매일</option></select></Field><Field label="요약 시각" help="일별 요약의 기준 시각입니다."><input type="time" value={notifications.digest.time} disabled={notifications.digest.mode === 'off'} onChange={(event) => setValue({ ...value, notifications: { ...notifications, digest: { ...notifications.digest, time: event.target.value } } })}/></Field></div>

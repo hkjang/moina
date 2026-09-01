@@ -2,7 +2,7 @@
 
 ## 책임 경계
 
-GitHub Release에는 `linux/amd64`용 `moina:v0.1.9` 서비스 이미지 하나를 저장한 `moina-v0.1.9.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
+GitHub Release에는 `linux/amd64`용 `moina:v0.1.10` 서비스 이미지 하나를 저장한 `moina-v0.1.10.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
 
 ## 반입과 설치
 
@@ -13,10 +13,10 @@ GitHub Release에는 `linux/amd64`용 `moina:v0.1.9` 서비스 이미지 하나�
 5. `pull never`, read-only, dropped capabilities로 시작합니다.
 
 ```bash
-sha256sum moina-v0.1.9.tar.gz
-gzip -t moina-v0.1.9.tar.gz
-gzip -dc moina-v0.1.9.tar.gz | docker image load
-docker image inspect moina:v0.1.9
+sha256sum moina-v0.1.10.tar.gz
+gzip -t moina-v0.1.10.tar.gz
+gzip -dc moina-v0.1.10.tar.gz | docker image load
+docker image inspect moina:v0.1.10
 cp .env.example .env
 chmod 600 .env
 docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull never
@@ -52,7 +52,7 @@ docker compose -f deploy/docker-compose.offline.yml logs --since 15m moina
 
 `v0.1.4`은 시작 시 `pg_trgm` 확장을 만들고 trigram·전문 검색 index를 생성합니다. migration 계정이 extension 생성 권한이 없다면 DBA가 대상 database에 `CREATE EXTENSION IF NOT EXISTS pg_trgm`을 먼저 실행해야 합니다. 별도 OpenSearch나 인터넷 연결은 필요하지 않습니다.
 
-적용한 migration에는 SHA-256 checksum을 저장합니다. 이미 기록된 SQL 파일이 바뀌어 checksum이 다르면 시작을 중단하므로, 운영 DB의 `schema_migrations`를 임의 수정하거나 적용 완료 migration 파일을 덮어쓰지 않습니다. **DB에 현재 binary가 알지 못하는 migration version이 하나라도 있으면 downgrade로 판단해 기동을 거부합니다.** 새 변경은 항상 다음 번호 migration으로 배포합니다. v0.1.4의 migration 005는 Moin 관계별 `post_media.alt_text`와 기존 기본 설명 backfill을, 006은 다중 인스턴스 공용 `rate_limit_buckets`를, 007은 사용자별 `notification_digest_state`를 추가합니다. Migration 008은 알림 전달 row에 `notifications.in_app`을 추가하고 In App 미확인 조회용 부분 index를 만들며, 009는 Outbox 실제 전달 시각인 `notifications.delivered_at`과 Digest 집계 index를 추가합니다. Migration 010은 각 일반 알림의 Digest 처리 완료 시각인 `notifications.digested_at`과 미처리 알림 index를 추가해 worker 실행 사이에 commit된 전달 row도 다음 Digest가 이어서 처리하도록 합니다. Migration 011은 `notification_digest_state.config_signature`에 끔·시간별·일별+시각 구성을 기록합니다. 기존 상태에는 현재 저장 설정의 signature를 backfill해 업그레이드 직후 이미 도래한 정상 window를 임의로 버리지 않습니다. Migration에는 연결 단계와 분리된 최대 30분 제한이 적용되며 완료되기 전에는 readiness가 성공하지 않습니다. 대용량 index 생성 중 배포 관리자가 컨테이너를 조기 종료하지 않도록 startup/readiness 허용 시간을 30분 이상으로 잡고, 한도 초과 시 log와 PostgreSQL lock·I/O·권한을 확인합니다.
+적용한 migration에는 SHA-256 checksum을 저장합니다. 이미 기록된 SQL 파일이 바뀌어 checksum이 다르면 시작을 중단하므로, 운영 DB의 `schema_migrations`를 임의 수정하거나 적용 완료 migration 파일을 덮어쓰지 않습니다. **DB에 현재 binary가 알지 못하는 migration version이 하나라도 있으면 downgrade로 판단해 기동을 거부합니다.** 새 변경은 항상 다음 번호 migration으로 배포합니다. v0.1.4의 migration 005는 Moin 관계별 `post_media.alt_text`와 기존 기본 설명 backfill을, 006은 다중 인스턴스 공용 `rate_limit_buckets`를, 007은 사용자별 `notification_digest_state`를 추가합니다. Migration 008은 알림 전달 row에 `notifications.in_app`을 추가하고 In App 미확인 조회용 부분 index를 만들며, 009는 Outbox 실제 전달 시각인 `notifications.delivered_at`과 Digest 집계 index를 추가합니다. Migration 010은 각 일반 알림의 Digest 처리 완료 시각인 `notifications.digested_at`과 미처리 알림 index를 추가해 worker 실행 사이에 commit된 전달 row도 다음 Digest가 이어서 처리하도록 합니다. Migration 011은 `notification_digest_state.config_signature`에 끔·시간별·일별+시각 구성을 기록합니다. 기존 상태에는 현재 저장 설정의 signature를 backfill해 업그레이드 직후 이미 도래한 정상 window를 임의로 버리지 않습니다. Migration 012는 SMTP로 실제 전달한 알림에 `notifications.emailed_at`을 기록합니다. Migration에는 연결 단계와 분리된 최대 30분 제한이 적용되며 완료되기 전에는 readiness가 성공하지 않습니다. 대용량 index 생성 중 배포 관리자가 컨테이너를 조기 종료하지 않도록 startup/readiness 허용 시간을 30분 이상으로 잡고, 한도 초과 시 log와 PostgreSQL lock·I/O·권한을 확인합니다.
 
 Flow cursor는 서명 없는 versioned Base64 URL opaque 데이터이지만 서버가 내부 값을 검증합니다. Following은 게시 시각·ID를, For Me는 기준 시각·점수·ID·랭킹 버전과 사용자별 server ranking snapshot ID를 포함합니다. For Me는 필터를 통과한 최근 후보 최대 200개의 합계·component 점수와 당시 개인화 설정을 고정합니다. 동일 사용자·랭킹 버전·설정은 같은 30초 bucket에서 snapshot을 재사용합니다.
 
@@ -68,6 +68,17 @@ Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 
 
 알림은 commit된 PostgreSQL row가 source of truth이고 `LISTEN/NOTIFY`는 실시간 fanout hint입니다. Listener의 bounded channel이 가득 차면 signal을 버리지 않고 consumer가 따라올 때까지 backpressure를 적용합니다. Browser별 queue가 가득 찬 느린 WebSocket은 연결을 종료하고 client가 최대 30초 지수 backoff로 재연결합니다. 재연결 직후와 연결 중 매 60초마다 REST unread summary를 다시 읽으므로 일시적인 LISTEN·socket 공백은 지속적인 알림 유실이 되지 않습니다. In App을 끈 유형도 cross-instance Toast/Desktop 전달을 위해 `in_app=false`와 읽음 상태의 durable row로 남기고 알림 목록·미확인 수에서만 제외합니다. 사용자별 Toast·Desktop·조용한 시간과 Digest 설정은 WebSocket의 독립 `inApp`·`toast`·`desktop` flag에 적용되며 승인·보안 알림은 In App 운영 기록으로 항상 노출합니다. Digest는 업무 event 발생 시각이 아니라 Outbox가 알림 row를 실제 저장한 `delivered_at` 순서로 아직 `digested_at`이 없는 전달 row를 집계하고, 처리한 row를 같은 transaction에서 표시합니다. 따라서 지연 처리되거나 집계 도중 commit된 알림도 다음 실행에서 누락되지 않습니다. Digest를 새로 켜거나 mode·일별 시각을 바꾸면 현재 시각을 새 기준선으로 잡아 꺼져 있던 기간이나 이전 일정의 backlog를 재생하지 않습니다. 여러 인스턴스의 worker는 PostgreSQL advisory lock과 상태 테이블로 중복 생성을 막으며, 손상된 사용자 설정 한 건은 savepoint 단위로 격리해 다른 사용자의 Digest를 중단시키지 않습니다.
 
+### SMTP 알림 전달
+
+관리자는 **SMTP 메일 설정**에서 저장 후 테스트 메일을 현재 관리자 프로필 이메일로 전송해 DNS, TLS, 인증, 발신·수신 정책을 확인합니다. 사용자 이메일 알림은 별도의 `notification.email` Outbox 이벤트로 전달되므로 SMTP 장애가 게시·Signal·Link transaction을 되돌리지 않습니다. 실패 이벤트의 `lastError`로 DNS 정책, TLS 인증서, STARTTLS 지원, 인증 또는 relay 거부를 구분하고 원인을 해결한 뒤 재처리합니다. 성공한 알림은 `emailed_at`으로 표시합니다. Outbox는 at-least-once 전달이므로 SMTP 전송 직후 DB marker 기록 전에 process가 중단되는 극히 짧은 구간에는 같은 메일이 재시도될 수 있습니다.
+
+| SMTP 증상 | 우선 확인 |
+| --- | --- |
+| 사설망 주소 거부 | host에 port가 섞이지 않았는지 → 사설망 SMTP 허용 → 컨테이너 DNS가 정확한 RFC1918/ULA를 반환하는지 |
+| STARTTLS 실패 | server가 EHLO에 STARTTLS를 광고하는지 → CA bundle → hostname과 인증서 SAN |
+| 인증·relay 거부 | 암호화 연결 여부 → username/password → 보내는 주소와 받는 domain relay 정책 |
+| 메일은 실패하지만 Moin은 게시됨 | 정상 분리 동작. 감사 로그의 실패 이벤트 복구에서 `notification.email` 확인 |
+
 ## Client IP와 전역 요청 한도
 
 감사 기록의 `socketIp`는 직접 연결 Peer, `clientIp`는 신뢰 Proxy chain을 오른쪽부터 검증해 계산한 사용자 주소이며 `proxyChain`은 검증에 사용한 전체 주소 목록입니다. 신뢰 Proxy를 등록하지 않은 상태에서 임의 `X-Forwarded-For`를 보내도 `clientIp`는 소켓 주소로 유지되어야 합니다. `Forwarded: proto=`와 `X-Forwarded-Proto`도 가장 가까운 오른쪽 hop의 값만 사용합니다. 설정 변경 뒤 별도 재시작은 필요하지 않습니다.
@@ -76,7 +87,7 @@ Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 
 
 ## 미디어 업로드 계약 확인
 
-인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.9` 관리자 설정이 아닙니다.
+인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.10` 관리자 설정이 아닙니다.
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/v1/media/config \
@@ -125,7 +136,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 
 - root encryption key는 application 관리자 계정과 분리해 vault/HSM 수준으로 보관합니다.
 - 개인 API/MCP key는 사용자 화면에서 회전하고 이전 token은 즉시 폐기합니다.
-- `v0.1.9`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
+- `v0.1.10`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
 - 유출이 의심되면 관련 key 폐기, session 종료, audit 조사와 downstream secret rotation을 함께 수행합니다.
 
 ## 장애 분류

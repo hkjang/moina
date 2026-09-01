@@ -19,12 +19,13 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { normalizeMoin } from "../api/adapters";
+import { normalizeMoin, normalizeProfile } from "../api/adapters";
 import { apiRequest, readableError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { useApiQuery } from "../hooks/useApiQuery";
-import type { Moin } from "../types";
+import type { Moin, Profile } from "../types";
 import {
+  clipboardImages,
   MEDIA_ACCEPT,
   mediaTypeFor,
   uploadStatusLabel,
@@ -55,6 +56,22 @@ interface MediaConfig {
   acceptedTypes?: string[];
 }
 
+interface MentionSearch {
+  start: number;
+  end: number;
+  query: string;
+}
+
+const activeMention = (value: string, caret: number): MentionSearch | null => {
+  const before = value.slice(0, caret);
+  const match = before.match(
+    /(?:^|[^\p{L}\p{N}._-])@([\p{L}\p{N}._-]{0,39})$/u,
+  );
+  if (!match) return null;
+  const query = match[1];
+  return { start: caret - query.length - 1, end: caret, query };
+};
+
 const localID = () =>
   globalThis.crypto?.randomUUID?.() ||
   `media-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -65,19 +82,6 @@ const fileIdentity = (file: File) =>
 const clipboardName = (file: File, index: number) => {
   const extension = file.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
   return `클립보드 이미지 ${index + 1}.${extension}`;
-};
-
-const clipboardImages = (clipboardData: DataTransfer | null) => {
-  if (!clipboardData) return [];
-  const itemFiles = Array.from(clipboardData.items || [])
-    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => Boolean(file));
-  return (
-    itemFiles.length > 0
-      ? itemFiles
-      : Array.from(clipboardData.files || [])
-  ).filter((file) => file.type.startsWith("image/"));
 };
 
 const fileSize = (bytes?: number) => {
@@ -142,6 +146,10 @@ export function MoinComposer({
   );
   const [submitting, setSubmitting] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState<MentionSearch | null>(null);
+  const [mentionCandidates, setMentionCandidates] = useState<Profile[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const mediaRef = useRef<MediaUpload[]>(media);
   const controllers = useRef(new Map<string, AbortController>());
   const uploadQueue = useRef<Promise<void>>(Promise.resolve());
@@ -152,7 +160,10 @@ export function MoinComposer({
   const protectedMediaIDs = useRef(new Set<string>());
   const dragDepth = useRef(0);
   const formRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const mentionTimer = useRef<number | undefined>(undefined);
+  const mentionSequence = useRef(0);
   const clipboardSequence = useRef(0);
   const addFilesRef = useRef<
     (
@@ -224,6 +235,7 @@ export function MoinComposer({
       disposed.current = false;
       return () => {
         disposed.current = true;
+        window.clearTimeout(mentionTimer.current);
         mediaRef.current.forEach((item) =>
           cancelledUploads.current.add(item.localId),
         );
@@ -567,6 +579,63 @@ export function MoinComposer({
     setMedia(next);
   };
 
+  const closeMentions = () => {
+    window.clearTimeout(mentionTimer.current);
+    mentionSequence.current += 1;
+    setMentionSearch(null);
+    setMentionCandidates([]);
+    setMentionLoading(false);
+    setMentionIndex(0);
+  };
+
+  const findMentions = (value: string, caret: number) => {
+    const active = activeMention(value, caret);
+    window.clearTimeout(mentionTimer.current);
+    if (!active) {
+      closeMentions();
+      return;
+    }
+    const sequence = ++mentionSequence.current;
+    setMentionSearch(active);
+    setMentionCandidates([]);
+    setMentionLoading(true);
+    setMentionIndex(0);
+    mentionTimer.current = window.setTimeout(() => {
+      const path = active.query
+        ? `/search?q=${encodeURIComponent(active.query)}&type=users&limit=6`
+        : "/search?recommended=true&type=users&limit=6";
+      void apiRequest<unknown>(path)
+        .then((result) => {
+          if (disposed.current || sequence !== mentionSequence.current) return;
+          const users =
+            result && typeof result === "object" && Array.isArray((result as { users?: unknown[] }).users)
+              ? (result as { users: unknown[] }).users
+              : [];
+          setMentionCandidates(users.map(normalizeProfile));
+        })
+        .catch(() => {
+          if (!disposed.current && sequence === mentionSequence.current)
+            setMentionCandidates([]);
+        })
+        .finally(() => {
+          if (!disposed.current && sequence === mentionSequence.current)
+            setMentionLoading(false);
+        });
+    }, 180);
+  };
+
+  const insertMention = (candidate: Profile) => {
+    if (!mentionSearch) return;
+    const next = `${content.slice(0, mentionSearch.start)}@${candidate.username} ${content.slice(mentionSearch.end)}`;
+    const caret = mentionSearch.start + candidate.username.length + 2;
+    setContent(next);
+    closeMentions();
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(caret, caret);
+    });
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (
@@ -652,6 +721,28 @@ export function MoinComposer({
   };
 
   const shortcutSubmit = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionSearch && (mentionLoading || mentionCandidates.length > 0)) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        if (mentionCandidates.length > 0)
+          setMentionIndex((current) =>
+            event.key === "ArrowDown"
+              ? (current + 1) % mentionCandidates.length
+              : (current - 1 + mentionCandidates.length) % mentionCandidates.length,
+          );
+        return;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && mentionCandidates[mentionIndex]) {
+        event.preventDefault();
+        insertMention(mentionCandidates[mentionIndex]);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMentions();
+        return;
+      }
+    }
     if (
       event.key === "Enter" &&
       (event.ctrlKey || event.metaKey) &&
@@ -683,16 +774,50 @@ export function MoinComposer({
       <Avatar name={user?.displayName || "나"} src={user?.avatarUrl} />
       <div>
         <textarea
+          ref={textareaRef}
           rows={replyToId ? 3 : 4}
           autoFocus={autoFocus}
           disabled={submitting}
           value={content}
-          onChange={(event) => setContent(event.target.value)}
+          onChange={(event) => {
+            setContent(event.target.value);
+            findMentions(event.target.value, event.target.selectionStart);
+          }}
           onKeyDown={shortcutSubmit}
+          onClick={(event) => findMentions(event.currentTarget.value, event.currentTarget.selectionStart)}
+          onBlur={() => window.setTimeout(() => closeMentions(), 100)}
+          aria-autocomplete="list"
+          aria-expanded={mentionSearch !== null}
+          aria-controls={mentionSearch ? "moin-mention-list" : undefined}
+          aria-activedescendant={mentionCandidates[mentionIndex] ? `moin-mention-${mentionCandidates[mentionIndex].id}` : undefined}
           placeholder={placeholder}
           aria-label={editMoin ? "수정할 모인 내용" : replyToId ? "에코 내용" : "모인 내용"}
           maxLength={5100}
         />
+        {mentionSearch && (
+          <div className="composer-mentions" id="moin-mention-list" role="listbox" aria-label="멘션할 사용자">
+            {mentionLoading ? (
+              <span className="composer-mention-state"><LoaderCircle className="spin"/>사용자를 찾는 중…</span>
+            ) : mentionCandidates.length > 0 ? mentionCandidates.map((candidate, index) => (
+              <button
+                id={`moin-mention-${candidate.id}`}
+                key={candidate.id}
+                type="button"
+                role="option"
+                aria-selected={index === mentionIndex}
+                className={index === mentionIndex ? "active" : ""}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setMentionIndex(index)}
+                onClick={() => insertMention(candidate)}
+              >
+                <Avatar name={candidate.displayName} src={candidate.avatarUrl}/>
+                <span><strong>{candidate.displayName}</strong><small>@{candidate.username}</small></span>
+              </button>
+            )) : (
+              <span className="composer-mention-state">일치하는 사용자가 없습니다.</span>
+            )}
+          </div>
+        )}
         <button
           type="button"
           className="composer-intake-hint"

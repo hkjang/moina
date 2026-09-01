@@ -148,6 +148,9 @@ export interface UserPreferences {
     desktop?: {
       enabled?: boolean;
     };
+    email?: {
+      enabled?: boolean;
+    };
     digest?: {
       mode?: "off" | "hourly" | "daily";
       time?: string;

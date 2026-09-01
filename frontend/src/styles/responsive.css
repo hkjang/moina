@@ -63,4 +63,5 @@
 @media (max-width: 600px) {
   .composer-intake-hint { grid-template-columns: auto minmax(0,1fr); }
   .composer-intake-hint > small { grid-column: 2; text-align: left; }
+  .composer-mentions { top: 112px; left: 0; }
 }

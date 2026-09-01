@@ -11,12 +11,12 @@
 
 ## 핵심 사실
 
-- 현재 버전: v0.1.9
-- 서비스 이미지: moina:v0.1.9
-- 오프라인 파일: moina-v0.1.9.tar.gz
+- 현재 버전: v0.1.10
+- 서비스 이미지: moina:v0.1.10
+- 오프라인 파일: moina-v0.1.10.tar.gz
 - 기술: Go, React, TypeScript, PostgreSQL, REST, SSE, WebSocket, MCP
 - 런타임 환경변수: MOINA_POSTGRES_DSN, MOINA_BOOTSTRAP_ADMIN, MOINA_BOOTSTRAP_ADMIN_PASSWORD, MOINA_ENCRYPTION_KEY
-- Keycloak/OIDC, AI, 승인, 권한은 관리자 화면에서 설정한다.
+- Keycloak/OIDC, AI, SMTP 메일, 승인, 권한은 관리자 화면에서 설정한다.
 - OIDC와 AI는 exact-authority allowedHosts를 사용한다. port 없는 항목은 scheme 기본 port만 허용하며 비기본 port는 host:port가 필요하다.
 - RFC1918/ULA를 쓰는 내부 endpoint는 정확한 DNS hostname을 privateAllowedHosts에도 등록한다. loopback, link-local, metadata, CGNAT, unspecified, multicast는 항상 차단한다.
 - Flow는 고정 SQL batch hydration과 versioned Base64 URL keyset cursor를 사용한다. For Me는 최근 후보 최대 200개의 개인화 설정과 score component를 동결한다.
@@ -25,9 +25,12 @@
 - 검색은 PostgreSQL pg_trgm과 전문 검색을 결합하며 외부 검색 서비스가 필요 없다.
 - Transactional Outbox 실패 이벤트 조회는 audit:read, 재처리는 outbox:manage 권한을 사용한다.
 - Prometheus 운영 지표는 /metrics에서 제공하고 미디어는 PostgreSQL Large Object로 streaming한다. GET /api/v1/media/config는 현재 maxUploadBytes, maxPerPost, acceptedTypes를 제공한다.
+- 개인 프로필 이미지는 본인 소유 image media만 사용할 수 있으며 파일 선택, drag-and-drop, 캡처 이미지 Ctrl+V, 교체와 제거를 지원한다.
+- Moin 작성·수정은 @사용자아이디 자동완성·키보드 선택과 클릭 가능한 프로필 링크를 제공한다. 멘션 알림은 공개 범위와 차단 관계를 확인하고 같은 Moin의 기존 수신자를 중복 통지하지 않는다.
 - 사용자별 미첨부 media quota는 100개·512 MiB다. 동시 Large Object read는 최대 8개이며 작은 pool에서는 일반 API 연결 5개를 남긴다. Cleaner는 인스턴스당 한 시간에 최대 10,000개를 drain한다.
 - 알림은 LISTEN backpressure, slow socket 재연결과 client의 60초 REST unread reconcile을 사용한다.
-- 알림 설정은 In App 유형, Toast, Desktop, 시간별·일별 Digest와 조용한 시간을 분리한다. WebSocket frame은 inApp, toast, desktop 정책 flag를 제공하며 In App 숨김 row는 알림 목록과 unread 수에서 제외한다.
+- 알림 설정은 In App 유형, Toast, Desktop, SMTP Email, 시간별·일별 Digest와 조용한 시간을 분리한다. Email은 사용자가 명시적으로 켜며 일반 활동은 Digest로 묶고 멘션·승인·보안은 즉시 전달한다. WebSocket frame은 inApp, toast, desktop 정책 flag를 제공하며 In App 숨김 row는 알림 목록과 unread 수에서 제외한다.
+- SMTP password는 암호화하고 조회하지 않는다. 정확한 host:port와 DNS 결과를 연결 직전에 검사하며 사설망 opt-in도 해당 DNS authority에만 적용한다. 메일 실패는 별도 notification.email Outbox로 재시도되어 원래 게시를 실패시키지 않는다.
 - Digest는 실제 알림 저장 시각 delivered_at 순서의 미처리 row를 집계하고 digested_at으로 완료를 표시해 지연 Outbox와 동시 commit을 다음 실행에서 이어서 처리한다. config_signature은 mode·일별 시각 전환을 새 구독 경계로 만들어 과거 backlog 재생을 막는다.
 - 미디어 대체 텍스트는 원본 파일이 아니라 각 post_media 관계에 저장되어 같은 media를 Moin별 문맥으로 설명할 수 있다.
 - Moin 작성·수정은 파일 선택, drag-and-drop과 clipboard 이미지 paste를 같은 직렬 upload queue로 처리한다. PATCH mediaIds 생략은 유지, 빈 배열은 전체 제거, 제공 배열은 순서 포함 전체 교체다.

@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity, Bell, Bookmark, Bot, CircleGauge, Compass, FileCheck2, Flag, KeyRound,
   LockKeyhole, MessageCircleMore, Network, Settings2, ShieldCheck, Sparkles, Users,
-  UserRoundCog, Waves, Search, ScrollText,
+  UserRoundCog, Waves, Search, ScrollText, MailCheck,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -43,6 +43,7 @@ export const adminNavigation: NavItem[] = [
   { label: '검토·승인', path: '/admin/approvals', icon: FileCheck2, description: '승인 또는 반려', admin: true, permission: 'approvals:review', approvalOnly: true },
   { label: '역할·권한', path: '/admin/roles', icon: ShieldCheck, description: '변경 가능한 권한 정책', admin: true, permission: 'roles:manage' },
   { label: 'Keycloak OIDC', path: '/admin/oidc', icon: LockKeyhole, description: 'SSO 자동 연결', admin: true, permission: 'settings:manage' },
+  { label: 'SMTP 메일', path: '/admin/smtp', icon: MailCheck, description: '알림 이메일 전달', admin: true, permission: 'settings:manage' },
   { label: 'AI 설정', path: '/admin/ai', icon: Bot, description: '모델과 스트리밍 정책', admin: true, permission: 'settings:manage' },
   { label: '일반 설정', path: '/admin/settings', icon: Settings2, description: '서비스와 API·MCP 정책', admin: true, permission: 'settings:manage' },
   { label: '감사 로그', path: '/admin/audit', icon: ScrollText, description: '관리 활동 추적', admin: true, permission: 'audit:read' },

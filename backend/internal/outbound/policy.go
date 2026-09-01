@@ -1,5 +1,5 @@
 // Package outbound provides per-setting SSRF protection for administrator
-// configured OIDC and AI endpoints. Exact host allowlists are enforced both
+// configured OIDC, AI, and SMTP endpoints. Exact host allowlists are enforced both
 // before a request and again while resolving the address used by the dialer.
 package outbound
 
@@ -272,6 +272,21 @@ func (p Policy) Client(base *http.Client) (*http.Client, error) {
 	return &client, nil
 }
 
+// DialContext opens a non-HTTP TCP connection while applying the same exact
+// hostname, DNS-rebinding and private-network checks used by Client. Because a
+// raw TCP protocol has no default URL port, every AllowedHosts entry used here
+// must include the exact destination port.
+func (p Policy) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	policy, err := p.normalized()
+	if err != nil {
+		return nil, err
+	}
+	if len(policy.AllowedHosts) == 0 {
+		return nil, errors.New("아웃바운드 허용 호스트를 하나 이상 등록해야 합니다")
+	}
+	return policy.dialContextExact(ctx, network, address)
+}
+
 type validatingRoundTripper struct {
 	next   http.RoundTripper
 	policy Policy
@@ -335,6 +350,66 @@ func (p Policy) dialContext(ctx context.Context, network, address string) (net.C
 		}
 	}
 	return nil, errors.New("아웃바운드 호스트에서 사용할 수 있는 IP를 찾지 못했습니다")
+}
+
+func (p Policy) dialContextExact(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("아웃바운드 주소 형식: %w", err)
+	}
+	if !exactAuthorityAllowed(p.AllowedHosts, host, port) {
+		return nil, &PolicyError{Cause: ErrHostNotAllowed, Authority: net.JoinHostPort(canonicalHostname(host), port), Reason: PolicyReasonHostNotAllowed}
+	}
+	addresses, err := p.resolve(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	allowPrivate := exactAuthorityAllowed(p.PrivateAllowedHosts, host, port)
+	var lastDialErr error
+	var rejectedAddresses, rejectedReasons []string
+	canAllowPrivate := false
+	for _, ip := range addresses {
+		allowed, reason, privateOptIn := resolvedIPDecision(ip, allowPrivate)
+		if !allowed {
+			rejectedAddresses = append(rejectedAddresses, ip.String())
+			rejectedReasons = append(rejectedReasons, reason)
+			canAllowPrivate = canAllowPrivate || privateOptIn
+			continue
+		}
+		connection, dialErr := p.Dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if dialErr == nil {
+			return connection, nil
+		}
+		lastDialErr = dialErr
+	}
+	if lastDialErr != nil {
+		return nil, lastDialErr
+	}
+	if len(rejectedAddresses) == 0 {
+		return nil, errors.New("아웃바운드 호스트에서 사용할 수 있는 IP를 찾지 못했습니다")
+	}
+	reason := rejectedReasons[0]
+	for _, candidate := range rejectedReasons[1:] {
+		if candidate != reason {
+			reason = PolicyReasonMixedUnsafe
+			break
+		}
+	}
+	return nil, &PolicyError{
+		Cause: ErrUnsafeAddress, Authority: net.JoinHostPort(canonicalHostname(host), port),
+		ResolvedAddresses: rejectedAddresses, Reason: reason, CanAllowPrivate: canAllowPrivate,
+	}
+}
+
+func exactAuthorityAllowed(allowedHosts []string, host, port string) bool {
+	host = canonicalHostname(strings.Trim(host, "[]"))
+	for _, allowed := range allowedHosts {
+		allowedHost, allowedPort := splitAuthority(allowed)
+		if allowedHost == host && allowedPort != "" && allowedPort == port {
+			return true
+		}
+	}
+	return false
 }
 
 func (p Policy) resolve(ctx context.Context, host string) ([]net.IP, error) {

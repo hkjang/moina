@@ -971,4 +971,24 @@ describe("MoinComposer media upload", () => {
     expect(intake).toHaveAccessibleDescription(/0\/4개/);
     expect(input).toHaveAccessibleName("첨부할 이미지 또는 영상 파일");
   });
+
+  it("@ 입력으로 사용자를 찾아 키보드로 멘션을 삽입한다", async () => {
+    mockedRequest.mockImplementation((path) => {
+      if (path === "/media/config")
+        return Promise.resolve({ maxUploadBytes: 1024, maxPerPost: 4 });
+      if (path.startsWith("/search?"))
+        return Promise.resolve({ users: [{ id: "u2", username: "alice", displayName: "앨리스" }] });
+      return Promise.resolve({});
+    });
+    renderComposer();
+    await waitForMediaIntake();
+    const textarea = screen.getByLabelText("모인 내용");
+    fireEvent.change(textarea, { target: { value: "안녕 @ali", selectionStart: 7 } });
+
+    expect(await screen.findByRole("option", { name: /앨리스.*@alice/ })).toBeInTheDocument();
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(textarea).toHaveValue("안녕 @alice ");
+    expect(screen.queryByRole("listbox", { name: "멘션할 사용자" })).not.toBeInTheDocument();
+  });
 });

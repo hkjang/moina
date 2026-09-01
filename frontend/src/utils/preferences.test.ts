@@ -15,6 +15,7 @@ describe('mergePreferences', () => {
       inApp: { mentions: false, signals: true, follows: true, echoes: true, approvals: true },
       toast: { enabled: true },
       desktop: { enabled: true },
+      email: { enabled: false },
       digest: { mode: 'off', time: '08:00' },
       quietHours: { enabled: true, start: '23:30', end: '07:00' },
     });

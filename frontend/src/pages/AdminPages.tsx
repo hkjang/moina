@@ -3,6 +3,7 @@ export { AdminApprovalsPage } from "./admin/AdminApprovalsPage";
 export { AdminAuditPage } from "./admin/AdminAuditPage";
 export { AdminContentPage } from "./admin/AdminContentPage";
 export { AdminOIDCPage } from "./admin/AdminOIDCPage";
+export { AdminSMTPPage } from "./admin/AdminSMTPPage";
 export { AdminOverviewPage } from "./admin/AdminOverviewPage";
 export { AdminReportsPage } from "./admin/AdminReportsPage";
 export { AdminRolesPage } from "./admin/AdminRolesPage";

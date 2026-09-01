@@ -41,6 +41,7 @@ func TestPostgreSQLNotificationChannelsRemainIndependent(t *testing.T) {
 	preferences := defaultPreferencesDocument()
 	preferences.Notifications.InApp.Signals = false
 	preferences.Notifications.Toast.Enabled = true
+	preferences.Notifications.Email.Enabled = true
 	payload, err := json.Marshal(preferences)
 	if err != nil {
 		t.Fatal(err)
@@ -79,6 +80,13 @@ func TestPostgreSQLNotificationChannelsRemainIndependent(t *testing.T) {
 	}
 	if !operationalInApp {
 		t.Fatal("mandatory operational notification was hidden")
+	}
+	var emailEvents int
+	if err := repository.Pool().QueryRow(t.Context(), `SELECT count(*) FROM outbox_events WHERE event_type=$1 AND idempotency_key=$2`, notificationEmailEvent, "notification:email:"+operationalID).Scan(&emailEvents); err != nil {
+		t.Fatal(err)
+	}
+	if emailEvents != 1 {
+		t.Fatalf("operational email event count=%d", emailEvents)
 	}
 }
 
@@ -127,7 +135,7 @@ func TestPostgreSQLDigestPreferenceTransitionIsAtomic(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(repository, secrets, "v0.1.9-test").Handler()
+	handler := New(repository, secrets, "v0.1.10-test").Handler()
 	request := httptest.NewRequest(http.MethodPut, "/api/v1/profile/preferences", bytes.NewBufferString(`{"notifications":{"digest":{"mode":"hourly"}}}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-CSRF-Token", csrf)

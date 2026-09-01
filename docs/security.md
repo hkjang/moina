@@ -28,7 +28,7 @@ MOINA는 신뢰되지 않은 브라우저 사용자, 악성 콘텐츠, 탈취된
 
 `MOINA_ENCRYPTION_KEY`는 정확히 32바이트이며 PostgreSQL의 OIDC/AI 비밀과 승인 snapshot 같은 보호 대상 값을 AEAD로 암호화합니다. setting key나 approval ID 같은 용도 문맥을 associated data로 결합해 ciphertext 이동 공격을 방지합니다.
 
-Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.9`에는 key version이나 online re-encryption 기능이 없으므로 값을 임의로 교체하면 저장 비밀 복호화와 기존 session/API key 검증이 실패합니다. DB backup과 함께 사용한 원래 key를 별도 보안 영역에 보관하고, 복구 시 같은 값을 사용합니다.
+Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.10`에는 key version이나 online re-encryption 기능이 없으므로 값을 임의로 교체하면 저장 비밀 복호화와 기존 session/API key 검증이 실패합니다. DB backup과 함께 사용한 원래 key를 별도 보안 영역에 보관하고, 복구 시 같은 값을 사용합니다.
 
 ## 개인 API·MCP 키
 
@@ -56,11 +56,11 @@ Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.9`에�
 - 인증된 작성 client에는 `GET /api/v1/media/config`로 현재 크기·개수·허용 MIME만 제공하고 관리자 전용 orphan TTL은 노출하지 않습니다. Client의 사전 검사는 편의 기능이며 업로드 API가 같은 정책을 다시 강제합니다.
 - 사용자별 미첨부 media 100개·512 MiB quota를 advisory lock 안에서 검사해 병렬 업로드 우회를 막습니다. Large Object read는 인스턴스당 최대 8개이고 DB pool이 작으면 일반 API용 연결 5개를 남기도록 더 줄입니다.
 
-이미지 재인코딩, EXIF 제거, 악성 파일 검사와 미디어 전용 origin은 `v0.1.9`에 포함되지 않습니다. 업로드 콘텐츠에는 기관의 별도 malware 검사 계층과 보존 정책을 적용하세요.
+이미지 재인코딩, EXIF 제거, 악성 파일 검사와 미디어 전용 origin은 `v0.1.10`에 포함되지 않습니다. 업로드 콘텐츠에는 기관의 별도 malware 검사 계층과 보존 정책을 적용하세요.
 
-## OIDC·AI outbound 보호
+## OIDC·AI·SMTP outbound 보호
 
-관리자가 등록하는 OIDC issuer와 AI base URL에는 각각 독립된 `allowedHosts`와 `privateAllowedHosts`를 적용합니다.
+관리자가 등록하는 OIDC issuer와 AI base URL에는 각각 독립된 `allowedHosts`와 `privateAllowedHosts`를 적용합니다. SMTP는 관리자가 입력한 정확한 `host:port` 자체를 단일 allowlist로 사용하고, 사설망 허용도 그 DNS authority에만 적용합니다.
 
 - `allowedHosts`는 정확한 DNS 이름/IP만 허용합니다. port가 없으면 URL scheme의 기본 port(HTTPS 443, HTTP 80)에만 일치하고 비기본 port는 `host:port`로 명시해야 합니다. wildcard, scheme, 경로와 사용자 정보는 거부합니다.
 - RFC1918 IPv4 또는 ULA IPv6로 해석되는 폐쇄망 endpoint는 정확한 DNS hostname을 `privateAllowedHosts`에도 등록해야 합니다. 같은 authority가 `allowedHosts`에 있어야 하며 IP literal은 사설 주소 예외로 받지 않습니다.
@@ -70,7 +70,7 @@ Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.9`에�
 - process proxy를 사용하지 않아 검증되지 않은 두 번째 hop을 만들지 않습니다.
 - loopback, link-local, cloud metadata, CGNAT, unspecified와 multicast 주소는 `privateAllowedHosts`에 등록해도 항상 차단합니다.
 
-Host allowlist는 network firewall, egress proxy 정책과 TLS 인증서 검증을 대체하지 않습니다. OIDC와 AI에 필요한 목적지만 방화벽에도 허용하고, DNS 변경과 인증서 갱신을 운영 변경 절차로 관리합니다.
+Host allowlist는 network firewall, egress proxy 정책과 TLS 인증서 검증을 대체하지 않습니다. OIDC, AI와 SMTP에 필요한 목적지만 방화벽에도 허용하고, DNS 변경과 인증서 갱신을 운영 변경 절차로 관리합니다. SMTP password는 암호화하고 조회 응답·감사 log에 원문을 반환하지 않으며, 암호화 없는 SMTP에는 인증 정보를 보내지 않습니다.
 
 `v0.1.0`에서 사설 Keycloak/OIDC·AI를 사용한 설정은 `v0.1.4` 업그레이드 시 자동으로 `privateAllowedHosts`에 들어가지 않습니다. 자동 승격은 기존 관리자 입력만으로 사설망 egress를 다시 여는 권한 확대가 되기 때문입니다. 업그레이드 전 로컬 bootstrap 최고 관리자 접근을 검증하고, 업그레이드 후 그 계정으로 정확한 hostname을 명시 저장·테스트해야 합니다.
 
@@ -88,7 +88,7 @@ Host allowlist는 network firewall, egress proxy 정책과 TLS 인증서 검증�
 
 - 비밀번호와 DSN password
 - session/CSRF/OIDC token
-- OIDC client secret, AI API key와 개인 key 원문
+- OIDC client secret, AI API key, SMTP password와 개인 key 원문
 - encryption root key와 전체 ciphertext
 - 필요 이상의 Moin 비공개 본문과 개인정보
 

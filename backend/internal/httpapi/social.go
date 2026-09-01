@@ -759,9 +759,20 @@ func imageDimensionsFrom(file multipart.File) (int, int) {
 }
 
 func (s *Server) getMedia(w http.ResponseWriter, r *http.Request) {
-	viewer := getPrincipal(r).User.ID
+	principal := getPrincipal(r)
 	id := chi.URLParam(r, "mediaID")
-	object, err := s.media.Open(r.Context(), id, viewer)
+	if !hasPermission(principal.Permissions, "posts:read") {
+		if principal.APIKey {
+			writeError(w, http.StatusForbidden, "forbidden", "이 작업을 수행할 권한이 없습니다")
+			return
+		}
+		var owned bool
+		if err := s.repo.Pool().QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM media_assets WHERE id=$1 AND owner_id=$2)`, id, principal.User.ID).Scan(&owned); err != nil || !owned {
+			writeError(w, http.StatusForbidden, "forbidden", "이 작업을 수행할 권한이 없습니다")
+			return
+		}
+	}
+	object, err := s.media.Open(r.Context(), id, principal.User.ID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "미디어를 찾을 수 없습니다")
 		return

@@ -237,7 +237,7 @@ func (s *Server) adminPutSetting(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_key", "설정 키 형식이 올바르지 않습니다")
 		return
 	}
-	if slices.Contains([]string{settingOIDC, settingAI, settingWorkflow}, key) {
+	if slices.Contains([]string{settingOIDC, settingAI, settingWorkflow, settingSMTP}, key) {
 		writeError(w, http.StatusConflict, "reserved_setting", "이 설정은 전용 관리 API를 사용해야 합니다")
 		return
 	}

@@ -1,11 +1,11 @@
 export const APP_NAME = 'moina';
 export const APP_DISPLAY_NAME = 'MOINA';
-export const APP_VERSION = normalizeVersion(import.meta.env.VITE_MOINA_VERSION || 'v0.1.9');
+export const APP_VERSION = normalizeVersion(import.meta.env.VITE_MOINA_VERSION || 'v0.1.10');
 export const API_BASE = '/api/v1';
 
 export function normalizeVersion(value: string) {
   const clean = value.trim().replace(/^v/i, '');
-  return `v${clean || '0.1.9'}`;
+  return `v${clean || '0.1.10'}`;
 }
 
 export function safeAppPath(value: string | null | undefined, fallback = '/flow') {

@@ -20,7 +20,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const notificationCreateEvent = "notification.create"
+const (
+	notificationCreateEvent = "notification.create"
+	notificationEmailEvent  = "notification.email"
+)
 
 var errNoIndependentApprover = errors.New("no independent approver")
 
@@ -30,6 +33,11 @@ type notificationEventPayload struct {
 	Type     string          `json:"type"`
 	TargetID string          `json:"targetId,omitempty"`
 	Payload  json.RawMessage `json:"payload"`
+}
+
+type notificationEmailEventPayload struct {
+	NotificationID string `json:"notificationId"`
+	UserID         string `json:"userId"`
 }
 
 // enqueueNotification must receive the same transaction that mutates the
@@ -67,7 +75,15 @@ func (s *Server) enqueueMentionNotifications(ctx context.Context, tx pgx.Tx, act
 	if len(usernames) == 0 {
 		return nil
 	}
-	rows, err := tx.Query(ctx, `SELECT id FROM users WHERE active AND lower(username)=ANY($1)`, usernames)
+	rows, err := tx.Query(ctx, `SELECT mentioned.id
+		FROM users mentioned JOIN posts post ON post.id=$2
+		WHERE mentioned.active AND lower(mentioned.username)=ANY($1)
+		AND NOT EXISTS(SELECT 1 FROM blocks block WHERE
+			(block.blocker_id=$3 AND block.blocked_id=mentioned.id) OR
+			(block.blocker_id=mentioned.id AND block.blocked_id=$3))
+		AND (post.visibility='public' OR mentioned.id=post.author_id OR
+			post.visibility='followers' AND EXISTS(SELECT 1 FROM follows link WHERE link.follower_id=mentioned.id AND link.followee_id=post.author_id) OR
+			post.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members member WHERE member.moim_id=post.moim_id AND member.user_id=mentioned.id))`, usernames, postID, actorID)
 	if err != nil {
 		return err
 	}
@@ -175,6 +191,9 @@ func (s *Server) RunBackground(ctx context.Context) error {
 }
 
 func (s *Server) handleOutboxEvent(ctx context.Context, item event.Event) error {
+	if item.Type == notificationEmailEvent {
+		return s.handleNotificationEmailEvent(ctx, item)
+	}
 	if item.Type != notificationCreateEvent {
 		return fmt.Errorf("지원하지 않는 outbox 이벤트: %s", item.Type)
 	}
@@ -224,11 +243,82 @@ func (s *Server) handleOutboxEvent(ctx context.Context, item event.Event) error 
 		return fmt.Errorf("notification insert: %w", err)
 	}
 	if tag.RowsAffected() > 0 {
+		if notificationEmailEnabled(preferences.Notifications, payload.Type) {
+			emailPayload, marshalErr := json.Marshal(notificationEmailEventPayload{NotificationID: item.ID, UserID: payload.UserID})
+			if marshalErr != nil {
+				return fmt.Errorf("notification email event marshal: %w", marshalErr)
+			}
+			if _, enqueueErr := event.Enqueue(ctx, tx, event.NewEvent{
+				Type: notificationEmailEvent, AggregateID: payload.UserID, Payload: emailPayload,
+				IdempotencyKey: "notification:email:" + item.ID,
+			}); enqueueErr != nil {
+				return fmt.Errorf("notification email enqueue: %w", enqueueErr)
+			}
+		}
 		if err := event.PublishNotificationSignal(ctx, tx, event.NotificationSignal{NotificationID: item.ID, UserID: payload.UserID}); err != nil {
 			return err
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+func (s *Server) handleNotificationEmailEvent(ctx context.Context, item event.Event) error {
+	var payload notificationEmailEventPayload
+	if err := json.Unmarshal(item.Payload, &payload); err != nil {
+		return fmt.Errorf("notification email event decode: %w", err)
+	}
+	payload.NotificationID = strings.TrimSpace(payload.NotificationID)
+	payload.UserID = strings.TrimSpace(payload.UserID)
+	if payload.NotificationID == "" || payload.UserID == "" {
+		return errors.New("notification email event fields are invalid")
+	}
+	cfg, err := s.smtpConfigContext(ctx)
+	if err != nil {
+		return fmt.Errorf("SMTP settings: %w", err)
+	}
+	if !cfg.Enabled {
+		return nil
+	}
+	preferences, err := s.loadPreferencesDocument(ctx, payload.UserID)
+	if err != nil {
+		return fmt.Errorf("notification email preferences: %w", err)
+	}
+	var notification model.Notification
+	var recipient string
+	var emailedAt *time.Time
+	err = s.repo.Pool().QueryRow(ctx, `SELECT n.id,n.user_id,COALESCE(n.actor_id,''),n.type,n.target_id,n.payload,n.in_app,n.read_at,n.created_at,n.emailed_at,u.email
+		FROM notifications n JOIN users u ON u.id=n.user_id
+		WHERE n.id=$1 AND n.user_id=$2 AND u.active`, payload.NotificationID, payload.UserID).Scan(
+		&notification.ID, &notification.UserID, &notification.ActorID, &notification.Type,
+		&notification.TargetID, &notification.Payload, &notification.InApp, &notification.ReadAt,
+		&notification.CreatedAt, &emailedAt, &recipient,
+	)
+	if errors.Is(err, pgx.ErrNoRows) || emailedAt != nil {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("notification email load: %w", err)
+	}
+	if _, recipientConfigured := bareEmailAddress(recipient); !recipientConfigured {
+		return nil
+	}
+	if !notificationEmailEnabled(preferences.Notifications, notification.Type) {
+		return nil
+	}
+	s.decorateNotification(ctx, &notification)
+	general := defaultGeneral()
+	if err := s.loadSettingContext(ctx, settingGeneral, &general); err != nil && !store.IsNotFound(err) {
+		return fmt.Errorf("notification email service settings: %w", err)
+	}
+	normalizeGeneral(&general)
+	message := notificationEmailMessage(general.ServiceName, general.PublicBaseURL, recipient, notification)
+	if err := deliverSMTP(ctx, cfg, message); err != nil {
+		return fmt.Errorf("notification email delivery: %w", err)
+	}
+	if _, err := s.repo.Pool().Exec(ctx, `UPDATE notifications SET emailed_at=now() WHERE id=$1 AND user_id=$2 AND emailed_at IS NULL`, notification.ID, notification.UserID); err != nil {
+		return fmt.Errorf("notification email marker: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) listenNotificationSignals(ctx context.Context, signals chan<- event.NotificationSignal) error {

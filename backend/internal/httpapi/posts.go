@@ -324,7 +324,7 @@ func attachHashtags(ctx context.Context, tx pgx.Tx, postID, content string) erro
 }
 
 var hashtagPattern = regexp.MustCompile(`(?i)#[\pL\pN_]{1,50}`)
-var mentionPattern = regexp.MustCompile(`(?i)@[\pL\pN][\pL\pN._-]{2,39}`)
+var mentionPattern = regexp.MustCompile(`(?i)(^|[^\pL\pN._-])@([\pL\pN][\pL\pN._-]{2,39})`)
 
 func extractHashtags(content string) []string {
 	set := map[string]bool{}
@@ -342,8 +342,8 @@ func extractHashtags(content string) []string {
 func extractMentions(content string) []string {
 	set := map[string]bool{}
 	result := make([]string, 0)
-	for _, match := range mentionPattern.FindAllString(content, 20) {
-		username := strings.ToLower(strings.TrimPrefix(match, "@"))
+	for _, match := range mentionPattern.FindAllStringSubmatch(content, 20) {
+		username := strings.ToLower(match[2])
 		if !set[username] {
 			set[username] = true
 			result = append(result, username)
@@ -871,7 +871,21 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := tx.Exec(r.Context(), `DELETE FROM post_topics WHERE post_id=$1 AND source='hashtag'`, id); err != nil || attachHashtags(r.Context(), tx, id, input.Content) != nil || tx.Commit(r.Context()) != nil {
+	if _, err := tx.Exec(r.Context(), `DELETE FROM post_topics WHERE post_id=$1 AND source='hashtag'`, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
+		return
+	}
+	if err := attachHashtags(r.Context(), tx, id, input.Content); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
+		return
+	}
+	// The post-scoped idempotency key means edits notify only newly added
+	// mentions. Existing recipients are not spammed on every correction.
+	if err := s.enqueueMentionNotifications(r.Context(), tx, p.User.ID, id, input.Content); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "멘션 알림을 저장할 수 없습니다")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
 		return
 	}

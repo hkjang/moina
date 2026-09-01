@@ -100,6 +100,7 @@ Client는 이 값을 파일 선택 UI와 사전 검사에 사용하되 업로드
     "inApp": {"mentions": true, "signals": true, "follows": true, "echoes": true, "approvals": true},
     "toast": {"enabled": true},
     "desktop": {"enabled": false},
+    "email": {"enabled": true},
     "digest": {"mode": "daily", "time": "08:00"},
     "quietHours": {"enabled": true, "start": "22:00", "end": "07:00"}
   }
@@ -107,6 +108,10 @@ Client는 이 값을 파일 선택 UI와 사전 검사에 사용하되 업로드
 ```
 
 `digest.mode`는 `off`, `hourly`, `daily` 중 하나이고 시각은 서비스 기본 시간대의 `HH:MM`입니다. Digest를 새로 켜거나 mode·일별 시각을 바꾸면 worker가 변경을 감지한 시점부터 새 집계 구간을 시작하며, 꺼져 있던 기간이나 이전 일정의 알림을 한꺼번에 재생하지 않습니다. Worker는 1분 간격으로 설정을 확인합니다. In App의 Signal·Mention·Follow·Echo는 알림 센터 노출과 미확인 수 포함 여부를 제어합니다. In App을 끈 유형도 cross-instance Toast/Desktop fanout을 위해 `inApp=false`와 읽음 상태의 durable 전달 row로 저장하며 목록에서는 숨깁니다. 승인·보안 알림은 운영상 필수이므로 `approvals`를 false로 보내도 true로 정규화됩니다. Toast와 Desktop은 독립 실시간 표시 채널이며 조용한 시간에는 보류되지만 durable 전달 기록은 유지됩니다. Desktop은 이 설정과 별도로 사용자 동작으로 Browser Notification 권한을 허용해야 합니다.
+
+`email.enabled`는 관리자가 SMTP를 활성화하고 사용자 프로필에 올바른 수신 이메일이 있을 때 UI에서 켤 수 있습니다. In App의 활동 종류 선택을 이메일에도 공통 적용하고, Digest mode가 켜지면 일반 활동 메일은 요약 알림 하나로 묶습니다. 멘션·승인·보안 알림은 Digest와 관계없이 즉시 메일 Outbox를 생성합니다. `GET /api/v1/notifications/email/status`는 SMTP 세부 값을 노출하지 않고 `available`, `smtpConfigured`, `recipientConfigured`로 사용자 이메일 채널의 준비 상태만 반환합니다.
+
+관리자 전용 `GET/PUT /api/v1/admin/smtp`는 password 원문 대신 `passwordConfigured`를 사용합니다. `POST /api/v1/admin/smtp/test`는 저장된 설정으로 현재 관리자 프로필 이메일에 실제 테스트 메일을 보냅니다. `host`와 `port`를 분리해 입력하며 `allowPrivateNetwork`는 그 정확한 DNS authority만 RFC1918/ULA에 연결하도록 허용합니다.
 
 ## AI SSE
 
@@ -131,7 +136,7 @@ OIDC와 AI 관리 설정의 `allowedHosts`에는 정확한 DNS 이름/IP 또는 
 
 ## WebSocket 알림
 
-브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.9` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
+브라우저 session으로 `/api/v1/ws/notifications`에 연결합니다. Server는 handshake에서 Origin과 권한을 검증합니다. 알림 JSON의 `inApp`, `toast`, `desktop` boolean은 각 전달 채널의 현재 정책을 나타냅니다. Client는 Toast/Desktop이 true인 채널만 표시하고 `inApp`은 알림 센터 노출 여부를 뜻합니다. Browser queue가 포화된 느린 socket은 서버가 종료하고 client는 최대 30초 지수 backoff로 재연결합니다. Client는 연결 직후와 60초마다 `GET /api/v1/notifications`의 unread summary를 다시 조회해 LISTEN/WebSocket 공백을 보완합니다. REST 목록과 unread 수에는 `inApp=true`인 row만 포함합니다. `v0.1.10` WebSocket 자체는 last event ID replay를 제공하지 않습니다.
 
 ```json
 {
@@ -176,7 +181,7 @@ X-CSRF-Token: ...
 
 MCP Streamable HTTP 요청은 JSON-RPC 2.0과 Bearer key를 사용합니다.
 
-`v0.1.9`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
+`v0.1.10`은 stateless POST JSON-RPC 전송만 제공합니다. `GET /mcp`와 `GET /api/v1/mcp`는 capability 확인 요청에 `405 Method Not Allowed`와 `Allow: POST`를 반환하며 별도 SSE channel을 열지 않습니다.
 
 ```bash
 curl --fail --silent http://127.0.0.1:8080/mcp \
