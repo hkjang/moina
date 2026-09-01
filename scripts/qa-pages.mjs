@@ -196,12 +196,13 @@ try {
   for (const [kind, values] of Object.entries(manifest.runtimeFailures || {})) if (!Array.isArray(values) || values.length) fail(`runtimeFailures.${kind}가 비어 있지 않습니다.`);
   if (!Array.isArray(manifest.skipped) || manifest.skipped.length) fail('screenshot manifest에 생략된 화면이 있습니다.');
   const dynamic = ['profile-bootstrap', 'moin-detail', 'topic-moina', 'moim-detail'];
+  const special = ['profile-menu-version', 'quick-navigation'];
   const expected = new Set();
   for (const theme of ['light', 'dark']) {
     const prefix = theme === 'light' ? '' : `${theme}-`;
     for (const viewport of ['desktop', 'mobile']) {
       expected.add(`${prefix}${viewport}-login`);
-      expected.add(`${prefix}${viewport}-profile-menu-version`);
+      for (const slug of special) expected.add(`${prefix}${viewport}-${slug}`);
       for (const route of captureRoutes) expected.add(`${prefix}${viewport}-${route.slug}`);
       for (const slug of dynamic) expected.add(`${prefix}${viewport}-${slug}`);
     }
