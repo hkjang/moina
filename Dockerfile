@@ -9,7 +9,7 @@ WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-ARG VERSION=v0.1.7
+ARG VERSION=v0.1.8
 RUN npm test && VITE_MOINA_VERSION="${VERSION}" npm run build
 
 FROM ${GO_IMAGE} AS backend-builder
@@ -17,7 +17,7 @@ WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download && go mod verify
 COPY backend/ ./
-ARG VERSION=v0.1.7
+ARG VERSION=v0.1.8
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 RUN go test ./... && go vet ./... && \
@@ -26,7 +26,7 @@ RUN go test ./... && go vet ./... && \
     -o /out/moina ./cmd/moina
 
 FROM ${RUNTIME_IMAGE} AS runtime
-ARG VERSION=v0.1.7
+ARG VERSION=v0.1.8
 ARG VCS_REF=unknown
 ARG BUILD_DATE=unknown
 LABEL org.opencontainers.image.title="moina" \

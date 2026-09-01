@@ -119,6 +119,9 @@ describe("관리자 공급자 설정 저장 계약", () => {
 
   it("OIDC Secret 삭제 의도를 명시적으로 보낸다", async () => {
     renderPage(<AdminOIDCPage />);
+    expect(
+      await screen.findByText(/저장된 Secret이 토큰 교환에 사용됩니다/),
+    ).toBeInTheDocument();
     const clear = await screen.findByRole("switch", {
       name: /^저장된 Client Secret 삭제/,
     });

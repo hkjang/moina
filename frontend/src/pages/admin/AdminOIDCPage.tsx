@@ -242,8 +242,8 @@ export function AdminOIDCPage() {
               label="Client Secret"
               help={
                 clientSecretConfigured
-                  ? "비워두면 저장된 Secret을 유지합니다."
-                  : "공개 클라이언트라면 비울 수 있습니다."
+                  ? "저장된 Secret이 토큰 교환에 사용됩니다. 비워두면 기존 값을 유지합니다."
+                  : "Keycloak에서 Client authentication을 끈 Public client라면 비워두세요."
               }
             >
               <input
@@ -371,7 +371,7 @@ export function AdminOIDCPage() {
           {clientSecretConfigured && (
             <SwitchField
               label="저장된 Client Secret 삭제"
-              description="저장하면 기존 Secret 암호문을 제거합니다."
+              description="Public client로 사용할 때 켜세요. 저장하면 기존 Secret을 제거하고 client_id만으로 토큰을 교환합니다."
               checked={form.clearClientSecret === true}
               onChange={(checked) =>
                 setForm({

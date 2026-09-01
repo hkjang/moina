@@ -68,7 +68,7 @@ func TestPostgreSQLDeleteMediaOnlyRemovesOwnedOrphans(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := New(repository, secrets, "v0.1.7-test")
+	server := New(repository, secrets, "v0.1.8-test")
 	putLargeObject := func(mediaID, filename string, body []byte) uint32 {
 		t.Helper()
 		if _, err := server.media.Put(ctx, mediastore.PutObject{

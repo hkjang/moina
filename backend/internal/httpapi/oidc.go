@@ -160,7 +160,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	tokens, err := oauthConfig(cfg, provider, flow.RedirectURL).Exchange(ctx, code, oauth2.VerifierOption(flow.Verifier))
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "oidc_exchange_failed", "SSO 인증 코드를 확인할 수 없습니다")
+		writeOIDCExchangeError(w, r, err)
 		return
 	}
 	rawIDToken, ok := tokens.Extra("id_token").(string)
@@ -224,7 +224,9 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func oauthConfig(cfg model.OIDCConfig, provider *oidc.Provider, redirect string) *oauth2.Config {
-	return &oauth2.Config{ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: redirect, Endpoint: provider.Endpoint(), Scopes: cfg.Scopes}
+	endpoint := provider.Endpoint()
+	endpoint.AuthStyle = oidcTokenAuthStyle(cfg.ClientSecret, oidcTokenAuthMethods(provider))
+	return &oauth2.Config{ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: redirect, Endpoint: endpoint, Scopes: cfg.Scopes}
 }
 
 func validateOIDCProvider(cfg model.OIDCConfig, provider *oidc.Provider) error {
@@ -479,5 +481,13 @@ func (s *Server) adminTestOIDC(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "oidc_authorization_failed", "OIDC 인증 endpoint가 Client ID 또는 Redirect URI를 확인하지 못했습니다")
 		return
 	}
-	writeData(w, http.StatusOK, map[string]any{"connected": true, "authorizationEndpoint": endpoint.AuthURL, "tokenEndpoint": endpoint.TokenURL, "redirectUrl": redirect, "redirectValidated": true})
+	tokenProbeCtx, cancelTokenProbe := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancelTokenProbe()
+	tokenProbeCtx = oidc.ClientContext(tokenProbeCtx, client)
+	tokenConfig := oauthConfig(cfg, provider, redirect)
+	if err := probeOIDCTokenExchange(tokenProbeCtx, tokenConfig); err != nil {
+		writeOIDCExchangeError(w, r, err)
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{"connected": true, "authorizationEndpoint": endpoint.AuthURL, "tokenEndpoint": endpoint.TokenURL, "redirectUrl": redirect, "redirectValidated": true, "clientAuthenticationValidated": true, "tokenAuthMethod": oidcTokenAuthMethod(cfg.ClientSecret, tokenConfig.Endpoint.AuthStyle)})
 }
