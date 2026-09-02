@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.15`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.16`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.15`는 정적 분석과 의존성 취약점 검사를 CI에 편입합니다. staticcheck가 찾은 죽은 코드와 자기 자신을 비교하던 테스트를 고쳤고, 멘션 자동완성을 전용 hook으로 분리해 단독 테스트를 붙였습니다. `v0.1.14`의 설정·권한 캐시와 검색 개선, `v0.1.13`의 응답 압축·본문 읽기 기한·보존 정책은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
+`v0.1.16`은 Proxy가 `X-Forwarded-For`를 하나로 합치지 않고 별도 header 줄로 덧붙이는 구성에서 첫 줄만 읽어 Client IP를 위조된 값으로 계산하던 문제를 고칩니다. 반복된 전달 header 줄을 받은 순서대로 하나의 chain으로 이어 붙이므로 감사 기록과 요청 한도 bucket이 실제 Client IP를 사용합니다. `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선, `v0.1.13`의 응답 압축·본문 읽기 기한·보존 정책은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
 
 ## 주요 기능
 
@@ -32,7 +32,7 @@ MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관�
 - 페이지별 Flow cache·ID 병합, optimistic update와 route lazy loading
 - 알림 LISTEN backpressure, slow WebSocket 재연결과 60초 REST 정합성 보완
 - In App·Toast·Desktop·SMTP Email·Digest·조용한 시간 알림 개인화와 필수 승인 알림 정책
-- 신뢰 Proxy IP/CIDR 기반 실제 Client IP 계산, 감사 Proxy Chain과 다중 인스턴스 공용 PostgreSQL 요청 한도
+- 신뢰 Proxy IP/CIDR 기반 실제 Client IP 계산, 반복된 전달 header 줄의 단일 chain 결합, 감사 Proxy Chain과 다중 인스턴스 공용 PostgreSQL 요청 한도
 - TLS Proxy bootstrap용 Fetch Metadata Origin 검증, immutable hash asset과 stale chunk 404
 - Moin 관계별 대체 텍스트와 엄격한 승인 Action 패턴·승인자 최종 권한 검증
 - SPA 번들·CSS와 JSON 응답 gzip 압축, Range 요청·SSE·미디어는 원본 그대로 전달
@@ -99,7 +99,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.15
+moina:v0.1.16
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -117,20 +117,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.15.tar.gz
-dist/moina-v0.1.15.tar.gz.sha256
+dist/moina-v0.1.16.tar.gz
+dist/moina-v0.1.16.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.15.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.16.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.15.tar.gz
-gzip -dc moina-v0.1.15.tar.gz | docker image load
-docker image inspect moina:v0.1.15
+sha256sum moina-v0.1.16.tar.gz
+gzip -dc moina-v0.1.16.tar.gz | docker image load
+docker image inspect moina:v0.1.16
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -179,15 +179,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.15 -m "moina v0.1.15"
-git push origin v0.1.15
+git tag -a v0.1.16 -m "moina v0.1.16"
+git push origin v0.1.16
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.15
-file:  moina-v버전.tar.gz  예: moina-v0.1.15.tar.gz
+image: moina:v버전          예: moina:v0.1.16
+file:  moina-v버전.tar.gz  예: moina-v0.1.16.tar.gz
 ```
 
 ## 라이선스
