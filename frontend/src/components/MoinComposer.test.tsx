@@ -11,7 +11,7 @@ import { clearApiQueryCache } from "../hooks/apiQueryClient";
 import type { Moin } from "../types";
 import { MoinComposer } from "./MoinComposer";
 import { ToastProvider } from "./ToastProvider";
-import { Modal } from "./ui";
+import { Modal } from "./Modal";
 
 vi.mock("../api/client", async (load) => {
   const actual = await load<typeof import("../api/client")>();

@@ -25,7 +25,8 @@ import { useToast } from "./ToastProvider";
 import { DraftNavigationGuard } from "./DraftNavigationGuard";
 import { MoinComposer } from "./MoinComposer";
 import { MoinContent } from "./MoinContent";
-import { Avatar, Badge, Modal } from "./ui";
+import { Avatar, Badge } from "./ui";
+import { Modal } from "./Modal";
 
 const signalLabels: Record<SignalType, string> = {
   like: "공감",

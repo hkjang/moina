@@ -76,6 +76,9 @@ type Server struct {
 	media           mediastore.MediaStore
 	rateMu          sync.Mutex
 	rates           map[string]*attempt
+	settings        *settingCache
+	permissions     *permissionCache
+	apiKeyTouches   *apiKeyTouch
 	networkMu       sync.Mutex
 	networkCache    networkConfig
 	networkLoadedAt time.Time
@@ -86,6 +89,7 @@ func New(repo *store.Store, secrets *secure.Manager, version string) *Server {
 	server := &Server{
 		repo: repo, secrets: secrets, version: version, startedAt: time.Now().UTC(),
 		client: &http.Client{}, hub: newNotificationHub(), metrics: observability.NewRegistry(), rates: make(map[string]*attempt), staticRoot: defaultStaticRoot,
+		settings: newSettingCache(), permissions: newPermissionCache(), apiKeyTouches: newAPIKeyTouch(),
 	}
 	if repo != nil {
 		server.outbox = event.NewRepository(repo.Pool())
@@ -440,7 +444,8 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			p.APIKey = true
 			p.APIKeyID = key.ID
 			if err == nil {
-				permissions, permissionErr := s.repo.PermissionsForRoles(r.Context(), p.User.Roles)
+				s.touchAPIKey(r.Context(), key.ID)
+				permissions, permissionErr := s.permissionsForRoles(r.Context(), p.User.Roles)
 				if permissionErr != nil {
 					err = permissionErr
 				} else {
@@ -454,7 +459,7 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			} else {
 				p.User, p.CSRFHash, err = s.repo.SessionUser(r.Context(), s.secrets.HashToken(cookie.Value))
 				if err == nil {
-					p.Permissions, err = s.repo.PermissionsForRoles(r.Context(), p.User.Roles)
+					p.Permissions, err = s.permissionsForRoles(r.Context(), p.User.Roles)
 				}
 			}
 		}

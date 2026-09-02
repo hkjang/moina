@@ -7,17 +7,8 @@ import { useAuth } from "../auth/AuthContext";
 import { MoinCard } from "../components/MoinCard";
 import { MoinComposer } from "../components/MoinComposer";
 import { useToast } from "../components/ToastProvider";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  Field,
-  LoadingState,
-  Modal,
-  PageHeader,
-} from "../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingState, PageHeader } from "../components/ui";
+import { Modal } from "../components/Modal";
 import { useApiQuery } from "../hooks/useApiQuery";
 import type { Moim } from "../types";
 import { topicLabel } from "../utils/format";

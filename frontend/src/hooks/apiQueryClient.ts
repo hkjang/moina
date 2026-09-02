@@ -35,7 +35,26 @@ export type ApiQueryCacheSnapshot<T> =
   | { status: 'fresh' | 'stale'; data: T }
   | { status: 'miss' };
 
+// A cached entry is only dropped when the same path is read again and found
+// stale, so paths that are never revisited - every cursor page of a Flow, every
+// search term - would accumulate for the life of the tab. The Map preserves
+// insertion order, which makes it the LRU list as well as the store.
+export const MAX_QUERY_CACHE_ENTRIES = 100;
+
 const cache = new Map<string, CacheEntry>();
+
+function touchCacheEntry(path: string, entry: CacheEntry) {
+  cache.delete(path);
+  cache.set(path, entry);
+}
+
+function evictOverflowingEntries() {
+  while (cache.size > MAX_QUERY_CACHE_ENTRIES) {
+    const oldest = cache.keys().next();
+    if (oldest.done) return;
+    cache.delete(oldest.value);
+  }
+}
 const inflight = new Map<string, InflightRequest>();
 const subscribers = new Map<symbol, InvalidationSubscriber>();
 
@@ -77,8 +96,12 @@ export function readApiQueryCache<T>(
   const entry = cache.get(path);
   if (!entry) return { status: 'miss' };
   const age = Math.max(0, now - entry.storedAt);
-  if (age <= Math.max(0, ttlMs)) return { status: 'fresh', data: entry.data as T };
+  if (age <= Math.max(0, ttlMs)) {
+    touchCacheEntry(path, entry);
+    return { status: 'fresh', data: entry.data as T };
+  }
   if (age <= Math.max(0, ttlMs) + Math.max(0, staleWhileRevalidateMs)) {
+    touchCacheEntry(path, entry);
     return { status: 'stale', data: entry.data as T };
   }
   cache.delete(path);
@@ -87,11 +110,13 @@ export function readApiQueryCache<T>(
 
 export function writeApiQueryCache<T>(path: string, data: T, resourceKeys: Iterable<string>, now = Date.now()) {
   const previous = cache.get(path);
+  cache.delete(path);
   cache.set(path, {
     data,
     storedAt: now,
     resourceKeys: new Set([...(previous?.resourceKeys || []), ...resourceKeys]),
   });
+  evictOverflowingEntries();
 }
 
 function retryable(error: unknown) {

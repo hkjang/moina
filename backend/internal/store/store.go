@@ -302,10 +302,15 @@ func (s *Store) APIKeyUser(ctx context.Context, tokenHash string) (model.User, m
 		&user.ID, &user.Username, &user.DisplayName, &user.Email, &user.Bio, &user.AvatarID, &user.AccountType, &user.Provider, &user.Roles, &user.Active, &user.CreatedAt, &user.UpdatedAt,
 		&key.ID, &key.UserID, &key.Name, &key.Prefix, &key.Permissions, &key.Version, &key.CreatedAt, &key.RotatedAt, &key.ExpiresAt, &key.RevokedAt, &key.LastUsedAt, &key.TokenHash,
 	)
-	if err == nil {
-		_, _ = s.pool.Exec(ctx, `UPDATE api_keys SET last_used_at=now() WHERE id=$1`, key.ID)
-	}
 	return user, key, err
+}
+
+// TouchAPIKey records that a key was used. It is deliberately separate from
+// APIKeyUser: authenticating a request is a read, and the caller decides how
+// often that read is worth turning into a write.
+func (s *Store) TouchAPIKey(ctx context.Context, id string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE api_keys SET last_used_at=now() WHERE id=$1`, id)
+	return err
 }
 
 func (s *Store) ListAPIKeys(ctx context.Context, userID string) ([]model.APIKey, error) {
@@ -411,4 +416,49 @@ func contains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+const settingChangeChannel = "moina_settings"
+
+// NotifySettingChange tells every instance that one setting row changed so a
+// cached copy can be dropped immediately instead of waiting out its TTL. A
+// failure here is not fatal: the caller has already committed the write and the
+// TTL still bounds how long a stale copy can survive.
+func (s *Store) NotifySettingChange(ctx context.Context, key string) error {
+	_, err := s.pool.Exec(ctx, `SELECT pg_notify('`+settingChangeChannel+`',$1)`, key)
+	return err
+}
+
+// ListenSettingChanges reserves one pool connection and emits the key of every
+// setting another instance changed. It returns on context cancellation or when
+// the connection drops; the caller reconnects and should assume it missed
+// notifications while disconnected.
+func (s *Store) ListenSettingChanges(ctx context.Context, keys chan<- string) error {
+	if s == nil || s.pool == nil || keys == nil {
+		return errors.New("setting listener store and output channel are required")
+	}
+	connection, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("setting listener acquire: %w", err)
+	}
+	defer connection.Release()
+	if _, err := connection.Exec(ctx, `LISTEN `+settingChangeChannel); err != nil {
+		return fmt.Errorf("setting LISTEN: %w", err)
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_, _ = connection.Exec(cleanup, `UNLISTEN `+settingChangeChannel)
+	}()
+	for {
+		notification, err := connection.Conn().WaitForNotification(ctx)
+		if err != nil {
+			return err
+		}
+		select {
+		case keys <- notification.Payload:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }

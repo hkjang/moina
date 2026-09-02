@@ -188,6 +188,7 @@ func (s *Server) RunBackground(ctx context.Context) error {
 	group.Go(func() error { return s.cleanupOrphanMedia(groupContext) })
 	group.Go(func() error { return s.runNotificationDigestWorker(groupContext) })
 	group.Go(func() error { return s.runRetentionWorker(groupContext) })
+	group.Go(func() error { return s.runSettingCacheWorker(groupContext) })
 	return group.Wait()
 }
 

@@ -7,7 +7,8 @@ import { DraftNavigationGuard } from '../components/DraftNavigationGuard';
 import { MoinCard } from '../components/MoinCard';
 import { MoinComposer } from '../components/MoinComposer';
 import { useToast } from '../components/ToastProvider';
-import { Avatar, Button, EmptyState, ErrorState, Modal, SkeletonFeed, Tabs } from '../components/ui';
+import { Avatar, Button, EmptyState, ErrorState, SkeletonFeed, Tabs } from '../components/ui';
+import { Modal } from '../components/Modal';
 import { useApiQuery } from '../hooks/useApiQuery';
 import { useFeedPages, type FeedMode } from '../hooks/useFeedPages';
 

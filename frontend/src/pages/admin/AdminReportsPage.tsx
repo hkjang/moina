@@ -2,16 +2,8 @@ import { RefreshCw } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { apiRequest, readableError } from "../../api/client";
 import { useToast } from "../../components/ToastProvider";
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  Field,
-  LoadingState,
-  Modal,
-} from "../../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, LoadingState } from "../../components/ui";
+import { Modal } from "../../components/Modal";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { formatDate, listFrom } from "../../utils/format";
 import { AdminTitle, Table } from "./components";

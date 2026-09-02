@@ -472,6 +472,7 @@ func (s *Server) adminPutRoles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "storage_error", "역할 정책을 저장할 수 없습니다")
 		return
 	}
+	s.invalidateRolePermissions(r.Context())
 	s.audit(r, "admin.roles.update", "role", "*", true, map[string]int{"count": len(input.Roles)})
 	s.adminListRoles(w, r)
 }

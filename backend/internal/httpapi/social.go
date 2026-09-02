@@ -21,13 +21,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
-	feedservice "github.com/hkjang/moina/backend/internal/feed"
 	mediastore "github.com/hkjang/moina/backend/internal/media"
 	"github.com/hkjang/moina/backend/internal/model"
 	searchservice "github.com/hkjang/moina/backend/internal/search"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
-	"github.com/hkjang/moina/backend/internal/visibility"
 )
 
 func (s *Server) getProfile(w http.ResponseWriter, r *http.Request) {
@@ -308,108 +306,41 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_query", "검색어는 1~100자로 입력해 주세요")
 		return
 	}
-	limit, _ := pagination(r)
+	// offset has always been part of the documented contract; it used to be
+	// parsed and dropped, capping every search at a single page.
+	limit, offset := pagination(r)
 	viewer := getPrincipal(r).User.ID
+	wants := func(kind string) bool { return searchType == "all" || searchType == kind }
+
 	users := make([]map[string]any, 0)
-	if searchType == "all" || searchType == "users" {
-		usersRows, err := s.repo.Pool().Query(r.Context(), `SELECT `+userSelectColumns+` FROM users
-		WHERE active AND id<>$4
-		AND `+visibility.NotBlockedBetween("users.id", "$4")+`
-		AND ($6 OR lower(username) LIKE $3 ESCAPE E'\\' OR lower(display_name) LIKE $3 ESCAPE E'\\' OR lower(bio) LIKE $3 ESCAPE E'\\' OR lower(username) % $2 OR lower(display_name) % $2 OR word_similarity($2,lower(bio)) >= 0.3 OR to_tsvector('simple',username||' '||display_name||' '||bio) @@ websearch_to_tsquery('simple',$1))
-		ORDER BY (
-			CASE WHEN $2<>'' AND lower(username)=$2 THEN 1000 ELSE 0 END +
-			CASE WHEN $2<>'' AND lower(username) LIKE $2||'%%' THEN 250 ELSE 0 END +
-			ts_rank_cd(to_tsvector('simple',username||' '||display_name||' '||bio),websearch_to_tsquery('simple',$1))*100 +
-			greatest(similarity(lower(username),$2)*80,similarity(lower(display_name),$2)*40,word_similarity($2,lower(bio))*25)
-		) DESC, CASE WHEN $6 THEN (SELECT count(*) FROM follows rf WHERE rf.followee_id=users.id) ELSE 0 END DESC,username
-		LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
-		if err != nil {
+	if wants("users") {
+		if users, err = s.searchUsers(r.Context(), query, viewer, recommended, limit, offset); err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 			return
 		}
-		for usersRows.Next() {
-			user, scanErr := scanUserRow(usersRows)
-			if scanErr != nil {
-				usersRows.Close()
-				writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-				return
-			}
-			users = append(users, publicUserView(user))
-		}
-		usersRows.Close()
 	}
 	posts := make([]model.Moin, 0)
-	if searchType == "all" || searchType == "posts" {
-		postWhere := append(visibility.PublishedAndVisible("p", "$1"),
-			`($5 OR lower(p.content) LIKE $4 ESCAPE E'\\' OR lower(p.content) % $3 OR word_similarity($3,lower(p.content)) >= 0.3 OR to_tsvector('simple',p.content) @@ websearch_to_tsquery('simple',$2))`,
-		)
-		postOrder := `(CASE WHEN $3<>'' AND lower(p.content)=$3 THEN 500 ELSE 0 END + ts_rank_cd(to_tsvector('simple',p.content),websearch_to_tsquery('simple',$2))*100 + greatest(similarity(lower(p.content),$3),word_similarity($3,lower(p.content)))*40) DESC,p.published_at DESC,p.id DESC`
-		posts, err = feedservice.QueryPosts(r.Context(), s.repo.Pool(), postWhere, []any{viewer, query.Raw, query.Folded, query.Pattern, recommended}, postOrder, limit, 0, viewer)
-		if err != nil {
+	if wants("posts") {
+		if posts, err = s.searchPosts(r.Context(), query, viewer, limit, offset); err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 			return
 		}
-		decorateRecommendations(posts)
 	}
 	topics := make([]model.Topic, 0)
-	if searchType == "all" || searchType == "topics" {
-		topicRows, err := s.repo.Pool().Query(r.Context(), `SELECT t.id,t.slug,t.name,t.description,t.created_at,
-		(SELECT count(*) FROM user_topic_follows WHERE topic_id=t.id),
-		(SELECT count(*) FROM post_topics pt JOIN posts p ON p.id=pt.post_id WHERE pt.topic_id=t.id AND p.status='published' AND p.visibility='public'),
-		EXISTS(SELECT 1 FROM user_topic_follows WHERE topic_id=t.id AND user_id=$4)
-		FROM topics t
-		WHERE $6 OR lower(t.name) LIKE $3 ESCAPE E'\\' OR lower(t.slug) LIKE $3 ESCAPE E'\\' OR lower(t.name) % $2 OR lower(t.slug) % $2 OR word_similarity($2,lower(t.description)) >= 0.3 OR to_tsvector('simple',t.name||' '||t.description) @@ websearch_to_tsquery('simple',$1)
-		ORDER BY (
-			CASE WHEN $2<>'' AND (lower(t.slug)=$2 OR lower(t.name)=$2) THEN 1000 ELSE 0 END +
-			CASE WHEN $2<>'' AND (lower(t.slug) LIKE $2||'%%' OR lower(t.name) LIKE $2||'%%') THEN 250 ELSE 0 END +
-			ts_rank_cd(to_tsvector('simple',t.name||' '||t.description),websearch_to_tsquery('simple',$1))*100 +
-			greatest(similarity(lower(t.slug),$2)*100,similarity(lower(t.name),$2)*80,word_similarity($2,lower(t.description))*30)
-		) DESC,t.name LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
-		if err != nil {
+	if wants("topics") {
+		if topics, err = s.searchTopics(r.Context(), query, viewer, limit, offset); err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 			return
 		}
-		for topicRows.Next() {
-			var topic model.Topic
-			if err := topicRows.Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following); err != nil {
-				topicRows.Close()
-				writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-				return
-			}
-			topics = append(topics, topic)
-		}
-		topicRows.Close()
 	}
 	moims := make([]model.Moim, 0)
-	if searchType == "all" || searchType == "moims" {
-		moimRows, err := s.repo.Pool().Query(r.Context(), `SELECT m.id,m.slug,m.name,m.description,m.owner_id,m.visibility,m.created_at,
-		(SELECT count(*) FROM moim_members WHERE moim_id=m.id),(SELECT count(*) FROM posts WHERE moim_id=m.id AND status='published'),
-		EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$4)
-		FROM moims m
-		WHERE (m.visibility='public' OR EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$4))
-		AND ($6 OR lower(m.name) LIKE $3 ESCAPE E'\\' OR lower(m.slug) LIKE $3 ESCAPE E'\\' OR lower(m.description) LIKE $3 ESCAPE E'\\' OR lower(m.name) % $2 OR lower(m.slug) % $2 OR word_similarity($2,lower(m.description)) >= 0.3 OR to_tsvector('simple',m.name||' '||m.description) @@ websearch_to_tsquery('simple',$1))
-		ORDER BY (
-			CASE WHEN $2<>'' AND (lower(m.slug)=$2 OR lower(m.name)=$2) THEN 1000 ELSE 0 END +
-			CASE WHEN $2<>'' AND (lower(m.slug) LIKE $2||'%%' OR lower(m.name) LIKE $2||'%%') THEN 250 ELSE 0 END +
-			ts_rank_cd(to_tsvector('simple',m.name||' '||m.description),websearch_to_tsquery('simple',$1))*100 +
-			greatest(similarity(lower(m.slug),$2)*100,similarity(lower(m.name),$2)*80,word_similarity($2,lower(m.description))*30)
-		) DESC,m.created_at DESC LIMIT $5`, query.Raw, query.Folded, query.Pattern, viewer, limit, recommended)
-		if err != nil {
+	if wants("moims") {
+		if moims, err = s.searchMoims(r.Context(), query, viewer, limit, offset); err != nil {
 			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
 			return
 		}
-		for moimRows.Next() {
-			var item model.Moim
-			if err := moimRows.Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.OwnerID, &item.Visibility, &item.CreatedAt, &item.MemberCount, &item.MoinCount, &item.Joined); err != nil {
-				moimRows.Close()
-				writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-				return
-			}
-			moims = append(moims, item)
-		}
-		moimRows.Close()
 	}
-	writeData(w, http.StatusOK, map[string]any{"query": query.Raw, "users": users, "posts": posts, "topics": topics, "moims": moims})
+	writeData(w, http.StatusOK, map[string]any{"query": query.Raw, "limit": limit, "offset": offset, "users": users, "posts": posts, "topics": topics, "moims": moims})
 }
 
 func publicUserView(user model.User) map[string]any {

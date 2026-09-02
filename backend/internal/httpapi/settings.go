@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -78,16 +79,9 @@ func (s *Server) loadSetting(r *http.Request, key string, destination any) error
 }
 
 func (s *Server) loadSettingContext(ctx context.Context, key string, destination any) error {
-	record, err := s.repo.GetSetting(ctx, key)
+	payload, err := s.cachedSettingPayload(ctx, key)
 	if err != nil {
 		return err
-	}
-	payload := record.Payload
-	if record.Sensitive {
-		payload, err = s.secrets.Decrypt(payload, "setting:"+key)
-		if err != nil {
-			return err
-		}
 	}
 	return json.Unmarshal(payload, destination)
 }
@@ -103,7 +97,17 @@ func (s *Server) saveSetting(r *http.Request, key string, value any, sensitive b
 			return model.SettingRecord{}, err
 		}
 	}
-	return s.repo.PutSetting(r.Context(), model.SettingRecord{Key: key, Payload: payload, Sensitive: sensitive, UpdatedBy: getPrincipal(r).User.ID}, revision)
+	record, err := s.repo.PutSetting(r.Context(), model.SettingRecord{Key: key, Payload: payload, Sensitive: sensitive, UpdatedBy: getPrincipal(r).User.ID}, revision)
+	if err != nil {
+		return model.SettingRecord{}, err
+	}
+	// Drop this instance's copy before returning so the administrator's next
+	// read is their own write, and tell the other instances to do the same.
+	s.settings.invalidate(key)
+	if notifyErr := s.repo.NotifySettingChange(r.Context(), key); notifyErr != nil {
+		slog.WarnContext(r.Context(), "설정 변경 알림 실패", "key", key, "error", notifyErr)
+	}
+	return record, nil
 }
 
 func (s *Server) general(r *http.Request) (generalConfig, error) {
