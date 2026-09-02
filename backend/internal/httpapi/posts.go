@@ -19,6 +19,7 @@ import (
 	cursorpage "github.com/hkjang/moina/backend/internal/pagination"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
+	"github.com/hkjang/moina/backend/internal/visibility"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -373,7 +374,11 @@ func (s *Server) getPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) loadMoin(ctx context.Context, postID, viewerID string) (model.Moin, error) {
-	query := `SELECT ` + postAndAuthorColumns + ` FROM posts p JOIN users u ON u.id=p.author_id WHERE p.id=$1 AND p.status<>'deleted' AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$2 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$2)) AND (p.author_id=$2 OR (p.status='published' AND (p.visibility='public' OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$2 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$2))))`
+	// An author always reaches their own Moin, including a draft awaiting
+	// approval, so the status rule sits outside the shared visibility predicate.
+	query := `SELECT ` + postAndAuthorColumns + ` FROM posts p JOIN users u ON u.id=p.author_id WHERE p.id=$1 AND p.status<>'deleted'` +
+		` AND ` + visibility.NotBlocked("p", "$2") +
+		` AND (p.author_id=$2 OR p.status='published' AND ` + visibility.Moin("p", "$2") + `)`
 	post, err := scanMoin(s.repo.Pool().QueryRow(ctx, query, postID, viewerID))
 	if err != nil {
 		return model.Moin{}, err
@@ -404,7 +409,7 @@ func decorateRecommendations(items []model.Moin) {
 func (s *Server) listPosts(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	viewer := getPrincipal(r).User.ID
-	where := []string{"p.status='published'", `NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))`, `(p.visibility='public' OR p.author_id=$1 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$1))`}
+	where := visibility.PublishedAndVisible("p", "$1")
 	args := []any{viewer}
 	if authorID := strings.TrimSpace(r.URL.Query().Get("authorId")); authorID != "" {
 		args = append(args, authorID)
@@ -465,7 +470,7 @@ func (s *Server) writeFeed(w http.ResponseWriter, r *http.Request, mode string) 
 		writeError(w, http.StatusBadRequest, "invalid_cursor", "Flow는 offset 대신 서버가 발급한 Cursor를 사용해야 합니다")
 		return
 	}
-	where := []string{"p.status='published'", `NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))`, `NOT EXISTS(SELECT 1 FROM mutes m WHERE m.muter_id=$1 AND m.muted_id=p.author_id)`, `(p.visibility='public' OR p.author_id=$1 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$1))`}
+	where := append(visibility.PublishedAndVisible("p", "$1"), visibility.NotMuted("p", "$1"))
 	if mode == "following" {
 		where = append(where, `(p.author_id=$1 OR EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id))`)
 		s.writeFollowingFeed(w, r, where, limit, legacyOffset, viewer)
@@ -746,7 +751,7 @@ func (s *Server) listReplies(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, offset := pagination(r)
 	viewer := getPrincipal(r).User.ID
-	items, err := s.queryPosts(r.Context(), []string{"p.status='published'", "p.reply_to_id=$2", `NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))`, `(p.visibility='public' OR p.author_id=$1 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$1))`}, []any{viewer, parentID}, "p.created_at ASC,p.id ASC", limit, offset, viewer)
+	items, err := s.queryPosts(r.Context(), append(visibility.PublishedAndVisible("p", "$1"), "p.reply_to_id=$2"), []any{viewer, parentID}, "p.created_at ASC,p.id ASC", limit, offset, viewer)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Echo 목록을 불러올 수 없습니다")
 		return

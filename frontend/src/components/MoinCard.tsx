@@ -10,7 +10,7 @@ import {
   Share2,
   Trash2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { apiRequest, readableError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -76,7 +76,11 @@ function MoinEditDialog({
   );
 }
 
-export function MoinCard({
+// Memoised because a Flow keeps every loaded page mounted and a single
+// reaction replaces one item in that list. Without this, reacting to one Moin
+// re-renders every card on screen. FlowPage and PocketPage pass stable
+// useCallback handlers, so the comparison actually holds.
+function MoinCardComponent({
   moin,
   onMoinChange,
   onMoinDelete,
@@ -468,3 +472,5 @@ export function MoinCard({
     </>
   );
 }
+
+export const MoinCard = memo(MoinCardComponent);

@@ -27,6 +27,7 @@ import (
 	searchservice "github.com/hkjang/moina/backend/internal/search"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
+	"github.com/hkjang/moina/backend/internal/visibility"
 )
 
 func (s *Server) getProfile(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +314,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	if searchType == "all" || searchType == "users" {
 		usersRows, err := s.repo.Pool().Query(r.Context(), `SELECT `+userSelectColumns+` FROM users
 		WHERE active AND id<>$4
-		AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$4 AND b.blocked_id=users.id) OR (b.blocker_id=users.id AND b.blocked_id=$4))
+		AND `+visibility.NotBlockedBetween("users.id", "$4")+`
 		AND ($6 OR lower(username) LIKE $3 ESCAPE E'\\' OR lower(display_name) LIKE $3 ESCAPE E'\\' OR lower(bio) LIKE $3 ESCAPE E'\\' OR lower(username) % $2 OR lower(display_name) % $2 OR word_similarity($2,lower(bio)) >= 0.3 OR to_tsvector('simple',username||' '||display_name||' '||bio) @@ websearch_to_tsquery('simple',$1))
 		ORDER BY (
 			CASE WHEN $2<>'' AND lower(username)=$2 THEN 1000 ELSE 0 END +
@@ -339,12 +340,9 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	}
 	posts := make([]model.Moin, 0)
 	if searchType == "all" || searchType == "posts" {
-		postWhere := []string{
-			"p.status='published'",
-			`NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$1))`,
-			`(p.visibility='public' OR p.author_id=$1 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$1))`,
+		postWhere := append(visibility.PublishedAndVisible("p", "$1"),
 			`($5 OR lower(p.content) LIKE $4 ESCAPE E'\\' OR lower(p.content) % $3 OR word_similarity($3,lower(p.content)) >= 0.3 OR to_tsvector('simple',p.content) @@ websearch_to_tsquery('simple',$2))`,
-		}
+		)
 		postOrder := `(CASE WHEN $3<>'' AND lower(p.content)=$3 THEN 500 ELSE 0 END + ts_rank_cd(to_tsvector('simple',p.content),websearch_to_tsquery('simple',$2))*100 + greatest(similarity(lower(p.content),$3),word_similarity($3,lower(p.content)))*40) DESC,p.published_at DESC,p.id DESC`
 		posts, err = feedservice.QueryPosts(r.Context(), s.repo.Pool(), postWhere, []any{viewer, query.Raw, query.Folded, query.Pattern, recommended}, postOrder, limit, 0, viewer)
 		if err != nil {

@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/hkjang/moina/backend/internal/visibility"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -26,35 +27,23 @@ const (
 	defaultConcurrentMediaReads       = 8
 )
 
-const mediaAccessSQL = `SELECT m.id,m.owner_id,m.filename,m.alt_text,m.mime_type,m.size_bytes,m.sha256,m.width,m.height,m.created_at,m.large_object_oid,m.data
+// A viewer reaches a media asset through exactly three doors: they own it, it
+// is the avatar of a user they can see, or it hangs on a Moin they can read.
+// The last two reuse the shared predicates so media can never outlive the
+// visibility of the Moin that carries it.
+var mediaAccessSQL = `SELECT m.id,m.owner_id,m.filename,m.alt_text,m.mime_type,m.size_bytes,m.sha256,m.width,m.height,m.created_at,m.large_object_oid,m.data
 FROM media_assets m
 WHERE m.id=$1 AND (
     m.owner_id=$2
     OR EXISTS (
         SELECT 1 FROM users avatar_user
         WHERE avatar_user.avatar_id=m.id AND avatar_user.active
-          AND NOT EXISTS (
-            SELECT 1 FROM blocks b
-            WHERE (b.blocker_id=$2 AND b.blocked_id=avatar_user.id)
-               OR (b.blocker_id=avatar_user.id AND b.blocked_id=$2)
-          )
+          AND ` + visibility.NotBlockedBetween("avatar_user.id", "$2") + `
     )
     OR EXISTS (
         SELECT 1 FROM post_media pm JOIN posts p ON p.id=pm.post_id
-        WHERE pm.media_id=m.id AND p.status='published'
-          AND NOT EXISTS (
-            SELECT 1 FROM blocks b
-            WHERE (b.blocker_id=$2 AND b.blocked_id=p.author_id)
-               OR (b.blocker_id=p.author_id AND b.blocked_id=$2)
-          ) AND (
-            p.visibility='public' OR p.author_id=$2
-            OR (p.visibility='followers' AND EXISTS (
-                SELECT 1 FROM follows f WHERE f.follower_id=$2 AND f.followee_id=p.author_id
-            ))
-            OR (p.visibility='moim' AND EXISTS (
-                SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$2
-            ))
-        )
+        WHERE pm.media_id=m.id
+          AND ` + strings.Join(visibility.PublishedAndVisible("p", "$2"), "\n          AND ") + `
     )
 )`
 

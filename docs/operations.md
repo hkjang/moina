@@ -2,7 +2,7 @@
 
 ## 책임 경계
 
-GitHub Release에는 `linux/amd64`용 `moina:v0.1.12` 서비스 이미지 하나를 저장한 `moina-v0.1.12.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
+GitHub Release에는 `linux/amd64`용 `moina:v0.1.13` 서비스 이미지 하나를 저장한 `moina-v0.1.13.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
 
 ## 반입과 설치
 
@@ -13,10 +13,10 @@ GitHub Release에는 `linux/amd64`용 `moina:v0.1.12` 서비스 이미지 하나
 5. `pull never`, read-only, dropped capabilities로 시작합니다.
 
 ```bash
-sha256sum moina-v0.1.12.tar.gz
-gzip -t moina-v0.1.12.tar.gz
-gzip -dc moina-v0.1.12.tar.gz | docker image load
-docker image inspect moina:v0.1.12
+sha256sum moina-v0.1.13.tar.gz
+gzip -t moina-v0.1.13.tar.gz
+gzip -dc moina-v0.1.13.tar.gz | docker image load
+docker image inspect moina:v0.1.13
 cp .env.example .env
 chmod 600 .env
 docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull never
@@ -52,7 +52,7 @@ docker compose -f deploy/docker-compose.offline.yml logs --since 15m moina
 
 `v0.1.4`은 시작 시 `pg_trgm` 확장을 만들고 trigram·전문 검색 index를 생성합니다. migration 계정이 extension 생성 권한이 없다면 DBA가 대상 database에 `CREATE EXTENSION IF NOT EXISTS pg_trgm`을 먼저 실행해야 합니다. 별도 OpenSearch나 인터넷 연결은 필요하지 않습니다.
 
-적용한 migration에는 SHA-256 checksum을 저장합니다. 이미 기록된 SQL 파일이 바뀌어 checksum이 다르면 시작을 중단하므로, 운영 DB의 `schema_migrations`를 임의 수정하거나 적용 완료 migration 파일을 덮어쓰지 않습니다. **DB에 현재 binary가 알지 못하는 migration version이 하나라도 있으면 downgrade로 판단해 기동을 거부합니다.** 새 변경은 항상 다음 번호 migration으로 배포합니다. v0.1.4의 migration 005는 Moin 관계별 `post_media.alt_text`와 기존 기본 설명 backfill을, 006은 다중 인스턴스 공용 `rate_limit_buckets`를, 007은 사용자별 `notification_digest_state`를 추가합니다. Migration 008은 알림 전달 row에 `notifications.in_app`을 추가하고 In App 미확인 조회용 부분 index를 만들며, 009는 Outbox 실제 전달 시각인 `notifications.delivered_at`과 Digest 집계 index를 추가합니다. Migration 010은 각 일반 알림의 Digest 처리 완료 시각인 `notifications.digested_at`과 미처리 알림 index를 추가해 worker 실행 사이에 commit된 전달 row도 다음 Digest가 이어서 처리하도록 합니다. Migration 011은 `notification_digest_state.config_signature`에 끔·시간별·일별+시각 구성을 기록합니다. 기존 상태에는 현재 저장 설정의 signature를 backfill해 업그레이드 직후 이미 도래한 정상 window를 임의로 버리지 않습니다. Migration 012는 SMTP로 실제 전달한 알림에 `notifications.emailed_at`을 기록합니다. Migration에는 연결 단계와 분리된 최대 30분 제한이 적용되며 완료되기 전에는 readiness가 성공하지 않습니다. 대용량 index 생성 중 배포 관리자가 컨테이너를 조기 종료하지 않도록 startup/readiness 허용 시간을 30분 이상으로 잡고, 한도 초과 시 log와 PostgreSQL lock·I/O·권한을 확인합니다.
+적용한 migration에는 SHA-256 checksum을 저장합니다. 이미 기록된 SQL 파일이 바뀌어 checksum이 다르면 시작을 중단하므로, 운영 DB의 `schema_migrations`를 임의 수정하거나 적용 완료 migration 파일을 덮어쓰지 않습니다. **DB에 현재 binary가 알지 못하는 migration version이 하나라도 있으면 downgrade로 판단해 기동을 거부합니다.** 새 변경은 항상 다음 번호 migration으로 배포합니다. v0.1.4의 migration 005는 Moin 관계별 `post_media.alt_text`와 기존 기본 설명 backfill을, 006은 다중 인스턴스 공용 `rate_limit_buckets`를, 007은 사용자별 `notification_digest_state`를 추가합니다. Migration 008은 알림 전달 row에 `notifications.in_app`을 추가하고 In App 미확인 조회용 부분 index를 만들며, 009는 Outbox 실제 전달 시각인 `notifications.delivered_at`과 Digest 집계 index를 추가합니다. Migration 010은 각 일반 알림의 Digest 처리 완료 시각인 `notifications.digested_at`과 미처리 알림 index를 추가해 worker 실행 사이에 commit된 전달 row도 다음 Digest가 이어서 처리하도록 합니다. Migration 011은 `notification_digest_state.config_signature`에 끔·시간별·일별+시각 구성을 기록합니다. 기존 상태에는 현재 저장 설정의 signature를 backfill해 업그레이드 직후 이미 도래한 정상 window를 임의로 버리지 않습니다. Migration 012는 SMTP로 실제 전달한 알림에 `notifications.emailed_at`을 기록합니다. Migration 013은 보존 정리가 순차 스캔 대신 index 범위 스캔으로 동작하도록 `notifications(created_at)`과 전달 완료 `outbox_events(delivered_at)` index를 추가합니다. Migration에는 연결 단계와 분리된 최대 30분 제한이 적용되며 완료되기 전에는 readiness가 성공하지 않습니다. 대용량 index 생성 중 배포 관리자가 컨테이너를 조기 종료하지 않도록 startup/readiness 허용 시간을 30분 이상으로 잡고, 한도 초과 시 log와 PostgreSQL lock·I/O·권한을 확인합니다.
 
 Flow cursor는 서명 없는 versioned Base64 URL opaque 데이터이지만 서버가 내부 값을 검증합니다. Following은 게시 시각·ID를, For Me는 기준 시각·점수·ID·랭킹 버전과 사용자별 server ranking snapshot ID를 포함합니다. For Me는 필터를 통과한 최근 후보 최대 200개의 합계·component 점수와 당시 개인화 설정을 고정합니다. 동일 사용자·랭킹 버전·설정은 같은 30초 bucket에서 snapshot을 재사용합니다.
 
@@ -87,7 +87,7 @@ Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 
 
 ## 미디어 업로드 계약 확인
 
-인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.12` 관리자 설정이 아닙니다.
+인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.13` 관리자 설정이 아닙니다.
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/v1/media/config \
@@ -97,6 +97,14 @@ curl --fail http://127.0.0.1:8080/api/v1/media/config \
 관리자가 업로드 제한을 바꾼 직후에는 작성 화면의 이전 값과 서버 값이 잠시 다를 수 있습니다. HTTP `413`, `415` 또는 설정 오류를 받으면 client가 설정을 다시 조회하도록 안내하고, 서버 검증을 우회하지 않습니다. HTTP `429`와 `media_quota_exceeded`는 기존 업로드를 Moin·프로필에 연결하거나 orphan TTL 정리를 기다린 뒤 재시도합니다.
 
 Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, PostgreSQL pool이 작으면 일반 API용 연결 5개를 남기도록 media read slot을 줄입니다. 느린 다운로드가 slot을 오래 점유하면 새 read가 요청 context 안에서 대기하므로 reverse proxy timeout과 DB pool 사용량을 함께 봅니다. Cleaner는 매시간 500개씩 최대 20 batch, 즉 인스턴스당 한 주기에 최대 10,000개를 정리합니다. 여러 인스턴스는 `SKIP LOCKED`로 대상 충돌을 피합니다.
+
+## 보존 정리
+
+시작 직후와 이후 매시간, 한 인스턴스가 advisory lock을 잡고 만료 session과 보존 기간이 지난 운영 레코드를 정리합니다. 한 주기에 테이블당 최대 5,000행씩 20회까지만 삭제하므로 오래 정리하지 않은 설치에서도 한 번에 긴 lock을 잡지 않고, 남은 행은 다음 주기가 이어서 처리합니다.
+
+기본값은 알림 90일, 전달 완료 Outbox event 14일, AI 사용 기록 180일이며 감사 기록은 무기한입니다. 값은 `service.retention` 설정으로 바꿉니다(`docs/configuration.md` 참고). 정리한 행 수는 `보존 기간 초과 레코드 정리` log로 남습니다.
+
+업그레이드 직후 첫 주기에서 이전 릴리스가 삭제할 수 없던 만료 session과 오래된 알림이 한 번에 정리되므로, `audit_events`·`notifications`·`outbox_events` 크기와 PostgreSQL I/O를 함께 관찰합니다. 삭제된 공간의 실제 반환은 autovacuum 일정에 따릅니다.
 
 ## PostgreSQL backup과 복구
 
@@ -119,6 +127,10 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 5. compose image tag를 바꾸고 서비스를 재시작합니다.
 6. readiness, 버전, 로그인, Flow, 검색, 알림, 관리자 설정을 확인합니다.
 
+### v0.1.13 업그레이드 시 확인
+
+Migration 013이 `notifications`와 `outbox_events`에 index를 추가하므로 두 테이블이 큰 설치에서는 기동 시간이 늘어날 수 있습니다. 기동 직후 첫 보존 정리가 실행되며, 기본값으로도 90일 넘은 알림과 14일 넘은 전달 완료 Outbox event가 삭제됩니다. 이 기록을 더 오래 보관해야 한다면 업그레이드 **전에** `service.retention`을 원하는 값으로 먼저 설정합니다. 감사 기록은 기본값이 무기한이므로 별도 조치가 필요 없습니다.
+
 ### v0.1.0 내부 OIDC·AI 사용자의 필수 조치
 
 `v0.1.4`은 사설 주소를 자동 허용하지 않습니다. `v0.1.0`에서 RFC1918/ULA로 해석되는 Keycloak/OIDC 또는 AI endpoint를 사용했다면 업그레이드 뒤 해당 연결은 `privateAllowedHosts`를 명시적으로 저장하기 전까지 실패합니다. 기존 host를 자동으로 사설 예외로 승격하지 않는 것은 SSRF 방어를 약화하지 않기 위한 의도된 변경입니다.
@@ -136,7 +148,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 
 - root encryption key는 application 관리자 계정과 분리해 vault/HSM 수준으로 보관합니다.
 - 개인 API/MCP key는 사용자 화면에서 회전하고 이전 token은 즉시 폐기합니다.
-- `v0.1.12`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
+- `v0.1.13`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
 - 유출이 의심되면 관련 key 폐기, session 종료, audit 조사와 downstream secret rotation을 함께 수행합니다.
 
 ## 장애 분류

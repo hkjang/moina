@@ -20,12 +20,13 @@ import (
 )
 
 const (
-	settingGeneral  = "service.general"
-	settingOIDC     = "auth.oidc"
-	settingAI       = "ai.config"
-	settingWorkflow = "workflow.approval"
-	settingAPI      = "api.access"
-	settingMedia    = "media.config"
+	settingGeneral   = "service.general"
+	settingOIDC      = "auth.oidc"
+	settingAI        = "ai.config"
+	settingWorkflow  = "workflow.approval"
+	settingAPI       = "api.access"
+	settingMedia     = "media.config"
+	settingRetention = "service.retention"
 )
 
 type generalConfig struct {
@@ -279,6 +280,13 @@ func (s *Server) adminPutSetting(w http.ResponseWriter, r *http.Request) {
 		cfg := defaultMedia()
 		if strictUnmarshal(input.Value, &cfg) != nil || validateMedia(cfg) != nil {
 			writeError(w, http.StatusBadRequest, "invalid_value", "미디어 설정이 올바르지 않습니다")
+			return
+		}
+		value, sensitive = cfg, false
+	case settingRetention:
+		cfg := defaultRetention()
+		if strictUnmarshal(input.Value, &cfg) != nil || validateRetention(cfg) != nil {
+			writeError(w, http.StatusBadRequest, "invalid_value", "보존 기간은 0일(무기한)부터 3650일 사이여야 합니다")
 			return
 		}
 		value, sensitive = cfg, false

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hkjang/moina/backend/internal/event"
 	mediastore "github.com/hkjang/moina/backend/internal/media"
 	"github.com/hkjang/moina/backend/internal/model"
@@ -33,11 +34,19 @@ import (
 )
 
 const (
-	SessionCookie     = "moina_session"
-	CSRFCookie        = "moina_csrf"
-	OIDCCookie        = "moina_oidc_flow"
-	maxBodyBytes      = 4 << 20
-	defaultStaticRoot = "/app/web/dist"
+	SessionCookie = "moina_session"
+	CSRFCookie    = "moina_csrf"
+	OIDCCookie    = "moina_oidc_flow"
+	maxBodyBytes  = 4 << 20
+	// gzip level 5 is the usual balance: most of the ratio of level 9 for a
+	// fraction of the CPU, which matters because every JSON response pays it.
+	compressionLevel = 5
+	mediaUploadPath  = "/api/v1/media"
+	// An upload may legitimately run for minutes; the administrator ceiling is
+	// 50 MiB, which a slow mobile link does not move in 30 seconds.
+	requestBodyReadTimeout = 30 * time.Second
+	uploadBodyReadTimeout  = 15 * time.Minute
+	defaultStaticRoot      = "/app/web/dist"
 )
 
 type principal struct {
@@ -104,7 +113,7 @@ func (s *Server) SetObservability(registry *observability.Registry) {
 
 func (s *Server) Handler() http.Handler {
 	router := chi.NewRouter()
-	router.Use(s.resolveRequestNetwork, observability.HTTPMiddleware(slog.Default()), s.recoverJSON, s.securityHeaders, s.verifyOrigin)
+	router.Use(s.resolveRequestNetwork, s.bodyReadDeadline, compressResponses, observability.HTTPMiddleware(slog.Default()), s.recoverJSON, s.securityHeaders, s.verifyOrigin)
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeData(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -269,6 +278,53 @@ func (s *Server) metricsEndpoint(w http.ResponseWriter, r *http.Request) {
 		s.metrics.ObserveDBPool(s.repo.Pool().Stat())
 	}
 	s.metrics.ServeHTTP(w, r)
+}
+
+// compressResponses encodes the text payloads that dominate a cold load: the
+// SPA bundle, its stylesheet, and every JSON response. chi's default type list
+// deliberately excludes text/event-stream and every media type, so AI streaming
+// still flushes token by token and video keeps its byte exact Range responses.
+func compressResponses(next http.Handler) http.Handler {
+	compressed := middleware.Compress(compressionLevel)(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A range response describes an offset into the identity encoding, so
+		// compressing it would make Content-Range describe the wrong bytes.
+		if r.Header.Get("Range") != "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		compressed.ServeHTTP(w, r)
+	})
+}
+
+// bodyReadDeadline replaces the process wide http.Server.ReadTimeout, which
+// could not tell a 4 KiB JSON body from a 50 MiB upload and cut both off at the
+// same 30 seconds: a trickled upload died at exactly that mark. Slow header
+// attacks stay covered by ReadHeaderTimeout, and each request body now gets a
+// budget matching what it legitimately needs.
+//
+// The WebSocket case is belt and braces. net/http already clears both deadlines
+// when a handler hijacks the connection, so a notification stream was never at
+// risk; skipping the upgrade keeps that true no matter where this runs.
+func (s *Server) bodyReadDeadline(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := http.NewResponseController(w).SetReadDeadline(bodyReadDeadlineAt(r, time.Now())); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			observability.Logger(r.Context()).WarnContext(r.Context(), "요청 본문 읽기 기한 설정 실패", "error", err)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// bodyReadDeadlineAt returns the zero time for a connection that must outlive
+// any single request body.
+func bodyReadDeadlineAt(r *http.Request, now time.Time) time.Time {
+	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Upgrade")), "websocket") {
+		return time.Time{}
+	}
+	if r.Method == http.MethodPost && (r.URL.Path == mediaUploadPath || strings.HasPrefix(r.URL.Path, mediaUploadPath+"/")) {
+		return now.Add(uploadBodyReadTimeout)
+	}
+	return now.Add(requestBodyReadTimeout)
 }
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {

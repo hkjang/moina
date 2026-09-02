@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hkjang/moina/backend/internal/model"
+	"github.com/hkjang/moina/backend/internal/visibility"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -245,7 +246,9 @@ func Hydrate(ctx context.Context, database Queryer, roots []model.Moin, viewerID
 }
 
 func visibleRelated(ctx context.Context, database Queryer, ids []string, viewerID string) ([]model.Moin, error) {
-	rows, err := database.Query(ctx, `SELECT `+PostAndAuthorColumns+` FROM posts p JOIN users u ON u.id=p.author_id WHERE p.id=ANY($1::text[]) AND p.status='published' AND NOT EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id=$2 AND b.blocked_id=p.author_id) OR (b.blocker_id=p.author_id AND b.blocked_id=$2)) AND (p.visibility='public' OR p.author_id=$2 OR p.visibility='followers' AND EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$2 AND f.followee_id=p.author_id) OR p.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members mm WHERE mm.moim_id=p.moim_id AND mm.user_id=$2))`, ids, viewerID)
+	query := `SELECT ` + PostAndAuthorColumns + ` FROM posts p JOIN users u ON u.id=p.author_id WHERE p.id=ANY($1::text[])` +
+		` AND ` + strings.Join(visibility.PublishedAndVisible("p", "$2"), " AND ")
+	rows, err := database.Query(ctx, query, ids, viewerID)
 	if err != nil {
 		return nil, err
 	}

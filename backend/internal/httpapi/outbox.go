@@ -16,6 +16,7 @@ import (
 	"github.com/hkjang/moina/backend/internal/model"
 	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
+	"github.com/hkjang/moina/backend/internal/visibility"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
 )
@@ -75,15 +76,14 @@ func (s *Server) enqueueMentionNotifications(ctx context.Context, tx pgx.Tx, act
 	if len(usernames) == 0 {
 		return nil
 	}
-	rows, err := tx.Query(ctx, `SELECT mentioned.id
+	// A mention only notifies someone who could have read the Moin anyway, so
+	// the same visibility rule applies with the mentioned user as the viewer.
+	query := `SELECT mentioned.id
 		FROM users mentioned JOIN posts post ON post.id=$2
 		WHERE mentioned.active AND lower(mentioned.username)=ANY($1)
-		AND NOT EXISTS(SELECT 1 FROM blocks block WHERE
-			(block.blocker_id=$3 AND block.blocked_id=mentioned.id) OR
-			(block.blocker_id=mentioned.id AND block.blocked_id=$3))
-		AND (post.visibility='public' OR mentioned.id=post.author_id OR
-			post.visibility='followers' AND EXISTS(SELECT 1 FROM follows link WHERE link.follower_id=mentioned.id AND link.followee_id=post.author_id) OR
-			post.visibility='moim' AND EXISTS(SELECT 1 FROM moim_members member WHERE member.moim_id=post.moim_id AND member.user_id=mentioned.id))`, usernames, postID, actorID)
+		AND ` + visibility.NotBlockedBetween("mentioned.id", "$3") +
+		` AND ` + visibility.Moin("post", "mentioned.id")
+	rows, err := tx.Query(ctx, query, usernames, postID, actorID)
 	if err != nil {
 		return err
 	}
@@ -187,6 +187,7 @@ func (s *Server) RunBackground(ctx context.Context) error {
 	group.Go(func() error { return dispatcher.Run(groupContext) })
 	group.Go(func() error { return s.cleanupOrphanMedia(groupContext) })
 	group.Go(func() error { return s.runNotificationDigestWorker(groupContext) })
+	group.Go(func() error { return s.runRetentionWorker(groupContext) })
 	return group.Wait()
 }
 

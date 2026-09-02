@@ -1,5 +1,5 @@
 import { Bookmark } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { normalizeMoin, normalizePage } from "../api/adapters";
 import { MoinCard } from "../components/MoinCard";
 import {
@@ -26,10 +26,17 @@ export default function PocketPage() {
     if (query.data !== undefined)
       setItems(normalizePage(query.data, normalizeMoin).items);
   }, [query.data]);
-  const updateMoin = (next: (typeof items)[number]) =>
-	setItems((current) => mergePocketMoin(current, next));
-  const removeMoin = (id: string) =>
-    setItems((current) => current.filter((item) => item.id !== id));
+  // Stable identities so the memoised MoinCard can skip untouched rows.
+  const updateMoin = useCallback(
+    (next: (typeof items)[number]) =>
+      setItems((current) => mergePocketMoin(current, next)),
+    [],
+  );
+  const removeMoin = useCallback(
+    (id: string) =>
+      setItems((current) => current.filter((item) => item.id !== id)),
+    [],
+  );
   return (
     <div className="page-stack">
       <PageHeader

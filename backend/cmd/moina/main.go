@@ -84,11 +84,15 @@ func run() error {
 	backgroundErrors := make(chan error, 1)
 	go func() { backgroundErrors <- api.RunBackground(runtimeContext) }()
 
+	// ReadTimeout is intentionally unset. One process wide body deadline cannot
+	// serve both a small JSON request and a 50 MiB upload: at 30 seconds the
+	// upload needs a sustained 14 Mbps or the connection dies mid body. The API
+	// sets a per request read deadline instead, and ReadHeaderTimeout still
+	// bounds a slow header attack.
 	server := &http.Server{
 		Addr:              listenAddress,
 		Handler:           api.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
