@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatDate, formatRelativeTime, listFrom, topicLabel } from './format';
+import { formatDate, formatRelativeTime, listFrom, moinEditedAt, topicLabel } from './format';
 
 const NOW = '2026-06-15T12:00:00.000Z';
 
@@ -36,6 +36,24 @@ describe('formatDate', () => {
     expect(formatDate('2026-06-15T12:00:00.000Z')).toContain('2026년');
     expect(formatDate('2026-06-15T12:00:00.000Z')).toMatch(/\d{2}:\d{2}/);
     expect(formatDate('2026-06-15T12:00:00.000Z', false)).not.toMatch(/\d{2}:\d{2}/);
+  });
+});
+
+describe('moinEditedAt', () => {
+  it('수정된 적이 없으면 빈 값을 돌려준다', () => {
+    expect(moinEditedAt('2026-06-15T12:00:00.000Z', undefined)).toBe('');
+    expect(moinEditedAt(undefined, '2026-06-15T12:00:00.000Z')).toBe('');
+    expect(moinEditedAt('2026-06-15T12:00:00.000Z', '2026-06-15T12:00:00.000Z')).toBe('');
+  });
+  it('작성 시각과 1초 미만 차이는 저장 시점의 오차로 본다', () => {
+    expect(moinEditedAt('2026-06-15T12:00:00.000Z', '2026-06-15T12:00:00.400Z')).toBe('');
+  });
+  it('본문이 바뀐 뒤에는 수정 시각을 그대로 돌려준다', () => {
+    expect(moinEditedAt('2026-06-15T12:00:00.000Z', '2026-06-15T12:30:00.000Z')).toBe('2026-06-15T12:30:00.000Z');
+  });
+  it('해석할 수 없는 시각이나 거꾸로 된 시각은 수정으로 보지 않는다', () => {
+    expect(moinEditedAt('언제인지 모름', '2026-06-15T12:30:00.000Z')).toBe('');
+    expect(moinEditedAt('2026-06-15T12:30:00.000Z', '2026-06-15T12:00:00.000Z')).toBe('');
   });
 });
 

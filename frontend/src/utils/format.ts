@@ -22,6 +22,17 @@ export function formatDate(value: string | undefined, includeTime = true) {
   return new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'short', day: 'numeric', ...(includeTime ? { hour: '2-digit', minute: '2-digit' } : {}) }).format(date);
 }
 
+// 서버는 본문이 바뀔 때만 updatedAt을 옮기고, 생성 시점에는 createdAt과 같은
+// 값으로 채운다. 두 값이 뜻있게 벌어졌을 때만 수정된 Moin으로 보고 그 시각을
+// 돌려주므로, 호출하는 쪽은 반환값 유무로 수정 여부를 판단할 수 있다.
+export function moinEditedAt(createdAt: string | undefined, updatedAt: string | undefined) {
+  if (!createdAt || !updatedAt) return '';
+  const created = new Date(createdAt).getTime();
+  const updated = new Date(updatedAt).getTime();
+  if (!Number.isFinite(created) || !Number.isFinite(updated)) return '';
+  return updated - created >= 1000 ? updatedAt : '';
+}
+
 export function listFrom<T>(value: T[] | { items?: T[] } | undefined): T[] {
   return Array.isArray(value) ? value : value?.items || [];
 }

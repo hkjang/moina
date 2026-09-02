@@ -155,7 +155,10 @@ func (s *Server) reviewApproval(w http.ResponseWriter, r *http.Request, approved
 		writeError(w, http.StatusConflict, "unsupported_action", "현재 버전에서 실행할 수 없는 승인 작업입니다")
 		return
 	}
-	postTag, err := tx.Exec(r.Context(), `UPDATE posts SET status=$2,published_at=CASE WHEN $2='published' THEN now() ELSE published_at END,updated_at=now() WHERE id=$1 AND status='pending_approval'`, item.TargetID, postStatus)
+	// posts.updated_at reports when the body last changed, so clients can mark an
+	// edited Moin. A review decision only moves the status and is already recorded
+	// by published_at and the approval request, so it must not look like an edit.
+	postTag, err := tx.Exec(r.Context(), `UPDATE posts SET status=$2,published_at=CASE WHEN $2='published' THEN now() ELSE published_at END WHERE id=$1 AND status='pending_approval'`, item.TargetID, postStatus)
 	if err != nil || postTag.RowsAffected() != 1 {
 		writeError(w, http.StatusConflict, "target_changed", "승인 대상 Moin 상태가 변경되어 결정을 적용하지 않았습니다")
 		return

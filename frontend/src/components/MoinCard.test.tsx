@@ -260,3 +260,29 @@ describe('MoinCard optimistic mutation', () => {
 		expect(screen.getByText('리모인이 승인 대기 상태로 접수되었습니다.')).toBeInTheDocument();
 	});
 });
+
+describe('MoinCard timestamp', () => {
+  beforeEach(() => mockedRequest.mockReset());
+  afterEach(() => cleanup());
+
+  it('작성 시각을 기계가 읽는 time 요소와 정확한 시각 툴팁으로 함께 제공한다', () => {
+    renderCardWithRouter();
+    const element = document.querySelector('time');
+    expect(element).not.toBeNull();
+    expect(element).toHaveAttribute('datetime', '2026-01-01T00:00:00Z');
+    expect(element?.getAttribute('title')).toContain('2026년');
+  });
+
+  it('본문이 바뀌지 않은 Moin에는 수정됨 표시를 붙이지 않는다', () => {
+    renderCardWithRouter(vi.fn(), { ...moin(), updatedAt: '2026-01-01T00:00:00Z' });
+    expect(screen.queryByText('수정됨')).not.toBeInTheDocument();
+  });
+
+  it('작성 뒤 본문이 바뀐 Moin은 수정 시각과 함께 수정됨으로 표시한다', () => {
+    renderCardWithRouter(vi.fn(), { ...moin(), updatedAt: '2026-01-02T03:04:00Z' });
+    const marker = screen.getByText('수정됨');
+    expect(marker).toBeInTheDocument();
+    expect(marker.getAttribute('title')).toContain('2026년');
+    expect(marker.getAttribute('title')).toContain('수정됨');
+  });
+});
