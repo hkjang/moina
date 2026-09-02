@@ -2,7 +2,7 @@
 
 ## 책임 경계
 
-GitHub Release에는 `linux/amd64`용 `moina:v0.1.16` 서비스 이미지 하나를 저장한 `moina-v0.1.16.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
+GitHub Release에는 `linux/amd64`용 `moina:v0.1.17` 서비스 이미지 하나를 저장한 `moina-v0.1.17.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
 
 ## 반입과 설치
 
@@ -13,10 +13,10 @@ GitHub Release에는 `linux/amd64`용 `moina:v0.1.16` 서비스 이미지 하나
 5. `pull never`, read-only, dropped capabilities로 시작합니다.
 
 ```bash
-sha256sum moina-v0.1.16.tar.gz
-gzip -t moina-v0.1.16.tar.gz
-gzip -dc moina-v0.1.16.tar.gz | docker image load
-docker image inspect moina:v0.1.16
+sha256sum moina-v0.1.17.tar.gz
+gzip -t moina-v0.1.17.tar.gz
+gzip -dc moina-v0.1.17.tar.gz | docker image load
+docker image inspect moina:v0.1.17
 cp .env.example .env
 chmod 600 .env
 docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull never
@@ -87,7 +87,7 @@ Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 
 
 ## 미디어 업로드 계약 확인
 
-인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.16` 관리자 설정이 아닙니다.
+인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.17` 관리자 설정이 아닙니다.
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/v1/media/config \
@@ -127,7 +127,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 5. compose image tag를 바꾸고 서비스를 재시작합니다.
 6. readiness, 버전, 로그인, Flow, 검색, 알림, 관리자 설정을 확인합니다.
 
-### v0.1.16 업그레이드 시 확인
+### v0.1.17 업그레이드 시 확인
 
 Migration 013이 `notifications`와 `outbox_events`에 index를 추가하므로 두 테이블이 큰 설치에서는 기동 시간이 늘어날 수 있습니다. 기동 직후 첫 보존 정리가 실행되며, 기본값으로도 90일 넘은 알림과 14일 넘은 전달 완료 Outbox event가 삭제됩니다. 이 기록을 더 오래 보관해야 한다면 업그레이드 **전에** `service.retention`을 원하는 값으로 먼저 설정합니다. 감사 기록은 기본값이 무기한이므로 별도 조치가 필요 없습니다.
 
@@ -148,7 +148,7 @@ Migration 013이 `notifications`와 `outbox_events`에 index를 추가하므로 
 
 - root encryption key는 application 관리자 계정과 분리해 vault/HSM 수준으로 보관합니다.
 - 개인 API/MCP key는 사용자 화면에서 회전하고 이전 token은 즉시 폐기합니다.
-- `v0.1.16`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
+- `v0.1.17`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
 - 유출이 의심되면 관련 key 폐기, session 종료, audit 조사와 downstream secret rotation을 함께 수행합니다.
 
 ## 장애 분류
