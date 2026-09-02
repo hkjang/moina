@@ -20,7 +20,12 @@ import {
   toggleMoinSignal,
 } from "../state/moinMutations";
 import type { Moin, SignalType } from "../types";
-import { formatRelativeTime, topicLabel } from "../utils/format";
+import {
+  formatDate,
+  formatRelativeTime,
+  moinEditedAt,
+  topicLabel,
+} from "../utils/format";
 import { useToast } from "./ToastProvider";
 import { DraftNavigationGuard } from "./DraftNavigationGuard";
 import { MoinComposer } from "./MoinComposer";
@@ -250,6 +255,7 @@ function MoinCardComponent({
     }
   };
   if (deleted) return null;
+  const editedAt = moinEditedAt(current.createdAt, current.updatedAt);
   return (
     <>
       <article
@@ -284,7 +290,23 @@ function MoinCardComponent({
             )}
             <span>
               @{current.author.username} ·{" "}
-              {formatRelativeTime(current.createdAt)}
+              <time
+                dateTime={current.createdAt}
+                title={formatDate(current.createdAt)}
+              >
+                {formatRelativeTime(current.createdAt)}
+              </time>
+              {editedAt && (
+                <>
+                  {" · "}
+                  <span
+                    className="moin-edited"
+                    title={`${formatDate(editedAt)}에 수정됨`}
+                  >
+                    수정됨
+                  </span>
+                </>
+              )}
             </span>
           </Link>
           {editable && (

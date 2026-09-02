@@ -1241,7 +1241,7 @@ components:
         topics: {type: array, items: {type: object, additionalProperties: true}}
         counts: {type: object, additionalProperties: {type: integer}}
         createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time, description: 본문이 마지막으로 바뀐 시각. 승인 게시 같은 상태 전이는 바꾸지 않으므로 createdAt보다 뒤면 작성자가 본문을 수정했다는 뜻입니다.}
     CreatePost:
       type: object
       additionalProperties: false
