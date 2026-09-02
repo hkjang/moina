@@ -771,13 +771,6 @@ func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusCreated, report)
 }
 
-func nullableString(value string) any {
-	if value == "" {
-		return nil
-	}
-	return value
-}
-
 func escapeLike(value string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(value)
 }

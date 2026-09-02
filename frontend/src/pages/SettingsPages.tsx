@@ -1,4 +1,4 @@
-import { Bell, KeyRound, Mail, Monitor, RefreshCw, Save, ShieldCheck, UserRoundCog } from 'lucide-react';
+import { Bell, KeyRound, Mail, Monitor, RefreshCw, Save, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { NavLink } from 'react-router-dom';
 import { apiRequest, readableError } from '../api/client';

@@ -1,14 +1,15 @@
 export const APP_NAME = 'moina';
 export const APP_DISPLAY_NAME = 'MOINA';
-export const APP_VERSION = normalizeVersion(import.meta.env.VITE_MOINA_VERSION || 'v0.1.14');
+export const APP_VERSION = normalizeVersion(import.meta.env.VITE_MOINA_VERSION || 'v0.1.15');
 export const API_BASE = '/api/v1';
 
 export function normalizeVersion(value: string) {
   const clean = value.trim().replace(/^v/i, '');
-  return `v${clean || '0.1.14'}`;
+  return `v${clean || '0.1.15'}`;
 }
 
 export function safeAppPath(value: string | null | undefined, fallback = '/flow') {
+  // eslint-disable-next-line no-control-regex -- rejecting control characters in a stored route is the purpose of this guard
   if (!value || value !== value.trim() || !value.startsWith('/') || value.startsWith('//') || value.includes('\\') || /[\u0000-\u001f\u007f]/.test(value)) return fallback;
   let decoded: string;
   try { decoded = decodeURIComponent(value); } catch { return fallback; }

@@ -64,12 +64,32 @@ jobs:
           go test -race ./...
           go vet ./...
 
-      - name: Frontend tests and production build
+      - name: Frontend lint, tests and production build
         run: |
           set -Eeuo pipefail
           npm ci --prefix frontend
+          npm run lint --prefix frontend
           npm test --prefix frontend
           VITE_MOINA_VERSION="$(tr -d '[:space:]' < VERSION)" npm run build --prefix frontend
+
+      - name: Static analysis
+        run: |
+          set -Eeuo pipefail
+          cd backend
+          go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
+
+      # Advisory data changes without a commit, so this reports rather than
+      # blocks: a newly published advisory must not fail an unrelated pull
+      # request. The job summary is where a reviewer sees it.
+      - name: Dependency audit
+        continue-on-error: true
+        run: |
+          set -Eeuo pipefail
+          cd backend
+          go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./... | tee "${GITHUB_STEP_SUMMARY}"
+          cd ..
+          npm audit --audit-level=high --prefix frontend
+          npm audit --audit-level=high --prefix e2e
 
   image:
     name: Image and browser smoke

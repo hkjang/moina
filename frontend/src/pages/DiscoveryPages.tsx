@@ -1,6 +1,6 @@
 import { ArrowRight, Compass, Search as SearchIcon, Sparkles, TrendingUp, UserPlus } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { normalizeMoin, normalizePage, normalizeProfile, normalizeTopic } from '../api/adapters';
 import { apiRequest, readableError } from '../api/client';
 import { MoinCard } from '../components/MoinCard';

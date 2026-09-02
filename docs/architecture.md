@@ -2,7 +2,7 @@
 
 ## 선택
 
-MOINA `v0.1.14`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
+MOINA `v0.1.15`은 Go modular monolith와 React SPA를 단일 binary/image로 배포합니다. 초기 제품에서 microservice 운영 복잡도를 만들지 않으면서 모듈 경계를 유지하고, 실제 부하가 확인되면 독립 worker나 search/notification service로 분리할 수 있게 합니다.
 
 ```text
 Browser (React, REST/SSE/WebSocket)
@@ -69,7 +69,7 @@ WebSocket은 새 알림을 연결된 브라우저로 전달하고 PostgreSQL이 
 
 ## 검색
 
-`v0.1.14` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. `type`을 지정하면 해당 대상의 SQL만 실행하고, 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다. 공개 프로필의 Moin·Signal 통계는 공개·게시 상태의 Moin만 집계합니다. Topic Pulse는 최근 7일의 공개 Moin과 Signal을 집계하고 최근 24시간 활동에 더 큰 가중치를 적용하며, 비공개·삭제·승인 대기 Moin은 제외합니다.
+`v0.1.15` 검색은 PostgreSQL `pg_trgm`, `to_tsvector('simple', ...)`와 정확 일치 가중치를 결합해 사용자, Moin, Topic과 Moim을 관련도 순으로 찾습니다. 오탈자·부분 문자열과 한국어 띄어쓰기 검색을 지원하면서 외부 OpenSearch를 요구하지 않습니다. `type`을 지정하면 해당 대상의 SQL만 실행하고, 검색 결과 Moin도 ID별 재조회 대신 일괄 hydration합니다. 공개 프로필의 Moin·Signal 통계는 공개·게시 상태의 Moin만 집계합니다. Topic Pulse는 최근 7일의 공개 Moin과 Signal을 집계하고 최근 24시간 활동에 더 큰 가중치를 적용하며, 비공개·삭제·승인 대기 Moin은 제외합니다.
 
 ## 클라이언트 빠른 이동
 
@@ -100,7 +100,7 @@ Large Object read는 인스턴스당 최대 8개를 동시에 유지합니다. D
 ## 오프라인 runtime
 
 ```text
-moina:v0.1.14 (linux/amd64, distroless, non-root, read-only)
+moina:v0.1.15 (linux/amd64, distroless, non-root, read-only)
   ├─ /app/moina
   └─ /app/web/dist
 

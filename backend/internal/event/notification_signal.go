@@ -38,7 +38,7 @@ func PublishNotificationSignal(ctx context.Context, tx Execer, signal Notificati
 	if err != nil {
 		return fmt.Errorf("notification signal marshal: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `SELECT pg_notify('moina_notifications',$1)`, string(payload)); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_notify('`+notificationChannel+`',$1)`, string(payload)); err != nil {
 		return fmt.Errorf("notification signal publish: %w", err)
 	}
 	return nil
@@ -55,13 +55,13 @@ func (r *Repository) ListenNotificationSignals(ctx context.Context, signals chan
 		return fmt.Errorf("notification listener acquire: %w", err)
 	}
 	defer connection.Release()
-	if _, err := connection.Exec(ctx, `LISTEN moina_notifications`); err != nil {
+	if _, err := connection.Exec(ctx, `LISTEN `+notificationChannel); err != nil {
 		return fmt.Errorf("notification LISTEN: %w", err)
 	}
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_, _ = connection.Exec(cleanup, `UNLISTEN moina_notifications`)
+		_, _ = connection.Exec(cleanup, `UNLISTEN `+notificationChannel)
 	}()
 	for {
 		notification, err := connection.Conn().WaitForNotification(ctx)

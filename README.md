@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.14`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.15`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.14`는 설정·역할 권한 캐시로 요청당 DB 왕복을 줄이고, 검색어 없는 추천 조회에서 전체 스캔을 제거했으며, 문서에만 있던 검색 `offset`을 실제로 적용합니다. 브라우저 번들은 React·Radix·아이콘을 분리해 업그레이드 후 재방문 전송량을 줄입니다. `v0.1.13`의 응답 압축, 요청 종류별 본문 읽기 기한, 운영 레코드 보존 정책도 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
+`v0.1.15`는 정적 분석과 의존성 취약점 검사를 CI에 편입합니다. staticcheck가 찾은 죽은 코드와 자기 자신을 비교하던 테스트를 고쳤고, 멘션 자동완성을 전용 hook으로 분리해 단독 테스트를 붙였습니다. `v0.1.14`의 설정·권한 캐시와 검색 개선, `v0.1.13`의 응답 압축·본문 읽기 기한·보존 정책은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
 
 ## 주요 기능
 
@@ -42,6 +42,7 @@ MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관�
 - pg_notify로 즉시 전파되는 설정·역할 권한 캐시와 분당 1회로 제한한 API 키 사용 기록
 - 검색어가 없는 추천 조회의 전용 질의, 문서와 일치하는 검색 `offset` 페이지네이션
 - React·Radix·아이콘 분리 chunk와 상한이 있는 브라우저 API 캐시
+- CI에서 실행하는 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사
 
 ## 기술 구성
 
@@ -85,16 +86,20 @@ Go 1.26.6 이상, Node.js 24, npm, Docker 24+와 Docker Compose v2가 필요합�
 
 ```bash
 make check
+make lint
 make test
+make audit
 make image
 ```
+
+`make lint`는 Go staticcheck와 프런트엔드 ESLint를, `make audit`은 실제로 호출되는 Go 취약점(govulncheck)과 npm 취약점을 검사합니다. ESLint는 도입 시점의 경고 40건을 예산으로 고정하므로 기존 경고를 고칠 수는 있어도 새 경고가 늘면 실패합니다.
 
 로고 SVG를 수정한 뒤 PWA PNG 아이콘과 OG WebP를 재현하려면 Playwright Chromium과 FFmpeg가 준비된 연결 빌드 구역에서 `make brand-assets`를 실행합니다. 생성 결과의 고정 SHA-256과 이전 Purple·Teal 색상 잔존 여부는 `make check`가 검증합니다.
 
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.14
+moina:v0.1.15
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -112,20 +117,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.14.tar.gz
-dist/moina-v0.1.14.tar.gz.sha256
+dist/moina-v0.1.15.tar.gz
+dist/moina-v0.1.15.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.14.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.15.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.14.tar.gz
-gzip -dc moina-v0.1.14.tar.gz | docker image load
-docker image inspect moina:v0.1.14
+sha256sum moina-v0.1.15.tar.gz
+gzip -dc moina-v0.1.15.tar.gz | docker image load
+docker image inspect moina:v0.1.15
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -174,15 +179,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.14 -m "moina v0.1.14"
-git push origin v0.1.14
+git tag -a v0.1.15 -m "moina v0.1.15"
+git push origin v0.1.15
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.14
-file:  moina-v버전.tar.gz  예: moina-v0.1.14.tar.gz
+image: moina:v버전          예: moina:v0.1.15
+file:  moina-v버전.tar.gz  예: moina-v0.1.15.tar.gz
 ```
 
 ## 라이선스

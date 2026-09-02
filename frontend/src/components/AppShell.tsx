@@ -36,7 +36,7 @@ import type {
 } from "../types";
 import { websocketURL } from "../api/client";
 import { cn } from "../lib/cn";
-import { Avatar, Badge, Button, IconButton } from "./ui";
+import { Avatar, Button, IconButton } from "./ui";
 import { ProfileMenu } from "./ProfileMenu";
 import { QuickNavigation } from "./QuickNavigation";
 import { useToast } from "./ToastProvider";

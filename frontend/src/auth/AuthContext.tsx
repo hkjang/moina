@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiRequest<unknown>('/auth/login', { method: 'POST', body: { username, password }, suppressUnauthorized: true });
       const resolved = normalizeUser(response);
       if (resolved) setUser(resolved); else await refresh();
-    } catch (error) { throw new Error(readableError(error)); }
+    } catch (error) { throw new Error(readableError(error), { cause: error }); }
   }, [refresh]);
   const logout = useCallback(async () => {
     try { await apiRequest('/auth/logout', { method: 'POST', suppressUnauthorized: true }); } catch { /* Local state is still cleared. */ }

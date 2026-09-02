@@ -220,13 +220,13 @@ func (r *Repository) Listen(ctx context.Context, wake chan<- struct{}) error {
 		return fmt.Errorf("outbox listener acquire: %w", err)
 	}
 	defer connection.Release()
-	if _, err := connection.Exec(ctx, `LISTEN moina_outbox`); err != nil {
+	if _, err := connection.Exec(ctx, `LISTEN `+outboxChannel); err != nil {
 		return fmt.Errorf("outbox LISTEN: %w", err)
 	}
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_, _ = connection.Exec(cleanup, `UNLISTEN moina_outbox`)
+		_, _ = connection.Exec(cleanup, `UNLISTEN `+outboxChannel)
 	}()
 	for {
 		if _, err := connection.Conn().WaitForNotification(ctx); err != nil {

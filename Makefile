@@ -7,7 +7,12 @@ OUTPUT_DIR ?= dist
 
 .DEFAULT_GOAL := help
 
-.PHONY: help version fmt backend frontend test check brand-assets image package verify-package offline-up offline-down pages-test clean
+# Analysis tools are pinned so a scan result is reproducible and an upstream
+# release cannot change what CI accepts without a commit.
+STATICCHECK := honnef.co/go/tools/cmd/staticcheck@2025.1.1
+GOVULNCHECK := golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+.PHONY: help version fmt backend frontend test lint audit check brand-assets image package verify-package offline-up offline-down pages-test clean
 
 help: ## 사용 가능한 명령을 표시합니다.
 	@awk 'BEGIN {FS = ":.*## "; printf "moina build targets\n\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -27,7 +32,16 @@ frontend: ## React 웹 앱을 빌드합니다.
 
 test: ## 백엔드와 프런트엔드 검사를 실행합니다.
 	cd backend && go test ./... && go vet ./...
-	cd frontend && npm ci && npm test && VITE_MOINA_VERSION='$(VERSION)' npm run build
+	cd frontend && npm ci && npm run lint && npm test && VITE_MOINA_VERSION='$(VERSION)' npm run build
+
+lint: ## staticcheck와 ESLint로 정적 분석을 실행합니다.
+	cd backend && go vet ./... && go run $(STATICCHECK) ./...
+	cd frontend && npm run lint
+
+audit: ## 호출 가능한 Go 취약점과 npm 취약점을 검사합니다.
+	cd backend && go run $(GOVULNCHECK) ./...
+	cd frontend && npm audit --audit-level=high
+	cd e2e && npm audit --audit-level=high
 
 check: ## 버전·환경변수·셸·문서 계약을 검사합니다.
 	bash -n scripts/*.sh

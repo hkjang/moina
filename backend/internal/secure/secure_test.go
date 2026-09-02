@@ -26,7 +26,11 @@ func TestPurposeBoundEncryption(t *testing.T) {
 func TestTokenHashesAreStableAndKeyed(t *testing.T) {
 	a, _ := New(bytes.Repeat([]byte{1}, 32))
 	b, _ := New(bytes.Repeat([]byte{2}, 32))
-	if a.HashToken("token") != a.HashToken("token") || a.HashToken("token") == b.HashToken("token") {
-		t.Fatal("unexpected token hash behavior")
+	first, repeated := a.HashToken("token"), a.HashToken("token")
+	if first != repeated {
+		t.Fatal("hashing the same token twice produced different values")
+	}
+	if first == b.HashToken("token") {
+		t.Fatal("different root keys produced the same token hash")
 	}
 }
