@@ -71,6 +71,49 @@ func TestTrustedProxyUsesClosestForwardedProto(t *testing.T) {
 	}
 }
 
+func TestRepeatedForwardedForLinesFormOneChain(t *testing.T) {
+	server := New(nil, nil, "test")
+	server.networkCache = networkConfig{TrustedProxies: []string{"10.0.0.0/24"}}
+	server.networkLoadedAt = time.Now()
+
+	var got requestNetwork
+	handler := server.resolveRequestNetwork(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = requestNetworkInfo(r)
+	}))
+	request := httptest.NewRequest(http.MethodGet, "http://moina.internal", nil)
+	request.RemoteAddr = "10.0.0.5:49000"
+	// A client-supplied line followed by the line the trusted proxy appended.
+	// Only the rightmost untrusted hop may become the client address.
+	request.Header.Add("X-Forwarded-For", "203.0.113.9")
+	request.Header.Add("X-Forwarded-For", "192.0.2.44")
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+	if got.ClientIP != "192.0.2.44" {
+		t.Fatalf("client IP = %q, want 192.0.2.44", got.ClientIP)
+	}
+	if !slices.Equal(got.ProxyChain, []string{"203.0.113.9", "192.0.2.44", "10.0.0.5"}) {
+		t.Fatalf("proxy chain = %v", got.ProxyChain)
+	}
+}
+
+func TestRepeatedForwardedForLinesKeepTrustedHopsTransparent(t *testing.T) {
+	server := New(nil, nil, "test")
+	server.networkCache = networkConfig{TrustedProxies: []string{"10.0.0.0/24"}}
+	server.networkLoadedAt = time.Now()
+
+	var got requestNetwork
+	handler := server.resolveRequestNetwork(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = requestNetworkInfo(r)
+	}))
+	request := httptest.NewRequest(http.MethodGet, "http://moina.internal", nil)
+	request.RemoteAddr = "10.0.0.5:49000"
+	request.Header.Add("X-Forwarded-For", "192.0.2.44, 10.0.0.3")
+	request.Header.Add("X-Forwarded-For", "10.0.0.4")
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+	if got.ClientIP != "192.0.2.44" {
+		t.Fatalf("client IP = %q, want 192.0.2.44", got.ClientIP)
+	}
+}
+
 func TestNetworkConfigOnlyAcceptsExactIPOrCIDR(t *testing.T) {
 	valid := networkConfig{TrustedProxies: []string{"127.0.0.1", "10.20.0.0/16", "127.0.0.1"}}
 	if err := validateNetwork(&valid); err != nil {
