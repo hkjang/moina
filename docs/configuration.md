@@ -77,7 +77,7 @@ MOINA_ENCRYPTION_KEY=replace-with-base64-32-byte-value
 
 ### Reverse Proxy와 요청 한도
 
-`network.proxy.trustedProxies`에는 MOINA에 직접 연결하는 Proxy Peer의 IP 또는 CIDR만 입력합니다. 직접 연결 Peer가 목록에 있을 때만 표준 `Forwarded` 또는 `X-Forwarded-For`·`X-Forwarded-Proto`를 신뢰하며, 오른쪽부터 신뢰 Proxy를 제거해 실제 Client IP를 계산합니다. 전달 protocol은 가장 가까운 오른쪽 hop의 값만 사용해 왼쪽의 사용자 입력이 secure cookie 판단을 바꾸지 못하게 합니다. 빈 목록은 모든 전달 헤더를 무시하는 안전한 기본값입니다. 감사 기록에는 `socketIp`, `clientIp`, `proxyChain`을 분리해 남깁니다.
+`network.proxy.trustedProxies`에는 MOINA에 직접 연결하는 Proxy Peer의 IP 또는 CIDR만 입력합니다. 직접 연결 Peer가 목록에 있을 때만 표준 `Forwarded` 또는 `X-Forwarded-For`·`X-Forwarded-Proto`를 신뢰하며, 오른쪽부터 신뢰 Proxy를 제거해 실제 Client IP를 계산합니다. Proxy가 `Forwarded`·`X-Forwarded-For`를 하나로 합치지 않고 별도 header 줄로 덧붙여도 받은 순서대로 이어 붙인 하나의 chain으로 처리하므로, Client가 미리 보낸 줄이 chain 전체를 대신할 수 없습니다. 전달 protocol은 가장 가까운 오른쪽 hop의 값만 사용해 왼쪽의 사용자 입력이 secure cookie 판단을 바꾸지 못하게 합니다. 빈 목록은 모든 전달 헤더를 무시하는 안전한 기본값입니다. 감사 기록에는 `socketIp`, `clientIp`, `proxyChain`을 분리해 남깁니다.
 
 로그인은 사용자명+Client IP 5분당 5회와 사용자명 전체 5분당 20회를 함께 제한하고, 가입은 Client IP 기준 10분당 5회입니다. 개인 API·MCP key의 `rateLimitPerMinute`도 PostgreSQL `rate_limit_buckets`를 사용하므로 여러 MOINA 인스턴스가 같은 quota를 공유합니다. Rate Limit 저장소를 사용할 수 없으면 인증·키 요청을 허용하지 않고 `rate_limit_unavailable`을 반환합니다.
 

@@ -169,9 +169,15 @@ func forwardedAddresses(r *http.Request) ([]netip.Addr, string) {
 			}
 		}
 	} else {
-		for _, value := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
-			if strings.TrimSpace(value) != "" {
-				values = append(values, value)
+		// Repeated field lines carry the same meaning as one comma-joined list
+		// in the order received. Reading only the first line would drop the hop
+		// a trusted proxy appended as a separate line and let a client-supplied
+		// line stand alone as the whole chain.
+		for _, line := range r.Header.Values("X-Forwarded-For") {
+			for _, value := range strings.Split(line, ",") {
+				if strings.TrimSpace(value) != "" {
+					values = append(values, value)
+				}
 			}
 		}
 		for _, line := range r.Header.Values("X-Forwarded-Proto") {
