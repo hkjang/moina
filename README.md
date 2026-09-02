@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.17`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.18`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.17`은 7일이 지난 Moin의 상대 시각이 월·일만 표시해 작년 이전 Moin과 올해 Moin을 구분할 수 없던 문제를 고칩니다. 현재 연도와 다를 때만 연도를 덧붙이므로 Flow·Moin 카드·알림 목록의 평소 밀도는 그대로 두면서 오래된 Moin의 시점이 분명해집니다. `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
+`v0.1.18`은 작성자가 공개된 Moin의 본문을 다시 써도 카드가 작성 시각만 보여 주어 이미 Echo하거나 반응한 사람이 본문 변경을 알 수 없던 문제를 고칩니다. `updatedAt`이 작성 시각보다 의미 있게 뒤일 때만 **수정됨** 표시와 정확한 수정 시각을 보여 주고, Moin 카드와 알림 목록의 상대 시각을 `<time dateTime>`으로 감싸 전체 시각을 tooltip으로 제공합니다. 승인 게시 같은 상태 전이는 `updated_at`을 옮기지 않으므로 승인 정책을 켠 인스턴스에서 모든 승인 Moin이 수정으로 보이지 않습니다. `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
 
 ## 주요 기능
 
@@ -100,7 +100,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.17
+moina:v0.1.18
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -118,20 +118,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.17.tar.gz
-dist/moina-v0.1.17.tar.gz.sha256
+dist/moina-v0.1.18.tar.gz
+dist/moina-v0.1.18.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.17.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.18.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.17.tar.gz
-gzip -dc moina-v0.1.17.tar.gz | docker image load
-docker image inspect moina:v0.1.17
+sha256sum moina-v0.1.18.tar.gz
+gzip -dc moina-v0.1.18.tar.gz | docker image load
+docker image inspect moina:v0.1.18
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -180,15 +180,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.17 -m "moina v0.1.17"
-git push origin v0.1.17
+git tag -a v0.1.18 -m "moina v0.1.18"
+git push origin v0.1.18
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.17
-file:  moina-v버전.tar.gz  예: moina-v0.1.17.tar.gz
+image: moina:v버전          예: moina:v0.1.18
+file:  moina-v버전.tar.gz  예: moina-v0.1.18.tar.gz
 ```
 
 ## 라이선스
