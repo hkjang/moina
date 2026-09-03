@@ -15,4 +15,49 @@ describe("MoinContent", () => {
     expect(moinContentParts("mail@example.com 붙여쓴@alice @bob_user").filter((part) => part.type === "mention"))
       .toEqual([{ type: "mention", value: "@bob_user", target: "bob_user" }]);
   });
+
+  it("http와 https 주소를 새 탭 링크로 만든다", () => {
+    render(<MemoryRouter><MoinContent content="자료는 https://moina.example/guide 에 있습니다" moinId="m1"/></MemoryRouter>);
+    const link = screen.getByRole("link", { name: "https://moina.example/guide" });
+    expect(link).toHaveAttribute("href", "https://moina.example/guide");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer nofollow");
+  });
+
+  it("http와 https가 아닌 주소는 링크로 만들지 않는다", () => {
+    for (const content of ["javascript:alert(1)", "data:text/html,<b>x</b>", "ftp://moina.example/x"]) {
+      expect(moinContentParts(content).filter((part) => part.type === "link")).toEqual([]);
+    }
+  });
+
+  it("주소 안의 @와 #를 멘션이나 토픽으로 떼어내지 않는다", () => {
+    expect(moinContentParts("https://moina.example/@alice#guide").filter((part) => part.type !== "text"))
+      .toEqual([{ type: "link", value: "https://moina.example/@alice#guide", target: "https://moina.example/@alice#guide" }]);
+  });
+
+  it("문장 끝 구두점은 주소에서 떼어내고 짝이 맞는 괄호는 남긴다", () => {
+    expect(moinContentParts("https://moina.example/a. 확인").filter((part) => part.type === "link"))
+      .toEqual([{ type: "link", value: "https://moina.example/a", target: "https://moina.example/a" }]);
+    expect(moinContentParts("(https://moina.example/a)").filter((part) => part.type === "link"))
+      .toEqual([{ type: "link", value: "https://moina.example/a", target: "https://moina.example/a" }]);
+    expect(moinContentParts("https://moina.example/a_(b) 확인").filter((part) => part.type === "link"))
+      .toEqual([{ type: "link", value: "https://moina.example/a_(b)", target: "https://moina.example/a_(b)" }]);
+  });
+
+  it("주소 바로 뒤에 붙은 한글은 주소에 포함하지 않는다", () => {
+    expect(moinContentParts("https://moina.example/a에서 받으세요"))
+      .toEqual([
+        { type: "link", value: "https://moina.example/a", target: "https://moina.example/a" },
+        { type: "text", value: "에서 받으세요" },
+      ]);
+  });
+
+  it("주소 뒤에 이어지는 멘션과 토픽도 그대로 인식한다", () => {
+    expect(moinContentParts("https://moina.example/a. @bob_user #공지").filter((part) => part.type !== "text"))
+      .toEqual([
+        { type: "link", value: "https://moina.example/a", target: "https://moina.example/a" },
+        { type: "mention", value: "@bob_user", target: "bob_user" },
+        { type: "topic", value: "#공지", target: "공지" },
+      ]);
+  });
 });
