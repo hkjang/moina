@@ -36,7 +36,7 @@ Authorization: Bearer mk_...
 | 개인 | profile, preferences, sessions, API/MCP keys와 rotation |
 | 운영 | users, roles, settings, OIDC, AI, approvals, reports, audit와 Outbox 복구 |
 
-Flow 이외의 관리 collection은 `limit`과 숫자 `offset`을 사용합니다. Flow 응답의 `nextCursor`는 versioned Base64 URL로 인코딩한 opaque 값이며 client가 해석하거나 변경해서는 안 됩니다. Following cursor는 게시 시각·ID를 보존합니다. For Me cursor는 기준 시각·점수·ID·랭킹 버전과 사용자별 server ranking snapshot ID를 포함합니다.
+Flow 이외의 관리 collection은 `limit`과 숫자 `offset`을 사용합니다. `limit`은 1~100, `offset`은 0~1,000,000이며 범위 밖이거나 정수가 아닌 값은 기본값으로 대체하지 않고 HTTP 400 `invalid_pagination`을 반환합니다. 이 collection의 `nextCursor`는 다음 `offset`을 담은 숫자 문자열이고 상한을 넘는 다음 페이지는 발급하지 않으므로, cursor를 따라가는 client는 마지막 페이지에서 반드시 멈춥니다. Flow 응답의 `nextCursor`는 versioned Base64 URL로 인코딩한 opaque 값이며 client가 해석하거나 변경해서는 안 됩니다. Following cursor는 게시 시각·ID를 보존합니다. For Me cursor는 기준 시각·점수·ID·랭킹 버전과 사용자별 server ranking snapshot ID를 포함합니다.
 
 For Me 첫 페이지는 필터를 통과한 최근 후보 최대 200개의 합계·component 점수와 당시 개인화 설정을 동결합니다. 동일 사용자·랭킹 버전·설정은 같은 30초 bucket에서 snapshot을 재사용합니다. 시간 만료는 한 시간이지만 사용자당 활성 snapshot이 최대 3개이므로 반복 refresh 시 이전 값이 조기 제거될 수 있습니다. 잘못된 cursor는 `invalid_cursor`, 정책 버전이 달라진 cursor는 `ranking_version_mismatch`, 만료되거나 제거된 snapshot은 `feed_snapshot_expired` 오류가 됩니다. 이 경우 client는 저장한 페이지와 cursor를 버리고 첫 페이지부터 다시 조회합니다.
 
