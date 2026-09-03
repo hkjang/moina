@@ -47,6 +47,11 @@ const (
 	requestBodyReadTimeout = 30 * time.Second
 	uploadBodyReadTimeout  = 15 * time.Minute
 	defaultStaticRoot      = "/app/web/dist"
+	// The published limit·offset range in api/openapi.yaml. The offset ceiling
+	// bounds how deep a sequential scan a single page may ask PostgreSQL for.
+	defaultPageLimit = 30
+	maxPageLimit     = 100
+	maxPageOffset    = 1_000_000
 )
 
 type principal struct {
@@ -646,22 +651,42 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
 	return true
 }
 
-func pagination(r *http.Request) (int, int) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	if r.URL.Query().Get("offset") == "" {
-		offset, _ = strconv.Atoi(r.URL.Query().Get("cursor"))
+// pagination reads the documented limit·offset contract and answers 400 when a
+// value falls outside it. Silently substituting the default hid the mistake and
+// answered 200 with the first page: a client following the offset nextCursor
+// past the ceiling was handed page 1 again and looped over it forever.
+func pagination(w http.ResponseWriter, r *http.Request) (int, int, bool) {
+	query := r.URL.Query()
+	limit := defaultPageLimit
+	if raw := strings.TrimSpace(query.Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > maxPageLimit {
+			writeError(w, http.StatusBadRequest, "invalid_pagination", fmt.Sprintf("limit은 1 이상 %d 이하의 정수여야 합니다", maxPageLimit))
+			return 0, 0, false
+		}
+		limit = parsed
 	}
-	if limit < 1 {
-		limit = 30
+	raw := strings.TrimSpace(query.Get("offset"))
+	if raw == "" {
+		// A list endpoint hands back its next offset as nextCursor. Flow cursors
+		// are opaque and decoded by the endpoint itself, so a cursor that is not
+		// a number is not an offset mistake here.
+		if cursor := strings.TrimSpace(query.Get("cursor")); cursor != "" {
+			if _, err := strconv.Atoi(cursor); err == nil {
+				raw = cursor
+			}
+		}
 	}
-	if limit > 100 {
-		limit = 100
+	offset := 0
+	if raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 || parsed > maxPageOffset {
+			writeError(w, http.StatusBadRequest, "invalid_pagination", fmt.Sprintf("offset은 0 이상 %d 이하의 정수여야 합니다", maxPageOffset))
+			return 0, 0, false
+		}
+		offset = parsed
 	}
-	if offset < 0 || offset > 1_000_000 {
-		offset = 0
-	}
-	return limit, offset
+	return limit, offset, true
 }
 
 func (s *Server) audit(r *http.Request, action, targetType, targetID string, success bool, detail any) {

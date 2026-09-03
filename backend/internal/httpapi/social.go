@@ -179,7 +179,10 @@ func (s *Server) unmuteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listTopics(w http.ResponseWriter, r *http.Request) {
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	viewer := getPrincipal(r).User.ID
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	pattern := "%" + escapeLike(strings.ToLower(query)) + "%"
@@ -308,7 +311,10 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	}
 	// offset has always been part of the documented contract; it used to be
 	// parsed and dropped, capping every search at a single page.
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	viewer := getPrincipal(r).User.ID
 	wants := func(kind string) bool { return searchType == "all" || searchType == kind }
 
@@ -352,7 +358,10 @@ func publicUserView(user model.User) map[string]any {
 }
 
 func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	filter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("filter")))
 	if filter == "" {
 		filter = "all"
@@ -503,7 +512,10 @@ func (s *Server) createMoim(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listMoims(w http.ResponseWriter, r *http.Request) {
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	viewer := getPrincipal(r).User.ID
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT m.id,m.slug,m.name,m.description,m.owner_id,m.visibility,m.created_at,(SELECT count(*) FROM moim_members WHERE moim_id=m.id),(SELECT count(*) FROM posts WHERE moim_id=m.id AND status='published'),EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$1) FROM moims m WHERE m.visibility='public' OR EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$1) ORDER BY m.created_at DESC LIMIT $2 OFFSET $3`, viewer, limit, offset)
 	if err != nil {

@@ -50,7 +50,10 @@ func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "not_approver", "현재 승인 정책의 검토 역할이 아닙니다")
 		return
 	}
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	status := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
 	if status == "" {
 		status = "pending"

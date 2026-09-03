@@ -138,7 +138,7 @@ paths:
         - {$ref: '#/components/parameters/Limit'}
         - {name: moim, in: query, description: Moim slug로 대화 목록을 제한합니다., schema: {type: string}}
         - {name: moimId, in: query, description: Moim ID로 대화 목록을 제한합니다., schema: {type: string}}
-      responses: {'200': {$ref: '#/components/responses/PostPage'}}
+      responses: {'200': {$ref: '#/components/responses/PostPage'}, '400': {$ref: '#/components/responses/Error'}}
     post:
       tags: [Posts]
       summary: Moin 또는 Echo 작성
@@ -168,7 +168,7 @@ paths:
       tags: [Posts]
       summary: Echo 목록
       parameters: [{$ref: '#/components/parameters/PostID'}, {$ref: '#/components/parameters/Offset'}, {$ref: '#/components/parameters/Limit'}]
-      responses: {'200': {$ref: '#/components/responses/PostPage'}}
+      responses: {'200': {$ref: '#/components/responses/PostPage'}, '400': {$ref: '#/components/responses/Error'}}
   /api/v1/posts/{postID}/reactions:
     parameters: [{$ref: '#/components/parameters/PostID'}]
     post:
@@ -421,7 +421,7 @@ paths:
       tags: [Moims]
       summary: Moim 목록
       parameters: [{$ref: '#/components/parameters/Offset'}, {$ref: '#/components/parameters/Limit'}]
-      responses: {'200': {$ref: '#/components/responses/Data'}}
+      responses: {'200': {$ref: '#/components/responses/Data'}, '400': {$ref: '#/components/responses/Error'}}
     post:
       tags: [Moims]
       summary: Moim 생성
@@ -513,7 +513,7 @@ paths:
       tags: [Governance]
       summary: 검토 대기 목록
       parameters: [{$ref: '#/components/parameters/Offset'}, {$ref: '#/components/parameters/Limit'}]
-      responses: {'200': {$ref: '#/components/responses/Data'}}
+      responses: {'200': {$ref: '#/components/responses/Data'}, '400': {$ref: '#/components/responses/Error'}}
   /api/v1/approvals/{approvalID}/approve:
     post:
       tags: [Governance]
@@ -741,7 +741,7 @@ components:
       required: false
       description: Cookie 인증 unsafe 요청에서 필수. Bearer key에는 적용하지 않습니다.
       schema: {type: string}
-    Offset: {name: offset, in: query, schema: {type: integer, minimum: 0, maximum: 1000000, default: 0}}
+    Offset: {name: offset, in: query, description: 범위 밖이거나 정수가 아닌 값은 기본값으로 대체하지 않고 400 invalid_pagination입니다. offset page의 nextCursor는 상한을 넘는 다음 page를 발급하지 않습니다., schema: {type: integer, minimum: 0, maximum: 1000000, default: 0}}
     Cursor:
       name: cursor
       in: query
@@ -754,7 +754,7 @@ components:
         snapshot이 만료되거나 랭킹 정책이 달라지면 client는 저장한 cursor를 버리고 첫 페이지부터 다시
         조회해야 합니다.
       schema: {type: string, minLength: 1, maxLength: 1024, examples: [eyJ2IjoxLCJtIjoiZm9sbG93aW5nIiwiLi4uIjoiLi4uIn0]}
-    Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 30}}
+    Limit: {name: limit, in: query, description: 범위 밖이거나 정수가 아닌 값은 기본값으로 대체하지 않고 400 invalid_pagination입니다., schema: {type: integer, minimum: 1, maximum: 100, default: 30}}
     PostID: {name: postID, in: path, required: true, schema: {type: string}}
     UserID: {name: userID, in: path, required: true, schema: {type: string}}
     KeyID: {name: keyID, in: path, required: true, schema: {type: string}}

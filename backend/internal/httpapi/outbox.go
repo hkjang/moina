@@ -448,7 +448,10 @@ func (s *Server) adminListOutbox(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_status", "현재는 실패 보관 이벤트만 조회할 수 있습니다")
 		return
 	}
-	limit, _ := pagination(r)
+	limit, _, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	items, err := s.outbox.ListDeadLetters(r.Context(), limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "실패 이벤트를 불러올 수 없습니다")

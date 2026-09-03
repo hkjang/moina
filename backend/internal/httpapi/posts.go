@@ -407,7 +407,10 @@ func decorateRecommendations(items []model.Moin) {
 }
 
 func (s *Server) listPosts(w http.ResponseWriter, r *http.Request) {
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	viewer := getPrincipal(r).User.ID
 	where := visibility.PublishedAndVisible("p", "$1")
 	args := []any{viewer}
@@ -465,7 +468,10 @@ func (s *Server) writeFeed(w http.ResponseWriter, r *http.Request, mode string) 
 		return
 	}
 	viewer := getPrincipal(r).User.ID
-	limit, legacyOffset := pagination(r)
+	limit, legacyOffset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	if legacyOffset != 0 {
 		writeError(w, http.StatusBadRequest, "invalid_cursor", "Flow는 offset 대신 서버가 발급한 Cursor를 사용해야 합니다")
 		return
@@ -663,7 +669,9 @@ func (s *Server) queryPosts(ctx context.Context, where []string, args []any, ord
 
 func listEnvelope(items []model.Moin, limit, offset int) map[string]any {
 	response := map[string]any{"items": items, "limit": limit, "offset": offset}
-	if len(items) == limit {
+	// Past the offset ceiling the next page is unreachable, so promising a
+	// cursor the server would reject is worse than ending the list here.
+	if len(items) == limit && offset+limit <= maxPageOffset {
 		response["nextCursor"] = fmt.Sprintf("%d", offset+limit)
 	}
 	return response
@@ -749,7 +757,10 @@ func (s *Server) listReplies(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "Moin을 찾을 수 없습니다")
 		return
 	}
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	viewer := getPrincipal(r).User.ID
 	items, err := s.queryPosts(r.Context(), append(visibility.PublishedAndVisible("p", "$1"), "p.reply_to_id=$2"), []any{viewer, parentID}, "p.created_at ASC,p.id ASC", limit, offset, viewer)
 	if err != nil {

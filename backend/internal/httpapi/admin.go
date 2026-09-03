@@ -46,7 +46,10 @@ func (s *Server) adminStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) adminListUsers(w http.ResponseWriter, r *http.Request) {
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT `+userSelectColumns+` FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "사용자 목록을 불러올 수 없습니다")
@@ -224,7 +227,10 @@ func (s *Server) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) adminListPosts(w http.ResponseWriter, r *http.Request) {
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT p.id,p.content,p.kind,p.visibility,p.status,p.author_id,u.username,p.created_at,p.updated_at,(SELECT count(*) FROM reports WHERE target_type='post' AND target_id=p.id) FROM posts p JOIN users u ON u.id=p.author_id ORDER BY p.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "콘텐츠 목록을 불러올 수 없습니다")
@@ -314,7 +320,10 @@ func (s *Server) softDeletePost(ctx context.Context, id string, onlyIfActive boo
 }
 
 func (s *Server) adminListReports(w http.ResponseWriter, r *http.Request) {
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT r.id,r.reporter_id,u.username,r.target_type,r.target_id,r.reason,r.detail,r.status,r.resolution,COALESCE(r.moderator_id,''),r.created_at,r.resolved_at FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE WHEN r.status IN ('open','reviewing') THEN 0 ELSE 1 END,r.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "신고 목록을 불러올 수 없습니다")
@@ -478,7 +487,10 @@ func (s *Server) adminPutRoles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) adminListAudit(w http.ResponseWriter, r *http.Request) {
-	limit, offset := pagination(r)
+	limit, offset, ok := pagination(w, r)
+	if !ok {
+		return
+	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	pattern := "%" + escapeLike(strings.ToLower(query)) + "%"
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT a.id,a.actor_id,COALESCE(u.username,''),a.action,a.target_type,a.target_id,a.success,a.ip,a.user_agent,a.detail,a.created_at FROM audit_events a LEFT JOIN users u ON u.id=a.actor_id WHERE $1='' OR lower(COALESCE(u.username,'')) LIKE $2 ESCAPE E'\\' OR lower(a.action) LIKE $2 ESCAPE E'\\' OR lower(a.target_type||':'||a.target_id) LIKE $2 ESCAPE E'\\' ORDER BY a.created_at DESC LIMIT $3 OFFSET $4`, query, pattern, limit, offset)
