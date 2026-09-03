@@ -7,7 +7,7 @@ React 19, TypeScript, Vite, Tailwind CSS와 Radix primitives로 만든 독립 �
 ```bash
 npm ci
 npm test
-VITE_MOINA_VERSION=v0.1.19 npm run build
+VITE_MOINA_VERSION=v0.1.20 npm run build
 ```
 
 개발 서버는 `/api`와 `/mcp`를 `http://127.0.0.1:8080`으로 프록시합니다. 운영에서는 Go 서버가 `dist`를 SPA fallback과 함께 제공합니다.
