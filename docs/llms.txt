@@ -11,9 +11,9 @@
 
 ## 핵심 사실
 
-- 현재 버전: v0.1.20
-- 서비스 이미지: moina:v0.1.20
-- 오프라인 파일: moina-v0.1.20.tar.gz
+- 현재 버전: v0.1.21
+- 서비스 이미지: moina:v0.1.21
+- 오프라인 파일: moina-v0.1.21.tar.gz
 - 기술: Go, React, TypeScript, PostgreSQL, REST, SSE, WebSocket, MCP
 - 런타임 환경변수: MOINA_POSTGRES_DSN, MOINA_BOOTSTRAP_ADMIN, MOINA_BOOTSTRAP_ADMIN_PASSWORD, MOINA_ENCRYPTION_KEY
 - Keycloak/OIDC, AI, SMTP 메일, 승인, 권한은 관리자 화면에서 설정한다.

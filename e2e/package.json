@@ -1,7 +1,7 @@
 {
   "name": "moina-browser-e2e",
   "private": true,
-  "version": "0.1.20",
+  "version": "0.1.21",
   "type": "module",
   "scripts": {
     "test": "npm run test:visual && npm run test:accessibility && npm run test:smoke",

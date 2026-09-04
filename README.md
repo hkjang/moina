@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.20`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.21`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.20`은 목록 API가 문서에 공표한 범위를 벗어난 `limit`·`offset`을 조용히 기본값으로 바꾸고 200을 반환하던 문제를 고칩니다. 이제 정수가 아니거나 `limit` 1~100, `offset` 0~1,000,000을 벗어난 값은 `decodeJSON`과 같은 모양의 400 `invalid_pagination`으로 거절하므로, `limit=abc`나 `limit=0`을 보낸 client가 자기 요청이 그대로 실행되지 않았음을 알 수 있습니다. 값을 보내지 않으면 문서화된 기본값을 그대로 쓰고, Flow의 opaque cursor처럼 숫자가 아닌 `cursor`는 endpoint가 직접 해석하도록 통과시킵니다. 목록 응답은 상한을 넘는 다음 page의 `nextCursor`를 더 이상 발급하지 않으므로, cursor를 따라가던 client가 `offset=1000030`에서 1페이지로 접혀 같은 목록을 무한 반복하지 않고 마지막 page에서 끝납니다. MCP의 `intArgument`는 이미 1~100으로 제한하므로 영향이 없습니다. `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
+`v0.1.21`은 MCP 도구가 `tools/list`로 공표한 인자 스키마를 `tools/call`이 전혀 검사하지 않아, 맞지 않는 값을 조용히 기본값으로 대체하고 성공을 돌려주던 문제를 고칩니다. 이제 선언에 없는 인자 이름, 타입 불일치, 정수가 아니거나 1~100을 벗어난 `limit`, `mode`·`visibility` enum 밖의 문자열과 빠뜨린 필수 인자를 MCP 명세대로 JSON-RPC `-32602`로 거절하므로, 응답을 눈으로 확인할 수 없는 agent client가 `limit:500`이나 이름을 틀린 `count:100`을 보내고 받은 30개짜리 목록을 계정 전체로 오해하지 않습니다. `stringArgument`가 값을 trim하므로 enum도 trim 후 비교하고, `intArgument`는 스키마와 두 번째 계약이 생기지 않도록 clamp를 없애고 기본값 공급만 담당합니다. `v0.1.20`부터 REST가 400 `invalid_pagination`으로 거절하던 같은 호출이 MCP에서도 같은 답을 받으며, 규칙은 `docs/api-mcp.md`에 적혀 있습니다. 같은 릴리스에서 Moin 본문에 적은 http·https 주소 안의 `#fragment`와 `@handle`을 Topic·멘션 추출에서 제외합니다. 읽는 사람 화면에는 평범한 링크로 보이던 `https://example.com/guide#install`이 Topic "install" 피드에 들어가거나 `https://example.com/@alice`가 같은 아이디를 쓰는 이 인스턴스 회원에게 멘션 알림을 보내는 일이 없어지고, 웹 앱이 링크로 렌더링할 때 쓰는 RFC 3986 문자 집합을 서버도 그대로 사용해 주소의 끝을 양쪽이 같은 규칙으로 판정하며, 20개 token 예산도 작성자가 실제로 쓴 태그에 쓰입니다. `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
 
 ## 주요 기능
 
@@ -100,7 +100,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.20
+moina:v0.1.21
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -118,20 +118,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.20.tar.gz
-dist/moina-v0.1.20.tar.gz.sha256
+dist/moina-v0.1.21.tar.gz
+dist/moina-v0.1.21.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.20.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.21.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.20.tar.gz
-gzip -dc moina-v0.1.20.tar.gz | docker image load
-docker image inspect moina:v0.1.20
+sha256sum moina-v0.1.21.tar.gz
+gzip -dc moina-v0.1.21.tar.gz | docker image load
+docker image inspect moina:v0.1.21
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -180,15 +180,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.20 -m "moina v0.1.20"
-git push origin v0.1.20
+git tag -a v0.1.21 -m "moina v0.1.21"
+git push origin v0.1.21
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.20
-file:  moina-v버전.tar.gz  예: moina-v0.1.20.tar.gz
+image: moina:v버전          예: moina:v0.1.21
+file:  moina-v버전.tar.gz  예: moina-v0.1.21.tar.gz
 ```
 
 ## 라이선스
