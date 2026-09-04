@@ -211,6 +211,8 @@ curl --fail --silent http://127.0.0.1:8080/mcp \
 | `moina.profile.get` | `posts:read` | 허용된 프로필 조회 |
 | `moina.ai.status` | `ai:use` | AI 공급자 공개 상태 조회 |
 
+`tools/call`의 `arguments`는 `tools/list`가 공표한 `inputSchema`대로 검증합니다. 선언에 없는 이름, 타입이 다른 값, `minimum`·`maximum` 범위를 벗어난 정수, `enum` 밖 문자열, 빠뜨린 필수 인자는 기본값으로 대체하지 않고 JSON-RPC 오류 `-32602`를 반환합니다. 예를 들어 `limit`을 101로 보내면 조용히 30개를 돌려주지 않고 오류로 알려 주므로, client는 자기 요청이 그대로 실행됐는지 알 수 있습니다.
+
 MCP가 호출하는 동작도 REST와 같은 service method, permission, 승인 정책, rate limit과 audit를 사용합니다. 승인 정책의 대상인 Moin 작성은 즉시 공개하지 않고 `pending_approval` 상태의 Moin 정보를 반환합니다.
 
 ## Rotation 예시

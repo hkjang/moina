@@ -384,6 +384,68 @@ func TestMCPPermissionFiltersTools(t *testing.T) {
 	}
 }
 
+func mcpToolSchema(t *testing.T, name string) map[string]any {
+	t.Helper()
+	for _, tool := range mcpTools() {
+		if tool.Name == name {
+			return tool.InputSchema
+		}
+	}
+	t.Fatalf("도구를 찾을 수 없습니다: %s", name)
+	return nil
+}
+
+// A dropped argument used to be invisible to the caller: the tool ran with the
+// default and returned a plausible answer to a different question.
+func TestMCPRejectsArgumentsOutsidePublishedSchema(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		tool      string
+		arguments map[string]any
+	}{
+		{name: "상한을 넘는 limit", tool: "moina.flow.read", arguments: map[string]any{"limit": float64(500)}},
+		{name: "0인 limit", tool: "moina.notifications.list", arguments: map[string]any{"limit": float64(0)}},
+		{name: "문자열 limit", tool: "moina.flow.read", arguments: map[string]any{"limit": "50"}},
+		{name: "정수가 아닌 limit", tool: "moina.flow.read", arguments: map[string]any{"limit": 20.5}},
+		{name: "이름이 틀린 인자", tool: "moina.flow.read", arguments: map[string]any{"count": float64(20)}},
+		{name: "enum 밖 mode", tool: "moina.flow.read", arguments: map[string]any{"mode": "trending"}},
+		{name: "enum 밖 visibility", tool: "moina.posts.create", arguments: map[string]any{"content": "안녕하세요", "visibility": "secret"}},
+		{name: "문자열이 아닌 id", tool: "moina.posts.get", arguments: map[string]any{"id": float64(7)}},
+		{name: "빠뜨린 필수 인자", tool: "moina.echo.create", arguments: map[string]any{"content": "좋은 글이네요"}},
+		{name: "인자를 받지 않는 도구", tool: "moina.ai.status", arguments: map[string]any{"limit": float64(10)}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			failure := validateMCPArguments(mcpToolSchema(t, testCase.tool), testCase.arguments)
+			if failure == nil {
+				t.Fatalf("스키마를 벗어난 arguments를 허용했습니다: %v", testCase.arguments)
+			}
+			if failure.Code != -32602 || failure.Message == "" {
+				t.Fatalf("failure=%+v", failure)
+			}
+		})
+	}
+}
+
+func TestMCPAcceptsArgumentsMatchingPublishedSchema(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		tool      string
+		arguments map[string]any
+	}{
+		{name: "선택 인자 생략", tool: "moina.flow.read", arguments: map[string]any{}},
+		{name: "경계값 limit", tool: "moina.flow.read", arguments: map[string]any{"mode": "following", "limit": float64(100)}},
+		{name: "공백이 붙은 enum", tool: "moina.flow.read", arguments: map[string]any{"mode": " following "}},
+		{name: "필수 인자", tool: "moina.echo.create", arguments: map[string]any{"postId": "p1", "content": "좋은 글이네요"}},
+		{name: "arguments 없음", tool: "moina.ai.status", arguments: nil},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if failure := validateMCPArguments(mcpToolSchema(t, testCase.tool), testCase.arguments); failure != nil {
+				t.Fatalf("올바른 arguments를 거절했습니다: %+v", failure)
+			}
+		})
+	}
+}
+
 func TestMCPDoesNotExposeApprovalDecisionTool(t *testing.T) {
 	for _, tool := range mcpTools() {
 		if tool.Permission == "approvals:review" {

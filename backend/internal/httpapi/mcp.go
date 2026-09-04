@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -167,6 +170,9 @@ func (s *Server) callMCPTool(r *http.Request, raw json.RawMessage) (map[string]a
 	if len(call.Arguments) > 0 && json.Unmarshal(call.Arguments, &arguments) != nil {
 		return nil, &mcpError{Code: -32602, Message: "도구 arguments가 올바르지 않습니다"}
 	}
+	if argumentErr := validateMCPArguments(definition.InputSchema, arguments); argumentErr != nil {
+		return nil, argumentErr
+	}
 	var value any
 	var err error
 	switch call.Name {
@@ -243,6 +249,68 @@ func (s *Server) captureHandler(r *http.Request, handler http.HandlerFunc, query
 	return envelope.Data, nil
 }
 
+// An MCP client is an agent, and an agent cannot see that one of its arguments
+// was dropped. A limit of 500, a limit sent as the string "50" and a limit
+// misspelled as "count" all used to fall back to 30, so the tool answered a
+// different question than the one asked and the agent read the short list as
+// the whole account. Every tool already publishes an inputSchema in
+// tools/list; that schema is the contract, so it is what a call is checked
+// against - the same strictness the REST collections gained with
+// invalid_pagination. Invalid arguments are a JSON-RPC error rather than a
+// tool result, which is how the MCP specification separates them from a tool
+// that ran and failed.
+func validateMCPArguments(schema, arguments map[string]any) *mcpError {
+	properties, _ := schema["properties"].(map[string]any)
+	names := make([]string, 0, len(arguments))
+	for name := range arguments {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		definition, ok := properties[name].(map[string]any)
+		if !ok {
+			return &mcpError{Code: -32602, Message: fmt.Sprintf("%s는 이 도구가 받지 않는 인자입니다", name)}
+		}
+		if message := mcpArgumentError(name, definition, arguments[name]); message != "" {
+			return &mcpError{Code: -32602, Message: message}
+		}
+	}
+	required, _ := schema["required"].([]string)
+	for _, name := range required {
+		if _, ok := arguments[name]; !ok {
+			return &mcpError{Code: -32602, Message: fmt.Sprintf("%s는 필수 인자입니다", name)}
+		}
+	}
+	return nil
+}
+
+func mcpArgumentError(name string, definition map[string]any, value any) string {
+	switch definition["type"] {
+	case "integer":
+		number, ok := value.(float64)
+		if !ok || number != math.Trunc(number) {
+			return fmt.Sprintf("%s는 정수여야 합니다", name)
+		}
+		if minimum, ok := definition["minimum"].(int); ok && number < float64(minimum) {
+			return fmt.Sprintf("%s는 %d 이상이어야 합니다", name, minimum)
+		}
+		if maximum, ok := definition["maximum"].(int); ok && number > float64(maximum) {
+			return fmt.Sprintf("%s는 %d 이하여야 합니다", name, maximum)
+		}
+	case "string":
+		text, ok := value.(string)
+		if !ok {
+			return fmt.Sprintf("%s는 문자열이어야 합니다", name)
+		}
+		// stringArgument trims before use, so the enum is checked against the
+		// same value the tool will actually run with.
+		if allowed, ok := definition["enum"].([]string); ok && !slicesContains(allowed, strings.TrimSpace(text)) {
+			return fmt.Sprintf("%s는 %s 중 하나여야 합니다", name, strings.Join(allowed, ", "))
+		}
+	}
+	return ""
+}
+
 func stringArgument(values map[string]any, key, fallback string) string {
 	if value, ok := values[key].(string); ok {
 		return strings.TrimSpace(value)
@@ -250,8 +318,10 @@ func stringArgument(values map[string]any, key, fallback string) string {
 	return fallback
 }
 
+// The schema check already rejected a non-integer or out of range value, so
+// this only has to supply the default for an argument that was left out.
 func intArgument(values map[string]any, key string, fallback int) int {
-	if value, ok := values[key].(float64); ok && value >= 1 && value <= 100 {
+	if value, ok := values[key].(float64); ok {
 		return int(value)
 	}
 	return fallback
