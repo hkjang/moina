@@ -334,10 +334,37 @@ func attachHashtags(ctx context.Context, tx pgx.Tx, postID, content string) erro
 var hashtagPattern = regexp.MustCompile(`(?i)#[\pL\pN_]{1,50}`)
 var mentionPattern = regexp.MustCompile(`(?i)(^|[^\pL\pN._-])@([\pL\pN][\pL\pN._-]{2,39})`)
 
+// An address is one token, the same rule MoinContent renders with. The fragment
+// of https://example.com/guide#install names a section of that page, not a
+// Topic here, and the handle in https://example.com/@alice belongs to the other
+// site. Without this the reader saw a plain link while the Moin joined an
+// unrelated Topic feed and an unrelated member was notified. The character set
+// is the RFC 3986 one the web app uses, so Korean written straight after an
+// address ends it instead of being swallowed into it.
+var contentURLPattern = regexp.MustCompile(`(?i)https?://[\w-][\w\-.~:/?#\[\]@!$&'()*+,;=%]*`)
+
+// maskContentURLs blanks every address so the token scans below cannot reach
+// inside one. Sentence punctuation the web app gives back to the text stays
+// masked here: it can never begin a mention or a hashtag, so extraction is
+// unaffected by the difference.
+func maskContentURLs(content string) string {
+	matches := contentURLPattern.FindAllStringIndex(content, -1)
+	if len(matches) == 0 {
+		return content
+	}
+	masked := []byte(content)
+	for _, match := range matches {
+		for index := match[0]; index < match[1]; index++ {
+			masked[index] = ' '
+		}
+	}
+	return string(masked)
+}
+
 func extractHashtags(content string) []string {
 	set := map[string]bool{}
 	result := make([]string, 0)
-	for _, match := range hashtagPattern.FindAllString(content, 20) {
+	for _, match := range hashtagPattern.FindAllString(maskContentURLs(content), 20) {
 		slug := strings.ToLower(strings.TrimPrefix(match, "#"))
 		if !set[slug] {
 			set[slug] = true
@@ -350,7 +377,7 @@ func extractHashtags(content string) []string {
 func extractMentions(content string) []string {
 	set := map[string]bool{}
 	result := make([]string, 0)
-	for _, match := range mentionPattern.FindAllStringSubmatch(content, 20) {
+	for _, match := range mentionPattern.FindAllStringSubmatch(maskContentURLs(content), 20) {
 		username := strings.ToLower(match[2])
 		if !set[username] {
 			set[username] = true

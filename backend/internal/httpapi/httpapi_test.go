@@ -87,6 +87,30 @@ func TestExtractHashtagsAndMentionsDeduplicates(t *testing.T) {
 	}
 }
 
+func TestExtractHashtagsAndMentionsSkipsAddresses(t *testing.T) {
+	if got := extractHashtags("설치 안내 https://example.com/guide#install 를 보세요 #문서"); !slices.Equal(got, []string{"문서"}) {
+		t.Fatalf("a fragment names a section of the linked page, not a Topic: %v", got)
+	}
+	if got := extractMentions("https://github.com/@octocat 참고 @bob_user"); !slices.Equal(got, []string{"bob_user"}) {
+		t.Fatalf("a handle inside an address belongs to the other site: %v", got)
+	}
+	if got := extractHashtags("http://internal.example/docs?q=1#section"); len(got) != 0 {
+		t.Fatalf("query and fragment stay inside the address: %v", got)
+	}
+	// The address ends where the RFC 3986 set does, so text written straight
+	// after one is scanned as usual.
+	if got := extractHashtags("https://example.com/a에서 #실전 확인"); !slices.Equal(got, []string{"실전"}) {
+		t.Fatalf("hashtags=%v", got)
+	}
+	if got := extractMentions("자료 https://example.com/a.\n@alice 확인"); !slices.Equal(got, []string{"alice"}) {
+		t.Fatalf("mentions=%v", got)
+	}
+	// Only http and https are addresses; a bare word with a colon is text.
+	if got := extractHashtags("ftp://example.com/x#태그"); !slices.Equal(got, []string{"태그"}) {
+		t.Fatalf("hashtags=%v", got)
+	}
+}
+
 func TestValidateAIEnforces256KCeiling(t *testing.T) {
 	valid := model.AIConfig{Enabled: true, BaseURL: "https://ai.internal/v1", Model: "local-model", APIStyle: "responses", DefaultMaxTokens: 4096, MaxTokens: 262144, TimeoutSeconds: 300}
 	if err := validateAI(&valid); err != nil {

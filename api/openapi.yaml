@@ -144,7 +144,7 @@ paths:
       summary: Moin 또는 Echo 작성
       parameters: [{$ref: '#/components/parameters/CSRF'}]
       requestBody: {$ref: '#/components/requestBodies/CreatePost'}
-      description: 모임 Moin의 Echo·인용·Remoin은 부모의 moimId와 모임 공개 범위를 서버가 강제로 상속합니다.
+      description: 모임 Moin의 Echo·인용·Remoin은 부모의 moimId와 모임 공개 범위를 서버가 강제로 상속합니다. 본문에서 `#해시태그`는 Topic이 되고 `@사용자아이디`는 멘션 알림을 만들지만, http·https 주소는 하나의 token이므로 주소 안의 fragment와 handle은 웹 앱이 링크로 표시하는 그대로 주소의 일부로 남습니다.
       responses: {'201': {$ref: '#/components/responses/Post'}, '400': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
   /api/v1/posts/{postID}:
     parameters: [{$ref: '#/components/parameters/PostID'}]
