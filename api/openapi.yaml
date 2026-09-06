@@ -460,7 +460,7 @@ paths:
     post:
       tags: [Posts]
       summary: 이미지·동영상 media 업로드
-      description: 브라우저 세션은 개인 프로필 이미지에도 사용할 수 있으며 API key는 `posts:write`가 필요합니다. 사용자별 미첨부 media는 최대 100개·512 MiB입니다. 한도를 넘으면 `media_quota_exceeded`를 반환하며 기존 media를 Moin·프로필에 연결하거나 TTL 정리를 기다린 뒤 재시도합니다. 업로드의 `altText`는 재사용 시 기본값이며 Moin 문맥의 최종 대체 텍스트는 게시물 작성·수정 요청의 `mediaAltTexts`로 각 `post_media` 관계에 저장합니다.
+      description: 브라우저 세션은 개인 프로필 이미지에도 사용할 수 있으며 API key는 `posts:write`가 필요합니다. 사용자별 미첨부 media는 최대 100개·512 MiB입니다. 한도를 넘으면 `media_quota_exceeded`를 반환하며 기존 media를 Moin·프로필에 연결하거나 TTL 정리를 기다린 뒤 재시도합니다. 업로드의 `altText`는 재사용 시 기본값이며 Moin 문맥의 최종 대체 텍스트는 게시물 작성·수정 요청의 `mediaAltTexts`로 각 `post_media` 관계에 저장합니다. 형식은 파일 이름이 아니라 내용으로 판정하며, MP4는 ISO Base Media `ftyp` box의 major brand까지 확인하므로 같은 컨테이너를 쓰는 HEIC·AVIF 사진, M4A 오디오, QuickTime·3GPP 동영상은 `415 unsupported_media`입니다.
       parameters: [{$ref: '#/components/parameters/CSRF'}]
       requestBody:
         required: true
