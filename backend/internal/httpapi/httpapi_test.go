@@ -489,6 +489,36 @@ func TestDetectMediaTypeByMagic(t *testing.T) {
 	}
 }
 
+// ISO Base Media 컨테이너는 사진·오디오·동영상이 모두 "ftyp"로 시작하므로,
+// brand를 보지 않으면 아이폰 HEIC 사진이 재생할 수 없는 video/mp4로 저장됩니다.
+func TestDetectMediaTypeSeparatesISOBaseMediaBrands(t *testing.T) {
+	isoBaseMedia := func(brand, compatible string) []byte {
+		box := append([]byte("ftyp"+brand), []byte{0, 0, 0, 1}...)
+		box = append(box, []byte(compatible)...)
+		return append([]byte{0, 0, 0, byte(len(box) + 4)}, box...)
+	}
+	for _, testCase := range []struct {
+		name  string
+		data  []byte
+		isMP4 bool
+	}{
+		{name: "MP4 major brand", data: isoBaseMedia("mp42", "isommp42"), isMP4: true},
+		{name: "Apple M4V", data: isoBaseMedia("M4V ", "M4V mp42isom"), isMP4: true},
+		{name: "HEIC 사진", data: isoBaseMedia("heic", "mif1heic")},
+		{name: "AVIF 사진", data: isoBaseMedia("avif", "avifmif1miaf")},
+		{name: "M4A 오디오", data: isoBaseMedia("M4A ", "M4A mp42isom")},
+		{name: "QuickTime 동영상", data: isoBaseMedia("qt  ", "qt  ")},
+		{name: "3GPP 동영상", data: isoBaseMedia("3gp4", "3gp4isom")},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := detectMediaType(testCase.data)
+			if testCase.isMP4 != (got == "video/mp4") {
+				t.Fatalf("detectMediaType=%q, MP4로 봐야 하는가=%v", got, testCase.isMP4)
+			}
+		})
+	}
+}
+
 func TestNotificationAliasesMatchUI(t *testing.T) {
 	server := &Server{}
 	item := model.Notification{Type: "reaction", Payload: json.RawMessage(`{}`)}

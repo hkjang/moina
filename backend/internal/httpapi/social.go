@@ -663,10 +663,27 @@ func (s *Server) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	writeData(w, http.StatusCreated, media)
 }
 
+// mp4MajorBrands는 ftyp box의 major brand 중 MP4 동영상 컨테이너를 뜻하는 값입니다.
+// HEIC·AVIF 사진, M4A 오디오, QuickTime 동영상도 같은 ISO Base Media 컨테이너라
+// 똑같이 "ftyp"로 시작하므로 brand로만 MP4와 구분할 수 있습니다.
+var mp4MajorBrands = map[string]bool{
+	"avc1": true, "cmfc": true, "dash": true, "iso2": true, "iso4": true, "iso5": true,
+	"iso6": true, "isom": true, "mmp4": true, "mp41": true, "mp42": true, "mp71": true,
+	"msnv": true, "M4V ": true, "M4VH": true, "M4VP": true,
+}
+
 func detectMediaType(data []byte) string {
 	detected := http.DetectContentType(data)
+	// "ftyp" 시그니처만 보면 아이폰이 찍은 HEIC 사진까지 MP4로 저장돼 재생할 수 없는
+	// 동영상 첨부가 되므로, 이어지는 major brand까지 확인해 실제 MP4만 통과시킵니다.
 	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
-		return "video/mp4"
+		if mp4MajorBrands[string(data[8:12])] {
+			return "video/mp4"
+		}
+		// M4A 오디오처럼 호환 brand에 "mp4"를 함께 적어 두는 형식이 많아
+		// http.DetectContentType도 MP4로 답하므로, major brand가 아니라고 판정한 뒤에는
+		// 표준 감지 결과로 되돌아가지 않고 지원하지 않는 형식으로 남깁니다.
+		return "application/octet-stream"
 	}
 	if len(data) >= 4 && bytes.Equal(data[:4], []byte{0x1a, 0x45, 0xdf, 0xa3}) && bytes.Contains(bytes.ToLower(data[:min(len(data), 4096)]), []byte("webm")) {
 		return "video/webm"
