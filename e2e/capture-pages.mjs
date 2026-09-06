@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { paintEveryCard } from './render-mode.mjs';
 import { routeCatalogFromEnvironment } from './routes.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -261,6 +262,22 @@ async function seedDynamicRoutes(context) {
   ];
 }
 
+// A fullPage screenshot of a Flow comes out blank past the fold when Chromium
+// is allowed to skip off-screen cards, and the result still looks like a valid
+// PNG. paintEveryCard turns the skipping off for the capture context; this
+// confirms it actually took effect rather than trusting that it did.
+async function assertEveryCardPaints(page, phase) {
+  const skipping = await page.evaluate(() => {
+    const card = document.querySelector('.feed-list > .moin-card');
+    return card ? getComputedStyle(card).contentVisibility : null;
+  });
+  assert.notEqual(
+    skipping,
+    'auto',
+    `${phase}: 캡처 중에는 카드 content-visibility가 꺼져 있어야 합니다. 켜져 있으면 fullPage 스크린샷의 화면 밖이 비어 저장됩니다.`,
+  );
+}
+
 async function captureLoginScreenshot(browser, theme, viewport) {
   phase = `login:${theme.name}:${viewport.name}`;
   const loginContext = await browser.newContext({
@@ -270,6 +287,7 @@ async function captureLoginScreenshot(browser, theme, viewport) {
     timezoneId: 'Asia/Seoul',
     reducedMotion: 'reduce',
   });
+  await paintEveryCard(loginContext);
   const loginPage = await loginContext.newPage();
   monitor(loginPage);
   try {
@@ -289,6 +307,7 @@ async function captureLoginScreenshot(browser, theme, viewport) {
 
 const browser = await chromium.launch({ headless: process.env.MOINA_CAPTURE_HEADLESS !== '0' });
 const context = await browser.newContext({ colorScheme: 'light', locale: 'ko-KR', timezoneId: 'Asia/Seoul', reducedMotion: 'reduce' });
+await paintEveryCard(context);
 const page = await context.newPage();
 monitor(page);
 
@@ -331,6 +350,7 @@ try {
         assert.equal(new URL(page.url()).pathname, route.path, `${route.path} 경로가 유지되어야 합니다.`);
         if (!route.state) assert.equal(await page.locator('[data-error-state], .error-state, [data-login-page], .login-page').count(), 0, `${route.path}에 오류/로그인 상태가 있습니다.`);
         await assertSafe(page, phase);
+        await assertEveryCardPaints(page, phase);
         const slug = themedSlug(theme, `${viewport.name}-${route.slug}`);
         await page.screenshot({ path: join(output, `${slug}.png`), fullPage: true, animations: 'disabled', caret: 'hide', scale: 'css' });
         screenshots.push({ slug, title: `${theme.label} 테마 ${viewport.name === 'desktop' ? '데스크톱' : '모바일'} ${route.title}`, route: route.path, viewport, theme: theme.name, fullPage: true });

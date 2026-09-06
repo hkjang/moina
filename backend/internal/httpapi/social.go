@@ -319,32 +319,43 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	wants := func(kind string) bool { return searchType == "all" || searchType == kind }
 
 	users := make([]map[string]any, 0)
-	if wants("users") {
-		if users, err = s.searchUsers(r.Context(), query, viewer, recommended, limit, offset); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-			return
-		}
-	}
 	posts := make([]model.Moin, 0)
-	if wants("posts") {
-		if posts, err = s.searchPosts(r.Context(), query, viewer, limit, offset); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-			return
-		}
-	}
 	topics := make([]model.Topic, 0)
-	if wants("topics") {
-		if topics, err = s.searchTopics(r.Context(), query, viewer, limit, offset); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-			return
-		}
-	}
 	moims := make([]model.Moim, 0)
+	lookups := make([]func(context.Context) error, 0, 4)
+	if wants("users") {
+		lookups = append(lookups, func(ctx context.Context) error {
+			found, err := s.searchUsers(ctx, query, viewer, recommended, limit, offset)
+			users = found
+			return err
+		})
+	}
+	if wants("posts") {
+		lookups = append(lookups, func(ctx context.Context) error {
+			found, err := s.searchPosts(ctx, query, viewer, limit, offset)
+			posts = found
+			return err
+		})
+	}
+	if wants("topics") {
+		lookups = append(lookups, func(ctx context.Context) error {
+			found, err := s.searchTopics(ctx, query, viewer, limit, offset)
+			topics = found
+			return err
+		})
+	}
 	if wants("moims") {
-		if moims, err = s.searchMoims(r.Context(), query, viewer, limit, offset); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
-			return
-		}
+		lookups = append(lookups, func(ctx context.Context) error {
+			found, err := s.searchMoims(ctx, query, viewer, limit, offset)
+			moims = found
+			return err
+		})
+	}
+	// Each lookup writes its own result variable and reads none of the others,
+	// so running them together needs no further synchronisation.
+	if err := runSearches(r.Context(), lookups); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+		return
 	}
 	writeData(w, http.StatusOK, map[string]any{"query": query.Raw, "limit": limit, "offset": offset, "users": users, "posts": posts, "topics": topics, "moims": moims})
 }

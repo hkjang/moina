@@ -2,7 +2,7 @@
 
 ## 책임 경계
 
-GitHub Release에는 `linux/amd64`용 `moina:v0.1.21` 서비스 이미지 하나를 저장한 `moina-v0.1.21.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
+GitHub Release에는 `linux/amd64`용 `moina:v0.1.22` 서비스 이미지 하나를 저장한 `moina-v0.1.22.tar.gz`만 포함됩니다. PostgreSQL, reverse proxy, DNS, 인증서, backup 저장소는 운영기관이 제공합니다.
 
 ## 반입과 설치
 
@@ -13,10 +13,10 @@ GitHub Release에는 `linux/amd64`용 `moina:v0.1.21` 서비스 이미지 하나
 5. `pull never`, read-only, dropped capabilities로 시작합니다.
 
 ```bash
-sha256sum moina-v0.1.21.tar.gz
-gzip -t moina-v0.1.21.tar.gz
-gzip -dc moina-v0.1.21.tar.gz | docker image load
-docker image inspect moina:v0.1.21
+sha256sum moina-v0.1.22.tar.gz
+gzip -t moina-v0.1.22.tar.gz
+gzip -dc moina-v0.1.22.tar.gz | docker image load
+docker image inspect moina:v0.1.22
 cp .env.example .env
 chmod 600 .env
 docker compose --env-file .env -f deploy/docker-compose.offline.yml up -d --pull never
@@ -87,7 +87,7 @@ Snapshot의 시간 만료는 생성 후 한 시간이지만 사용자당 활성 
 
 ## 미디어 업로드 계약 확인
 
-인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.21` 관리자 설정이 아닙니다.
+인증된 작성 client는 업로드 전에 `GET /api/v1/media/config`로 현재 제한을 확인할 수 있습니다. 응답은 `maxUploadBytes`, `maxPerPost`, `acceptedTypes`만 제공하며 `orphanTtlHours`는 관리자 설정에만 남습니다. 이 endpoint는 `posts:write` 권한이 필요합니다. 별도로 사용자 한 명이 보유할 수 있는 미첨부 media는 최대 100개·512 MiB이며 이 quota는 `v0.1.22` 관리자 설정이 아닙니다.
 
 ```bash
 curl --fail http://127.0.0.1:8080/api/v1/media/config \
@@ -97,6 +97,12 @@ curl --fail http://127.0.0.1:8080/api/v1/media/config \
 관리자가 업로드 제한을 바꾼 직후에는 작성 화면의 이전 값과 서버 값이 잠시 다를 수 있습니다. HTTP `413`, `415` 또는 설정 오류를 받으면 client가 설정을 다시 조회하도록 안내하고, 서버 검증을 우회하지 않습니다. HTTP `429`와 `media_quota_exceeded`는 기존 업로드를 Moin·프로필에 연결하거나 orphan TTL 정리를 기다린 뒤 재시도합니다.
 
 Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, PostgreSQL pool이 작으면 일반 API용 연결 5개를 남기도록 media read slot을 줄입니다. 느린 다운로드가 slot을 오래 점유하면 새 read가 요청 context 안에서 대기하므로 reverse proxy timeout과 DB pool 사용량을 함께 봅니다. Cleaner는 매시간 500개씩 최대 20 batch, 즉 인스턴스당 한 주기에 최대 10,000개를 정리합니다. 여러 인스턴스는 `SKIP LOCKED`로 대상 충돌을 피합니다.
+
+## Flow 렌더링
+
+Flow 목록의 카드는 `content-visibility: auto`로 화면 밖에서 style·layout·paint를 건너뜁니다. DOM에는 그대로 남으므로 페이지 내 찾기, 스크린 리더와 anchor 이동은 영향을 받지 않고, `contain-intrinsic-size: auto`가 한 번 렌더링한 높이를 기억해 스크롤 위치가 튀지 않습니다. 카드 300장 기준 style 재계산 1.63초 → 0.19초, layout 0.110초 → 0.021초입니다.
+
+Chromium은 `fullPage` 스크린샷에서도 이 최적화를 적용하므로 화면 밖이 비어 저장됩니다. 문서 캡처와 시각 회귀 도구는 `e2e/render-mode.mjs`로 캡처 context에서만 이 최적화를 끄고, `capture-pages.mjs`가 실제로 꺼졌는지 확인한 뒤 촬영합니다. Flow를 캡처하는 다른 도구를 추가한다면 같은 처리가 필요합니다.
 
 ## 보존 정리
 
@@ -127,7 +133,7 @@ Large Object 다운로드는 인스턴스당 최대 8개를 동시에 열고, Po
 5. compose image tag를 바꾸고 서비스를 재시작합니다.
 6. readiness, 버전, 로그인, Flow, 검색, 알림, 관리자 설정을 확인합니다.
 
-### v0.1.21 업그레이드 시 확인
+### v0.1.22 업그레이드 시 확인
 
 Migration 013이 `notifications`와 `outbox_events`에 index를 추가하므로 두 테이블이 큰 설치에서는 기동 시간이 늘어날 수 있습니다. 기동 직후 첫 보존 정리가 실행되며, 기본값으로도 90일 넘은 알림과 14일 넘은 전달 완료 Outbox event가 삭제됩니다. 이 기록을 더 오래 보관해야 한다면 업그레이드 **전에** `service.retention`을 원하는 값으로 먼저 설정합니다. 감사 기록은 기본값이 무기한이므로 별도 조치가 필요 없습니다.
 
@@ -148,7 +154,7 @@ Migration 013이 `notifications`와 `outbox_events`에 index를 추가하므로 
 
 - root encryption key는 application 관리자 계정과 분리해 vault/HSM 수준으로 보관합니다.
 - 개인 API/MCP key는 사용자 화면에서 회전하고 이전 token은 즉시 폐기합니다.
-- `v0.1.21`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
+- `v0.1.22`는 root key online rotation을 제공하지 않습니다. 값을 바꾸면 저장 비밀과 기존 session/API key verifier를 사용할 수 없으므로 원본을 보관하고 임의 교체하지 않습니다.
 - 유출이 의심되면 관련 key 폐기, session 종료, audit 조사와 downstream secret rotation을 함께 수행합니다.
 
 ## 장애 분류

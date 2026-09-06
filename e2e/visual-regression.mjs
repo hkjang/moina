@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { paintEveryCard } from './render-mode.mjs';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDirectory, '..');
@@ -90,6 +91,7 @@ try {
         timezoneId: 'Asia/Seoul',
         reducedMotion: 'reduce',
       });
+      await paintEveryCard(context);
       const runtime = createRuntimeMonitor();
       const page = await context.newPage();
       runtime.monitor(page);

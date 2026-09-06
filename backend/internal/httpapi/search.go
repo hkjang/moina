@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 
+	"golang.org/x/sync/errgroup"
+
 	feedservice "github.com/hkjang/moina/backend/internal/feed"
 	"github.com/hkjang/moina/backend/internal/model"
 	searchservice "github.com/hkjang/moina/backend/internal/search"
@@ -17,6 +19,69 @@ import (
 // calls per row of the whole table to sort by nothing. Browse mode skips all of
 // that and orders by the popularity tiebreak the ranked query fell through to.
 func browsing(query searchservice.Query) bool { return query.Folded == "" }
+
+// searchFanOut bounds how many extra pool connections the whole process will
+// spend running the four type=all queries side by side. The pool has 25
+// connections and every other endpoint shares them, so a burst of searches must
+// not be able to starve them.
+//
+// A request that cannot claim a slot runs its queries in sequence instead of
+// waiting for one. That is the property that makes the fan-out safe: under
+// pressure the endpoint degrades to its previous latency rather than queueing
+// behind a semaphore while holding a connection of its own.
+var searchFanOut = make(chan struct{}, searchFanOutSlots)
+
+const searchFanOutSlots = 8
+
+// claimFanOut takes up to want slots and returns how many it got plus the
+// release for exactly those. It never blocks.
+func claimFanOut(want int) (int, func()) {
+	claimed := 0
+	for claimed < want {
+		select {
+		case searchFanOut <- struct{}{}:
+			claimed++
+		default:
+			goto done
+		}
+	}
+done:
+	return claimed, func() {
+		for index := 0; index < claimed; index++ {
+			<-searchFanOut
+		}
+	}
+}
+
+// runSearches executes each requested lookup, concurrently when the process has
+// spare fan-out budget and sequentially when it does not. Either way the first
+// error wins and the rest are abandoned through the cancelled context.
+func runSearches(ctx context.Context, lookups []func(context.Context) error) error {
+	if len(lookups) < 2 {
+		if len(lookups) == 1 {
+			return lookups[0](ctx)
+		}
+		return nil
+	}
+	// One lookup runs on the request's own goroutine, so only the rest need a
+	// slot.
+	claimed, release := claimFanOut(len(lookups) - 1)
+	defer release()
+	if claimed == 0 {
+		for _, lookup := range lookups {
+			if err := lookup(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	group, groupContext := errgroup.WithContext(ctx)
+	group.SetLimit(claimed + 1)
+	for _, lookup := range lookups {
+		group.Go(func() error { return lookup(groupContext) })
+	}
+	return group.Wait()
+}
 
 const searchUserColumns = `u.id,u.username,u.display_name,u.email,u.bio,u.avatar_id,u.account_type,u.provider,u.roles,u.active,u.created_at,u.updated_at`
 

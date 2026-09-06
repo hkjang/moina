@@ -3,7 +3,17 @@
 .sticky-feed-header > div:first-child { display: flex; align-items: center; justify-content: space-between; height: 60px; padding: 0 20px; }.sticky-feed-header h1 { margin: 0; font-size: 1.28rem; }
 .sticky-feed-header .tabs { border: 0; }.sticky-feed-header .tabs button { flex: 1; }
 .composer-prompt { display: flex; align-items: center; width: 100%; min-height: 84px; padding: 15px 20px; gap: 12px; color: var(--ink-muted); background: var(--surface); border: 0; border-bottom: 1px solid var(--line); text-align: left; }.composer-prompt span:nth-child(2) { flex: 1; }.composer-prompt:hover span:nth-child(2) { color: var(--ink); }
-.feed-list { background: var(--surface); }.moin-card { display: grid; grid-template-columns: 46px minmax(0,1fr); padding: 18px 20px; gap: 12px; background: var(--surface); border-bottom: 1px solid var(--line); transition: background .12s; }.moin-card:hover { background: color-mix(in srgb,var(--surface-soft) 46%,var(--surface)); }.moin-card.compact { padding: 12px; border: 0; border-radius: 12px; }.quote-moin .moin-card.compact .moin-avatar { display: none; }.quote-moin .moin-card.compact { grid-template-columns: 1fr; }
+.feed-list { background: var(--surface); }
+/* A Flow keeps every loaded page mounted, so "더 보기" grows the card count
+   without bound. content-visibility lets the browser skip layout and paint
+   for cards that are off screen while leaving them in the DOM, so find in
+   page, screen readers and anchor links keep working. contain-intrinsic-size
+   uses the auto keyword so a card that has been rendered once remembers its
+   real height and the scrollbar stops jumping. Quoted cards are excluded:
+   they are small, always inside a parent card, and skipping them would only
+   add containment boundaries. */
+.feed-list > .moin-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+.moin-card { display: grid; grid-template-columns: 46px minmax(0,1fr); padding: 18px 20px; gap: 12px; background: var(--surface); border-bottom: 1px solid var(--line); transition: background .12s; }.moin-card:hover { background: color-mix(in srgb,var(--surface-soft) 46%,var(--surface)); }.moin-card.compact { padding: 12px; border: 0; border-radius: 12px; }.quote-moin .moin-card.compact .moin-avatar { display: none; }.quote-moin .moin-card.compact { grid-template-columns: 1fr; }
 .moin-avatar { align-self: start; }.moin-body { min-width: 0; }.moin-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }.moin-header > a { display: flex; align-items: center; min-width: 0; max-width: 100%; flex-wrap: wrap; gap: 5px; }.moin-header strong { min-width: 0; max-width: 100%; overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }.moin-header span { overflow: hidden; max-width: 100%; color: var(--ink-muted); font-size: .88rem; text-overflow: ellipsis; white-space: nowrap; }
 .remoin-label { display: flex; align-items: center; margin: 0 0 5px; gap: 6px; color: var(--positive); font-size: .8rem; font-weight: 760; }.remoin-label svg { width: 15px; height: 15px; }
 .moin-content { display: block; margin-top: 4px; color: var(--ink); line-height: 1.68; overflow-wrap: anywhere; white-space: pre-wrap; }
