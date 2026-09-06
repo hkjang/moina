@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -514,6 +515,37 @@ func TestDetectMediaTypeSeparatesISOBaseMediaBrands(t *testing.T) {
 			got := detectMediaType(testCase.data)
 			if testCase.isMP4 != (got == "video/mp4") {
 				t.Fatalf("detectMediaType=%q, MP4로 봐야 하는가=%v", got, testCase.isMP4)
+			}
+		})
+	}
+}
+
+// 한글 파일 이름을 header에 그대로 넣으면 브라우저가 저장 이름을 다른 문자 집합으로
+// 읽어 깨뜨리므로, RFC 6266 filename*으로 원래 이름을 함께 내려보내야 합니다.
+func TestContentDispositionEncodesNonASCIIFilenames(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		filename string
+		want     string
+	}{
+		{name: "ASCII 이름은 그대로", filename: "capture.png", want: `inline; filename="capture.png"`},
+		{name: "한글 이름", filename: "사진.png", want: `inline; filename="__.png"; filename*=UTF-8''%EC%82%AC%EC%A7%84.png`},
+		{name: "공백과 한글", filename: "여름 휴가.jpg", want: `inline; filename="__ __.jpg"; filename*=UTF-8''%EC%97%AC%EB%A6%84%20%ED%9C%B4%EA%B0%80.jpg`},
+		{name: "따옴표와 역슬래시", filename: `a"b\c.png`, want: `inline; filename="a_b_c.png"; filename*=UTF-8''a%22b%5Cc.png`},
+		{name: "이름 없음", filename: "", want: `inline; filename="media"`},
+		{name: "ASCII 밖 문자만", filename: "사진", want: `inline; filename="media"; filename*=UTF-8''%EC%82%AC%EC%A7%84`},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := contentDisposition(testCase.filename)
+			if got != testCase.want {
+				t.Fatalf("contentDisposition=%q, want=%q", got, testCase.want)
+			}
+			disposition, params, err := mime.ParseMediaType(got)
+			if err != nil || disposition != "inline" {
+				t.Fatalf("header를 해석할 수 없습니다: disposition=%q err=%v", disposition, err)
+			}
+			if testCase.filename != "" && params["filename"] != testCase.filename {
+				t.Fatalf("해석한 filename=%q, want=%q", params["filename"], testCase.filename)
 			}
 		})
 	}
