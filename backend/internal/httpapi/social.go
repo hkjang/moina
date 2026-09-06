@@ -708,6 +708,48 @@ func safeFilename(header *multipart.FileHeader) string {
 	return name
 }
 
+// attrChars는 RFC 8187 ext-value에서 percent-encoding 없이 쓸 수 있는 문자입니다.
+const attrChars = "!#$&+-.^_`|~"
+
+// contentDisposition은 미디어 응답의 Content-Disposition 값을 만듭니다.
+// 한글처럼 ASCII 밖 문자가 들어간 파일 이름을 header에 그대로 넣으면 브라우저마다
+// 다른 문자 집합으로 읽어 저장 이름이 깨지므로, RFC 6266대로 ASCII fallback과
+// UTF-8 filename*을 함께 내려보내 filename*을 읽는 브라우저가 원래 이름을 쓰게 합니다.
+func contentDisposition(filename string) string {
+	ascii := asciiFilename(filename)
+	value := fmt.Sprintf("inline; filename=%q", ascii)
+	if filename == "" || ascii == filename {
+		return value
+	}
+	var encoded strings.Builder
+	for _, character := range []byte(filename) {
+		if character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z' ||
+			character >= '0' && character <= '9' || strings.IndexByte(attrChars, character) >= 0 {
+			encoded.WriteByte(character)
+			continue
+		}
+		fmt.Fprintf(&encoded, "%%%02X", character)
+	}
+	return value + "; filename*=UTF-8''" + encoded.String()
+}
+
+// asciiFilename은 filename*을 읽지 못하는 브라우저가 쓸 fallback 이름을 만듭니다.
+// header 값과 quoted-string을 깨뜨릴 수 있는 문자는 모두 밑줄로 바꿉니다.
+func asciiFilename(filename string) string {
+	var fallback strings.Builder
+	for _, character := range filename {
+		if character < 0x20 || character > 0x7e || character == '"' || character == '\\' {
+			fallback.WriteRune('_')
+			continue
+		}
+		fallback.WriteRune(character)
+	}
+	if strings.Trim(fallback.String(), "_ ") == "" {
+		return "media"
+	}
+	return fallback.String()
+}
+
 func imageDimensionsFrom(file multipart.File) (int, int) {
 	config, _, err := image.DecodeConfig(file)
 	if err != nil {
@@ -737,7 +779,7 @@ func (s *Server) getMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	defer object.Body.Close()
 	w.Header().Set("Content-Type", object.Metadata.MIMEType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", strings.ReplaceAll(object.Metadata.Filename, `"`, "")))
+	w.Header().Set("Content-Disposition", contentDisposition(object.Metadata.Filename))
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	http.ServeContent(w, r, object.Metadata.Filename, object.Metadata.CreatedAt, object.Body)
 }
