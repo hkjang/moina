@@ -551,6 +551,28 @@ func TestContentDispositionEncodesNonASCIIFilenames(t *testing.T) {
 	}
 }
 
+// ETag는 캐시 없이도 본문 재전송을 줄이는 수단이므로 저장한 SHA-256이 온전할 때만 씁니다.
+func TestMediaETagUsesStoredDigestOnly(t *testing.T) {
+	digest := strings.Repeat("ab", 32)
+	for _, testCase := range []struct {
+		name   string
+		sha256 string
+		want   string
+	}{
+		{name: "저장한 digest", sha256: digest, want: `"` + digest + `"`},
+		{name: "값 없음", sha256: ""},
+		{name: "길이가 짧음", sha256: strings.Repeat("a", 63)},
+		{name: "hex가 아닌 문자", sha256: strings.Repeat("a", 63) + "z"},
+		{name: "대문자 hex", sha256: strings.Repeat("A", 64)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := mediaETag(testCase.sha256); got != testCase.want {
+				t.Fatalf("mediaETag=%q, want=%q", got, testCase.want)
+			}
+		})
+	}
+}
+
 func TestNotificationAliasesMatchUI(t *testing.T) {
 	server := &Server{}
 	item := model.Notification{Type: "reaction", Payload: json.RawMessage(`{}`)}

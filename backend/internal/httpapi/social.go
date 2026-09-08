@@ -791,8 +791,30 @@ func (s *Server) getMedia(w http.ResponseWriter, r *http.Request) {
 	defer object.Body.Close()
 	w.Header().Set("Content-Type", object.Metadata.MIMEType)
 	w.Header().Set("Content-Disposition", contentDisposition(object.Metadata.Filename))
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	// 본문은 media ID마다 고정이지만 볼 수 있는 사람은 차단과 공개 범위 변경으로 언제든 바뀌므로,
+	// max-age로 캐시를 허용하면 게시물을 비공개로 돌리거나 차단한 뒤에도 이미 받아 간 브라우저가
+	// 그 시간 동안 캐시에서 계속 볼 수 있습니다. no-cache로 매 요청 서버 검사를 거치게 하고
+	// 본문 재전송만 ETag 재검증으로 줄입니다.
+	w.Header().Set("Cache-Control", "private, no-cache")
+	if etag := mediaETag(object.Metadata.SHA256); etag != "" {
+		w.Header().Set("ETag", etag)
+	}
 	http.ServeContent(w, r, object.Metadata.Filename, object.Metadata.CreatedAt, object.Body)
+}
+
+// mediaETag는 저장할 때 계산한 SHA-256으로 강한 ETag를 만듭니다.
+// 같은 media ID의 본문은 절대 바뀌지 않으므로 재검증 요청은 304로 끝나고,
+// 값이 비었거나 hex가 아닌 예전 행은 ETag 없이 Last-Modified 재검증만 씁니다.
+func mediaETag(sha256 string) string {
+	if len(sha256) != 64 {
+		return ""
+	}
+	for _, character := range sha256 {
+		if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f') {
+			return ""
+		}
+	}
+	return `"` + sha256 + `"`
 }
 
 func (s *Server) deleteMedia(w http.ResponseWriter, r *http.Request) {
