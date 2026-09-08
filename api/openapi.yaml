@@ -486,7 +486,7 @@ paths:
     get:
       tags: [Posts]
       summary: media 조회
-      description: 브라우저 세션은 본인 소유 media를 항상 조회할 수 있고 다른 사용자의 게시물·프로필 media에는 `posts:read` 최종 권한이 필요합니다. API key도 `posts:read`가 필요하며 서버는 차단 관계와 공개 범위를 별도로 검사합니다. `Content-Disposition`은 `inline`이며 한글처럼 ASCII 밖 문자가 들어간 파일 이름은 RFC 6266 `filename*=UTF-8''`로 함께 내려보내고 `filename`에는 ASCII fallback을 넣습니다.
+      description: 브라우저 세션은 본인 소유 media를 항상 조회할 수 있고 다른 사용자의 게시물·프로필 media에는 `posts:read` 최종 권한이 필요합니다. API key도 `posts:read`가 필요하며 서버는 차단 관계와 공개 범위를 별도로 검사합니다. `Content-Disposition`은 `inline`이며 한글처럼 ASCII 밖 문자가 들어간 파일 이름은 RFC 6266 `filename*=UTF-8''`로 함께 내려보내고 `filename`에는 ASCII fallback을 넣습니다. 접근 권한은 요청마다 다시 검사하므로 응답은 `Cache-Control: private, no-cache`로 캐시 재사용을 막고, 본문 재전송은 저장된 SHA-256 `ETag`와 `If-None-Match` 재검증(304)으로 줄입니다.
       parameters: [{$ref: '#/components/parameters/MediaID'}]
       responses: {'200': {description: 저장된 image/video bytes, content: {image/*: {schema: {type: string, format: binary}}, video/*: {schema: {type: string, format: binary}}}}, '206': {description: 동영상·미디어 byte range}, '404': {$ref: '#/components/responses/Error'}}
     delete:
