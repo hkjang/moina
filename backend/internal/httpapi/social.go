@@ -636,7 +636,7 @@ func (s *Server) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	mimeType := detectMediaType(sniff)
 	if !slicesContains([]string{"image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm"}, mimeType) {
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media", "JPEG, PNG, GIF, WebP 이미지 또는 MP4, WebM 동영상만 업로드할 수 있습니다")
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media", unsupportedMediaMessage(sniff))
 		return
 	}
 	width, height := imageDimensionsFrom(file)
@@ -700,6 +700,29 @@ func detectMediaType(data []byte) string {
 		return "video/webm"
 	}
 	return detected
+}
+
+// heifMajorBrands는 ftyp box의 major brand 중 HEIC·HEIF 사진을 뜻하는 값입니다.
+// 아이폰이 찍은 사진은 "heic"·"heix"를, HEIF 일반 형식은 "mif1"·"msf1"을 씁니다.
+var heifMajorBrands = map[string]bool{
+	"heic": true, "heim": true, "heis": true, "heix": true,
+	"hevc": true, "hevm": true, "hevs": true, "hevx": true,
+	"mif1": true, "msf1": true,
+}
+
+// heicUploadGuidance는 웹 앱의 HEIC 안내(frontend/src/utils/media.ts)와 같은 내용입니다.
+const heicUploadGuidance = "HEIC/HEIF 사진은 아직 업로드할 수 없습니다. iPhone은 설정 > 카메라 > 포맷에서 ‘높은 호환성’을 선택하면 앞으로 찍는 사진이 JPEG으로 저장되고, 이미 찍은 사진은 JPEG으로 내보낸 뒤 올려 주세요"
+
+const supportedMediaFormats = "JPEG, PNG, GIF, WebP 이미지 또는 MP4, WebM 동영상만 업로드할 수 있습니다"
+
+// unsupportedMediaMessage는 415로 거절한 업로드의 안내 문구를 고릅니다.
+// HEIC은 아이폰의 기본 촬영 형식이라 지원 형식 목록만 돌려주면 갤러리에서 평범해
+// 보이는 사진이 왜 거절됐는지 알 수 없으므로, 다시 시도할 방법을 함께 알려 줍니다.
+func unsupportedMediaMessage(data []byte) string {
+	if len(data) >= 12 && string(data[4:8]) == "ftyp" && heifMajorBrands[string(data[8:12])] {
+		return heicUploadGuidance
+	}
+	return supportedMediaFormats
 }
 
 func safeFilename(header *multipart.FileHeader) string {

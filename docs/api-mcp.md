@@ -55,6 +55,8 @@ For Me 첫 페이지는 필터를 통과한 최근 후보 최대 200개의 합�
 
 `POST /api/v1/media`의 multipart `file`은 이미지·MP4·WebM을 streaming 업로드하며 선택적인 `altText` 또는 `alt` text를 함께 받을 수 있습니다. 이 값은 업로드 기본 설명입니다. Moin 작성 시 이미 업로드한 media ID와 문맥별 최종 대체 텍스트를 함께 확정하고 `post_media` 관계에 저장합니다.
 
+형식은 파일 이름이 아니라 내용으로 판정하므로 지원하지 않는 형식은 HTTP `415` `unsupported_media`입니다. 아이폰의 기본 촬영 형식인 HEIC·HEIF는 `message`에 형식 목록 대신 JPEG으로 바꿔 다시 올리는 방법을 담아 돌려주므로, client는 이 문장을 사용자에게 그대로 보여 주면 됩니다.
+
 작성 client는 `posts:write` 권한으로 업로드 전에 현재 서버 계약을 조회합니다.
 
 ```http

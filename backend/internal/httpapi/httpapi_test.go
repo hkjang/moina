@@ -520,6 +520,41 @@ func TestDetectMediaTypeSeparatesISOBaseMediaBrands(t *testing.T) {
 	}
 }
 
+// HEIC은 아이폰의 기본 촬영 형식이라 지원 형식 목록만 돌려주면 API·MCP client는
+// 갤러리에서 평범해 보이는 사진이 왜 415인지 알 수 없습니다.
+func TestUnsupportedMediaMessageGuidesHEICUploads(t *testing.T) {
+	isoBaseMedia := func(brand, compatible string) []byte {
+		box := append([]byte("ftyp"+brand), []byte{0, 0, 0, 1}...)
+		box = append(box, []byte(compatible)...)
+		return append([]byte{0, 0, 0, byte(len(box) + 4)}, box...)
+	}
+	for _, testCase := range []struct {
+		name   string
+		data   []byte
+		isHEIC bool
+	}{
+		{name: "아이폰 HEIC 사진", data: isoBaseMedia("heic", "mif1heic"), isHEIC: true},
+		{name: "HEIC 무손실 변형", data: isoBaseMedia("heix", "mif1heix"), isHEIC: true},
+		{name: "HEIF 일반 brand", data: isoBaseMedia("mif1", "mif1heic"), isHEIC: true},
+		{name: "HEIF 시퀀스", data: isoBaseMedia("msf1", "msf1hevc"), isHEIC: true},
+		{name: "AVIF 사진", data: isoBaseMedia("avif", "avifmif1miaf")},
+		{name: "M4A 오디오", data: isoBaseMedia("M4A ", "M4A mp42isom")},
+		{name: "PDF 문서", data: []byte("%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")},
+		{name: "짧은 파일", data: []byte("ftyp")},
+		{name: "빈 파일", data: nil},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := unsupportedMediaMessage(testCase.data)
+			if testCase.isHEIC != (got == heicUploadGuidance) {
+				t.Fatalf("unsupportedMediaMessage=%q, HEIC 안내여야 하는가=%v", got, testCase.isHEIC)
+			}
+			if !testCase.isHEIC && got != supportedMediaFormats {
+				t.Fatalf("HEIC이 아닌 형식은 지원 형식 목록을 안내해야 합니다: %q", got)
+			}
+		})
+	}
+}
+
 // 한글 파일 이름을 header에 그대로 넣으면 브라우저가 저장 이름을 다른 문자 집합으로
 // 읽어 깨뜨리므로, RFC 6266 filename*으로 원래 이름을 함께 내려보내야 합니다.
 func TestContentDispositionEncodesNonASCIIFilenames(t *testing.T) {
