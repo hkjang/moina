@@ -30,6 +30,7 @@ import {
   clipboardImages,
   MEDIA_ACCEPT,
   mediaTypeFor,
+  unsupportedMediaMessage,
   uploadStatusLabel,
   type ComposerMediaType,
   type ComposerUploadStatus,
@@ -418,7 +419,10 @@ export function MoinComposer({
     });
     if (invalid.length)
       notify(
-        "비어 있지 않은 JPEG, PNG, GIF, WebP 이미지 또는 MP4, WebM 영상만 첨부할 수 있습니다.",
+        unsupportedMediaMessage(
+          invalid,
+          "비어 있지 않은 JPEG, PNG, GIF, WebP 이미지 또는 MP4, WebM 영상만 첨부할 수 있습니다.",
+        ),
         "error",
       );
     if (oversized.length)
