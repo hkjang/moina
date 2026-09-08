@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { apiRequest, readableError } from '../api/client';
 import { useApiQuery } from '../hooks/useApiQuery';
-import { clipboardImages, IMAGE_ACCEPT, IMAGE_TYPES } from '../utils/media';
+import { clipboardImages, IMAGE_ACCEPT, IMAGE_TYPES, isHEIC, unsupportedMediaMessage } from '../utils/media';
 import { useToast } from './ToastProvider';
 import { Avatar, Button } from './ui';
 
@@ -106,7 +106,7 @@ export function ProfileAvatarEditor({
       return;
     }
     if (!acceptedTypes.has(file.type) || file.size < 1) {
-      notify('비어 있지 않은 JPEG, PNG, GIF 또는 WebP 이미지를 선택해 주세요.', 'error');
+      notify(unsupportedMediaMessage([file], '비어 있지 않은 JPEG, PNG, GIF 또는 WebP 이미지를 선택해 주세요.'), 'error');
       return;
     }
     if (file.size > maxUploadBytes) {
@@ -162,7 +162,9 @@ export function ProfileAvatarEditor({
   };
 
   const selectFiles = (files: FileList | File[] | null, source: 'picker' | 'paste' | 'drop') => {
-    const images = Array.from(files || []).filter((file) => file.type.startsWith('image/'));
+    // HEIC은 브라우저가 MIME을 모르는 경우가 있어 그대로 두면 이미지가 아닌 파일로
+    // 걸러져 아무 안내 없이 사라지므로, upload가 왜 거절됐는지 알리도록 통과시킨다.
+    const images = Array.from(files || []).filter((file) => file.type.startsWith('image/') || isHEIC(file));
     if (images.length === 0) {
       if (source !== 'picker') notify('클립보드나 끌어 놓은 항목에서 이미지를 찾지 못했습니다.', 'error');
       return;

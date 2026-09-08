@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
 import { clearApiQueryCache } from "../hooks/apiQueryClient";
 import type { Moin } from "../types";
+import { HEIC_GUIDANCE } from "../utils/media";
 import { MoinComposer } from "./MoinComposer";
 import { ToastProvider } from "./ToastProvider";
 import { Modal } from "./Modal";
@@ -788,6 +789,28 @@ describe("MoinComposer media upload", () => {
     expect(
       mockedRequest.mock.calls.filter(([path]) => path === "/media"),
     ).toHaveLength(1);
+  });
+
+  it("dropzone에 놓은 HEIC 사진은 형식 목록 대신 JPEG 전환 방법을 안내한다", async () => {
+    mockedRequest.mockImplementation((path) =>
+      path === "/media/config"
+        ? Promise.resolve({ maxUploadBytes: 1024, maxPerPost: 4 })
+        : Promise.resolve({ id: "media-heic" }),
+    );
+    renderComposer();
+    await waitForMediaIntake();
+    const dropzone = await screen.findByRole("form", {
+      name: "새 모인 작성",
+    });
+    // 브라우저가 HEIC MIME을 모르면 type이 비어 오므로 확장자만으로 판정해야 한다.
+    const photo = new File(["heic"], "IMG_0001.HEIC", { type: "" });
+
+    dispatchDrop(dropzone, [photo]);
+
+    expect(await screen.findByText(HEIC_GUIDANCE)).toBeInTheDocument();
+    expect(
+      mockedRequest.mock.calls.filter(([path]) => path === "/media"),
+    ).toHaveLength(0);
   });
 
   it("수정에서 기존 미디어 다음에 붙여넣은 미디어를 배치하고 전체 ID와 대체 텍스트를 PATCH한다", async () => {
