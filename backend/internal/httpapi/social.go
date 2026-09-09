@@ -639,7 +639,7 @@ func (s *Server) uploadMedia(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media", unsupportedMediaMessage(sniff))
 		return
 	}
-	width, height := imageDimensionsFrom(file)
+	width, height := imageDimensionsFrom(file, sniff)
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_media", "업로드 파일을 읽을 수 없습니다")
 		return
@@ -784,12 +784,61 @@ func asciiFilename(filename string) string {
 	return fallback.String()
 }
 
-func imageDimensionsFrom(file multipart.File) (int, int) {
+func imageDimensionsFrom(file multipart.File, sniff []byte) (int, int) {
+	// 표준 라이브러리에는 WebP 디코더가 없어 image.DecodeConfig이 실패하므로
+	// 지원 형식인 WebP는 헤더에서 직접 읽습니다.
+	if width, height, ok := webpDimensions(sniff); ok {
+		return width, height
+	}
 	config, _, err := image.DecodeConfig(file)
 	if err != nil {
 		return 0, 0
 	}
 	return config.Width, config.Height
+}
+
+// webpDimensions는 RIFF 컨테이너의 첫 chunk에서 WebP 이미지 크기를 읽습니다.
+// image.DecodeConfig에 맡기면 WebP만 항상 0,0으로 저장돼 API client는 그림이
+// 도착하기 전 자리를 잡을 수 없고 media 응답도 크기를 알려 주지 못합니다.
+// chunk 종류는 세 가지입니다: VP8 (lossy), VP8L (lossless), VP8X (알파·애니메이션).
+func webpDimensions(data []byte) (int, int, bool) {
+	if len(data) < 20 || string(data[:4]) != "RIFF" || string(data[8:12]) != "WEBP" {
+		return 0, 0, false
+	}
+	payload := data[20:]
+	var width, height int
+	switch string(data[12:16]) {
+	case "VP8X":
+		// flags 1바이트와 reserved 3바이트 뒤에 canvas 크기가 24비트 little-endian으로
+		// 1을 뺀 값으로 들어 있습니다. 애니메이션은 이 canvas 크기가 전체 크기입니다.
+		if len(payload) < 10 {
+			return 0, 0, false
+		}
+		width = (int(payload[4]) | int(payload[5])<<8 | int(payload[6])<<16) + 1
+		height = (int(payload[7]) | int(payload[8])<<8 | int(payload[9])<<16) + 1
+	case "VP8L":
+		// 서명 1바이트 뒤에 14비트 너비와 14비트 높이가 1을 뺀 값으로 이어집니다.
+		if len(payload) < 5 || payload[0] != 0x2f {
+			return 0, 0, false
+		}
+		bits := uint32(payload[1]) | uint32(payload[2])<<8 | uint32(payload[3])<<16 | uint32(payload[4])<<24
+		width = int(bits&0x3fff) + 1
+		height = int((bits>>14)&0x3fff) + 1
+	case "VP8 ":
+		// 크기는 key frame만 실어 오므로 frame tag의 frame type 비트와 sync code를
+		// 확인한 뒤 14비트 너비·높이를 읽습니다(남은 2비트는 표시 배율).
+		if len(payload) < 10 || payload[0]&1 != 0 || payload[3] != 0x9d || payload[4] != 0x01 || payload[5] != 0x2a {
+			return 0, 0, false
+		}
+		width = (int(payload[6]) | int(payload[7])<<8) & 0x3fff
+		height = (int(payload[8]) | int(payload[9])<<8) & 0x3fff
+	default:
+		return 0, 0, false
+	}
+	if width <= 0 || height <= 0 {
+		return 0, 0, false
+	}
+	return width, height, true
 }
 
 func (s *Server) getMedia(w http.ResponseWriter, r *http.Request) {

@@ -1,7 +1,11 @@
 package httpapi
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/png"
 	"mime"
 	"net/http"
 	"net/http/httptest"
@@ -607,6 +611,85 @@ func TestMediaETagUsesStoredDigestOnly(t *testing.T) {
 		})
 	}
 }
+
+// libwebp가 만든 실제 WebP 파일입니다. chunk 종류마다 헤더 구조가 달라
+// 세 가지를 모두 둡니다(lossy 23x17, lossless 31x13, 알파가 있어 VP8X를 쓰는 45x29).
+const (
+	lossyWebP    = "UklGRjoAAABXRUJQVlA4IC4AAAAQAwCdASoXABEAPtFiqk+oJaOiKAgBABoJaQDMHBanXQAA/vEKSFOv0isqQAAA"
+	losslessWebP = "UklGRh4AAABXRUJQVlA4TBEAAAAvHgADAAdQiirUo/+BiOh/AAA="
+	alphaWebP    = "UklGRmIAAABXRUJQVlA4WAoAAAAQAAAALAAAHAAAQUxQSAoAAAABB1DAiAhERP8DVlA4IDIAAAAwAwCdASotAB0APu12s1OppySipWgBMB2JaQDGfA8xNu8AAP7wbBQ4+XmlafJ66AAAAA=="
+)
+
+// 표준 라이브러리에는 WebP 디코더가 없어, 헤더를 직접 읽지 않으면 지원 형식인
+// WebP만 width·height가 언제나 0으로 저장돼 응답에서도 빠집니다.
+func TestWebPDimensionsReadsEveryChunkKind(t *testing.T) {
+	for _, testCase := range []struct {
+		name          string
+		encoded       string
+		width, height int
+	}{
+		{name: "VP8 lossy", encoded: lossyWebP, width: 23, height: 17},
+		{name: "VP8L lossless", encoded: losslessWebP, width: 31, height: 13},
+		{name: "VP8X 알파", encoded: alphaWebP, width: 45, height: 29},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			data, err := base64.StdEncoding.DecodeString(testCase.encoded)
+			if err != nil {
+				t.Fatalf("테스트 데이터를 읽을 수 없습니다: %v", err)
+			}
+			width, height, ok := webpDimensions(data)
+			if !ok || width != testCase.width || height != testCase.height {
+				t.Fatalf("webpDimensions=%dx%d ok=%v, want=%dx%d", width, height, ok, testCase.width, testCase.height)
+			}
+			if width, height := imageDimensionsFrom(memoryUpload{bytes.NewReader(data)}, data); width != testCase.width || height != testCase.height {
+				t.Fatalf("imageDimensionsFrom=%dx%d, want=%dx%d", width, height, testCase.width, testCase.height)
+			}
+		})
+	}
+}
+
+// WebP가 아니거나 헤더가 잘린 업로드를 크기가 있는 것처럼 저장하면 안 됩니다.
+func TestWebPDimensionsRejectsOtherData(t *testing.T) {
+	lossy, err := base64.StdEncoding.DecodeString(lossyWebP)
+	if err != nil {
+		t.Fatalf("테스트 데이터를 읽을 수 없습니다: %v", err)
+	}
+	for _, testCase := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "빈 파일", data: nil},
+		{name: "RIFF만 있음", data: []byte("RIFF")},
+		{name: "잘린 헤더", data: lossy[:24]},
+		{name: "WEBP가 아닌 RIFF", data: append([]byte("RIFF\x3a\x00\x00\x00WAVE"), lossy[16:]...)},
+		{name: "알 수 없는 chunk", data: append([]byte("RIFF\x3a\x00\x00\x00WEBPXXXX"), lossy[20:]...)},
+		{name: "sync code가 없는 VP8", data: append(append([]byte{}, lossy[:23]...), make([]byte, 20)...)},
+		{name: "PNG", data: []byte("\x89PNG\r\n\x1a\n0000IHDR")},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if width, height, ok := webpDimensions(testCase.data); ok {
+				t.Fatalf("WebP 크기를 읽었다고 답했습니다: %dx%d", width, height)
+			}
+		})
+	}
+}
+
+// WebP 분기를 추가한 뒤에도 표준 디코더가 처리하는 형식은 그대로 읽어야 합니다.
+func TestImageDimensionsFromStillDecodesPNG(t *testing.T) {
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 12, 7))); err != nil {
+		t.Fatalf("PNG를 만들 수 없습니다: %v", err)
+	}
+	data := encoded.Bytes()
+	if width, height := imageDimensionsFrom(memoryUpload{bytes.NewReader(data)}, data); width != 12 || height != 7 {
+		t.Fatalf("imageDimensionsFrom=%dx%d, want=12x7", width, height)
+	}
+}
+
+// memoryUpload는 업로드 파일 대신 쓰는 multipart.File입니다.
+type memoryUpload struct{ *bytes.Reader }
+
+func (memoryUpload) Close() error { return nil }
 
 func TestNotificationAliasesMatchUI(t *testing.T) {
 	server := &Server{}
