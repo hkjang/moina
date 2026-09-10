@@ -42,6 +42,22 @@ describe('백엔드 응답 어댑터', () => {
     });
   });
 
+  it('첨부의 픽셀 크기를 보존하고 읽지 못한 크기는 생략한다', () => {
+    const moin = normalizeMoin({
+      id: 'p1', content: '첨부', author: { id: 'u1', username: 'jang' },
+      media: [
+        { id: 'media-1', type: 'image', width: 1200, height: 800 },
+        { id: 'media-2', type: 'video', width: 0, height: 0 },
+        { id: 'media-3', type: 'image', width: '640', height: 480.5 },
+      ],
+    });
+    expect(moin.media?.[0]).toMatchObject({ width: 1200, height: 800 });
+    expect(moin.media?.[1].width).toBeUndefined();
+    expect(moin.media?.[1].height).toBeUndefined();
+    expect(moin.media?.[2].width).toBe(640);
+    expect(moin.media?.[2].height).toBeUndefined();
+  });
+
   it('모임 Moin의 대화 범위 식별자를 보존한다', () => {
     expect(normalizeMoin({
       id: 'p-moim', content: '모임 대화', visibility: 'moim', moimId: 'moim-1',
