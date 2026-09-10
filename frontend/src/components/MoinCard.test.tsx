@@ -102,6 +102,26 @@ describe('MoinCard optimistic mutation', () => {
     confirm.mockRestore();
   });
 
+  it('첨부 이미지의 픽셀 크기를 속성으로 넘겨 로드 전 자리를 예약한다', () => {
+    renderCardWithRouter(vi.fn(), {
+      ...moin(),
+      media: [{ id: 'media-1', type: 'image', url: '/api/v1/media/media-1', width: 1200, height: 800 }],
+    });
+    const image = screen.getByAltText('모인 첨부 이미지');
+    expect(image).toHaveAttribute('width', '1200');
+    expect(image).toHaveAttribute('height', '800');
+  });
+
+  it('크기를 읽지 못한 첨부에는 크기 속성을 붙이지 않는다', () => {
+    renderCardWithRouter(vi.fn(), {
+      ...moin(),
+      media: [{ id: 'media-1', type: 'image', url: '/api/v1/media/media-1' }],
+    });
+    const image = screen.getByAltText('모인 첨부 이미지');
+    expect(image).not.toHaveAttribute('width');
+    expect(image).not.toHaveAttribute('height');
+  });
+
   it('승인 대기 중인 모인에는 실패할 수정 동작을 노출하지 않는다', () => {
     renderCardWithRouter(vi.fn(), { ...moin(), status: 'pending_approval' });
     expect(screen.queryByRole('button', { name: '모인 수정' })).not.toBeInTheDocument();

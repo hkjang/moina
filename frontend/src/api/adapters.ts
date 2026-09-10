@@ -10,6 +10,13 @@ const number = (...values: unknown[]) => {
 const boolean = (...values: unknown[]) => values.find((value) => typeof value === 'boolean') === true;
 const strings = (value: unknown) => Array.isArray(value) ? value.map(String) : [];
 
+// 서버는 크기를 읽지 못한 업로드(동영상 등)에 0을 주므로 자리를 예약할 수 있는
+// 값만 남긴다.
+function dimension(value: unknown) {
+  const pixels = Number(value);
+  return Number.isInteger(pixels) && pixels > 0 ? pixels : undefined;
+}
+
 function mediaURL(id: unknown) {
   return typeof id === 'string' && id ? `${API_BASE}/media/${encodeURIComponent(id)}` : undefined;
 }
@@ -72,6 +79,7 @@ export function normalizeMoin(value: unknown): Moin {
       filename: text(entry.filename) || undefined,
       mimeType: text(entry.mimeType) || undefined,
       size: Number.isFinite(Number(entry.size)) ? Number(entry.size) : undefined,
+      width: dimension(entry.width), height: dimension(entry.height),
     };
   }) : [];
   const signalValues = raw.signals ?? counts.signals;

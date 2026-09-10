@@ -348,6 +348,9 @@ function MoinCardComponent({
                   key={media.id}
                   src={media.url}
                   alt={media.alt || "모인 첨부 이미지"}
+                  {...(media.width && media.height
+                    ? { width: media.width, height: media.height }
+                    : {})}
                 />
               ) : (
                 <video
