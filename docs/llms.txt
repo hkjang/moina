@@ -4,8 +4,10 @@
 
 - 공식 사이트: https://hkjang.github.io/moina/
 - 소스 저장소: https://github.com/hkjang/moina
-- 사용자 가이드: https://hkjang.github.io/moina/user-guide.html
-- 관리자 가이드: https://hkjang.github.io/moina/admin-guide.html
+- 사용자 가이드(정본): https://github.com/hkjang/moina/blob/main/docs/USER_GUIDE.md
+- 관리자 가이드(정본): https://github.com/hkjang/moina/blob/main/docs/ADMIN_GUIDE.md
+- 사용자 가이드 웹 사본: https://hkjang.github.io/moina/user-guide.html
+- 관리자 가이드 웹 사본: https://hkjang.github.io/moina/admin-guide.html
 - OpenAPI: https://github.com/hkjang/moina/blob/main/api/openapi.yaml
 - 최신 릴리스: https://github.com/hkjang/moina/releases/latest
 

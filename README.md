@@ -165,9 +165,9 @@ curl --fail http://127.0.0.1:8080/metrics
 
 ## 문서
 
-- [제품 소개](https://hkjang.github.io/moina/)
-- [사용자 가이드](https://hkjang.github.io/moina/user-guide.html)
-- [관리자 가이드](https://hkjang.github.io/moina/admin-guide.html)
+- [사용자 가이드](docs/USER_GUIDE.md) ([PDF](docs/USER_GUIDE.pdf)) — 화면 캡처가 함께 실린 정본
+- [관리자 가이드](docs/ADMIN_GUIDE.md) ([PDF](docs/ADMIN_GUIDE.pdf)) — 설치·설정·권한·운영 정본
+- [제품 소개](https://hkjang.github.io/moina/) — 두 가이드의 웹 사본도 이곳에서 읽을 수 있습니다
 - [설정](docs/configuration.md)
 - [오프라인 운영](docs/operations.md)
 - [보안과 키 관리](docs/security.md)
