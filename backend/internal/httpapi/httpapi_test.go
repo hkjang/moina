@@ -3,8 +3,10 @@ package httpapi
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"mime"
 	"net/http"
@@ -683,6 +685,89 @@ func TestImageDimensionsFromStillDecodesPNG(t *testing.T) {
 	data := encoded.Bytes()
 	if width, height := imageDimensionsFrom(memoryUpload{bytes.NewReader(data)}, data); width != 12 || height != 7 {
 		t.Fatalf("imageDimensionsFrom=%dx%d, want=12x7", width, height)
+	}
+}
+
+// exifJPEG는 width x height JPEG 앞에 orientation만 담은 APP1 Exif를 끼워 넣습니다.
+// 세로로 든 휴대전화가 찍은 사진과 같은 구조입니다(픽셀은 가로, 방향은 EXIF).
+func exifJPEG(t *testing.T, width, height, orientation int, bigEndian bool) []byte {
+	t.Helper()
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, width, height)), nil); err != nil {
+		t.Fatalf("JPEG를 만들 수 없습니다: %v", err)
+	}
+	order := binary.AppendByteOrder(binary.LittleEndian)
+	tiff := []byte("II")
+	if bigEndian {
+		order = binary.BigEndian
+		tiff = []byte("MM")
+	}
+	tiff = order.AppendUint16(tiff, 42)
+	tiff = order.AppendUint32(tiff, 8)
+	tiff = order.AppendUint16(tiff, 1)      // IFD0 항목 수
+	tiff = order.AppendUint16(tiff, 0x0112) // orientation tag
+	tiff = order.AppendUint16(tiff, 3)      // SHORT
+	tiff = order.AppendUint32(tiff, 1)      // 값 1개
+	tiff = order.AppendUint16(tiff, uint16(orientation))
+	tiff = order.AppendUint16(tiff, 0) // 값 자리의 남은 2바이트
+	tiff = order.AppendUint32(tiff, 0) // 다음 IFD 없음
+	segment := append([]byte("Exif\x00\x00"), tiff...)
+	app1 := []byte{0xff, 0xe1, byte((len(segment) + 2) >> 8), byte(len(segment) + 2)}
+	return append(append(append([]byte{0xff, 0xd8}, app1...), segment...), encoded.Bytes()[2:]...)
+}
+
+// 브라우저는 EXIF orientation대로 돌려 그리므로 5~8인 사진은 저장 픽셀 크기와 표시
+// 크기가 뒤바뀝니다. 저장 크기를 그대로 알려 주면 client가 예약한 자리의 가로세로가
+// 반대가 돼, 그림이 도착하는 순간 오히려 배치가 밀립니다.
+func TestImageDimensionsFromAppliesEXIFOrientation(t *testing.T) {
+	for _, testCase := range []struct {
+		name          string
+		orientation   int
+		bigEndian     bool
+		width, height int
+	}{
+		{name: "1 회전 없음", orientation: 1, width: 40, height: 24},
+		{name: "3 180도", orientation: 3, width: 40, height: 24},
+		{name: "6 시계방향 90도", orientation: 6, width: 24, height: 40},
+		{name: "8 반시계방향 90도", orientation: 8, width: 24, height: 40},
+		{name: "5 전치", orientation: 5, width: 24, height: 40},
+		{name: "7 전치", orientation: 7, width: 24, height: 40},
+		{name: "big-endian TIFF", orientation: 6, bigEndian: true, width: 24, height: 40},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			data := exifJPEG(t, 40, 24, testCase.orientation, testCase.bigEndian)
+			width, height := imageDimensionsFrom(memoryUpload{bytes.NewReader(data)}, data)
+			if width != testCase.width || height != testCase.height {
+				t.Fatalf("imageDimensionsFrom=%dx%d, want=%dx%d", width, height, testCase.width, testCase.height)
+			}
+		})
+	}
+}
+
+// orientation을 읽을 수 없는 데이터를 돌려진 사진으로 잘못 보면 멀쩡한 첨부의 크기가
+// 뒤집히므로, 확실히 읽은 경우에만 크기를 바꿔야 합니다.
+func TestJPEGEXIFOrientationRejectsOtherData(t *testing.T) {
+	valid := exifJPEG(t, 40, 24, 6, false)
+	for _, testCase := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "빈 파일", data: nil},
+		{name: "JPEG이 아님", data: []byte("\x89PNG\r\n\x1a\n0000IHDR")},
+		{name: "Exif가 없는 JPEG", data: []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x04, 0x00, 0x00, 0xff, 0xd9}},
+		{name: "APP1 길이가 잘림", data: valid[:12]},
+		{name: "byte order가 아님", data: func() []byte {
+			broken := append([]byte{}, valid...)
+			copy(broken[12:14], "XX")
+			return broken
+		}()},
+		{name: "orientation이 범위 밖", data: exifJPEG(t, 40, 24, 9, false)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if orientation, ok := jpegEXIFOrientation(testCase.data); ok {
+				t.Fatalf("orientation을 읽었다고 답했습니다: %d", orientation)
+			}
+		})
 	}
 }
 
