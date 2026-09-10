@@ -196,3 +196,5 @@ file:  moina-v버전.tar.gz  예: moina-v0.1.26.tar.gz
 ## 라이선스
 
 [MIT](LICENSE)
+
+<!-- CI 기준선 확인용 임시 커밋 — 병합하지 않고 닫습니다. -->
