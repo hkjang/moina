@@ -199,6 +199,9 @@ async function runKeyboardChecks(context, page) {
   }
   await page.keyboard.press('Escape');
   await quickNavigationDialog.waitFor({ state: 'hidden' });
+  // Dialog가 사라진 프레임과 포커스가 돌아온 프레임은 같지 않습니다. 바로 읽으면
+  // 아직 body에 있는 포커스를 보고 실패하므로, 아래 두 Dialog와 같이 기다립니다.
+  await page.waitForFunction(() => document.activeElement?.id === 'main-content', undefined, { timeout: 5_000 });
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'main-content', '빠른 이동이 닫히면 원래 본문 포커스로 돌아가야 합니다.');
   keyboardChecks.push('quick-navigation');
 
@@ -212,6 +215,7 @@ async function runKeyboardChecks(context, page) {
   await assertFocusInside(page, '.profile-popover', '방향키 탐색 중 포커스가 프로필 메뉴 안에 유지되어야 합니다.');
   await page.keyboard.press('Escape');
   await profileMenu.waitFor({ state: 'hidden' });
+  await page.waitForFunction((element) => document.activeElement === element, await profileTrigger.elementHandle(), { timeout: 5_000 });
   assert.equal(await profileTrigger.evaluate((element) => document.activeElement === element), true, '프로필 메뉴가 닫히면 Trigger로 포커스가 돌아가야 합니다.');
   keyboardChecks.push('profile-menu');
 
