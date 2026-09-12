@@ -12,6 +12,7 @@ import {
   SwitchField,
 } from "../../components/ui";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { AdminTrackingSettings } from "./AdminTrackingSettings";
 import { AdminTitle } from "./components";
 import { roleRows } from "./helpers";
 import {
@@ -126,7 +127,7 @@ export function AdminSettingsPage() {
     <div className="page-stack">
       <AdminTitle
         title="일반 설정"
-        description="서비스 공통 정책과 API·MCP, 미디어, 선택형 검토·승인 프로세스를 관리합니다."
+        description="서비스 공통 정책과 API·MCP, 미디어, 선택형 검토·승인 프로세스, 방문 추적을 관리합니다."
       />
       {settings.loading || workflowQuery.loading || rolesQuery.loading ? (
         <LoadingState />
@@ -469,6 +470,7 @@ export function AdminSettingsPage() {
               </div>
             )}
           </Card>
+          <AdminTrackingSettings />
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/hkjang/moina/backend/internal/analytics"
 	"github.com/hkjang/moina/backend/internal/event"
 	mediastore "github.com/hkjang/moina/backend/internal/media"
 	"github.com/hkjang/moina/backend/internal/model"
@@ -88,6 +90,13 @@ type Server struct {
 	networkCache    networkConfig
 	networkLoadedAt time.Time
 	staticRoot      string
+	// violations remembers what the content security policy refused while a
+	// tracking snippet is on; momentoProxyClient is the policy-bound client the
+	// same-origin Momento proxy reuses between tracker events.
+	violations         *analytics.Recorder
+	momentoMu          sync.Mutex
+	momentoProxyClient *http.Client
+	momentoProxyKey    string
 }
 
 func New(repo *store.Store, secrets *secure.Manager, version string) *Server {
@@ -95,6 +104,7 @@ func New(repo *store.Store, secrets *secure.Manager, version string) *Server {
 		repo: repo, secrets: secrets, version: version, startedAt: time.Now().UTC(),
 		client: &http.Client{}, hub: newNotificationHub(), metrics: observability.NewRegistry(), rates: make(map[string]*attempt), staticRoot: defaultStaticRoot,
 		settings: newSettingCache(), permissions: newPermissionCache(), apiKeyTouches: newAPIKeyTouch(),
+		violations: analytics.NewRecorder(),
 	}
 	if repo != nil {
 		server.outbox = event.NewRepository(repo.Pool())
@@ -135,6 +145,9 @@ func (s *Server) Handler() http.Handler {
 		api.Get("/auth/oidc/status", s.oidcStatus)
 		api.Get("/auth/oidc/login", s.oidcLogin)
 		api.Get("/auth/oidc/callback", s.oidcCallback)
+		// Browsers post policy violation reports without credentials, so the
+		// report endpoint sits outside the authenticated group.
+		api.Post("/analytics/csp-report", s.receiveCSPReport)
 		api.Group(func(auth chi.Router) {
 			auth.Use(s.authenticate)
 			auth.Get("/auth/me", s.me)
@@ -250,6 +263,11 @@ func (s *Server) Handler() http.Handler {
 				admin.With(s.requirePermission("settings:manage")).Post("/smtp/test", s.adminTestSMTP)
 				admin.With(s.requirePermission("settings:manage")).Get("/workflow", s.adminGetWorkflow)
 				admin.With(s.requirePermission("settings:manage")).Put("/workflow", s.adminPutWorkflow)
+				admin.With(s.requirePermission("settings:manage")).Get("/analytics", s.adminGetAnalytics)
+				admin.With(s.requirePermission("settings:manage")).Put("/analytics", s.adminPutAnalytics)
+				admin.With(s.requirePermission("settings:manage")).Get("/analytics/violations", s.adminListAnalyticsViolations)
+				admin.With(s.requirePermission("settings:manage")).Delete("/analytics/violations", s.adminClearAnalyticsViolations)
+				admin.With(s.requirePermission("settings:manage")).Post("/analytics/violations/allow", s.adminAllowAnalyticsHost)
 				admin.With(s.requirePermission("audit:read")).Get("/audit", s.adminListAudit)
 				admin.With(s.requirePermission("audit:read")).Get("/outbox", s.adminListOutbox)
 				admin.With(s.requirePermission("outbox:manage")).Post("/outbox/{eventID}/retry", s.adminRetryOutbox)
@@ -264,6 +282,10 @@ func (s *Server) Handler() http.Handler {
 		root.With(s.requirePermission("mcp:use")).Method(http.MethodPost, "/mcp", s.mcpHandler())
 		root.With(s.requirePermission("mcp:use")).Method(http.MethodGet, "/mcp", s.mcpHandler())
 	})
+	// The same-origin Momento proxy answers 404 until an administrator turns
+	// it on, so a fresh installation exposes nothing new here.
+	router.HandleFunc(analytics.MomentoProxyPath, s.momentoProxy)
+	router.HandleFunc(analytics.MomentoProxyPath+"/*", s.momentoProxy)
 	router.NotFound(s.serveSPA)
 	return router
 }
@@ -343,7 +365,8 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		policy, r := s.contentSecurityPolicy(r)
+		w.Header().Set("Content-Security-Policy", policy)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -401,6 +424,12 @@ func (s *Server) verifyOrigin(next http.Handler) http.Handler {
 }
 
 func originProtectedPath(path string) bool {
+	// A policy violation report is sent with referrer policy no-referrer, which
+	// makes the browser write "Origin: null". It carries no credentials and is
+	// only ever counted, so the origin check has nothing to protect there.
+	if path == cspReportPath {
+		return false
+	}
 	return path == "/mcp" || path == "/api/v1" || strings.HasPrefix(path, "/api/v1/")
 }
 
@@ -731,6 +760,23 @@ func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-cache")
+	if nonce := requestNonce(r); nonce != "" {
+		// The middleware minted a nonce only because tracking is active for this
+		// page, so the shell is rewritten per request: the snippet goes in with
+		// that nonce, and no Last-Modified is offered because a 304 would let
+		// the browser reuse a shell whose nonce no longer matches the header.
+		cfg := s.analyticsConfigContext(r.Context())
+		if snippet := cfg.Snippet(nonce); snippet != "" {
+			page, err := os.ReadFile(index)
+			if err != nil {
+				writeError(w, http.StatusNotFound, "not_found", "요청한 경로를 찾을 수 없습니다")
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(injectSnippet(page, snippet, cfg.Placement)))
+			return
+		}
+	}
 	http.ServeFile(w, r, index)
 }
 

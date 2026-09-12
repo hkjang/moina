@@ -734,6 +734,8 @@ func TestCanonicalRoutesAreRegistered(t *testing.T) {
 		"DELETE /api/v1/posts/{postID}/remoin", "GET /api/v1/ws/notifications",
 		"POST /api/v1/moims/{slug}/members", "POST /api/v1/ai/chat", "POST /api/v1/mcp",
 		"PATCH /api/v1/admin/reports/{reportID}", "PUT /api/v1/admin/oidc", "PUT /api/v1/admin/workflow",
+		"POST /api/v1/analytics/csp-report", "PUT /api/v1/admin/analytics", "GET /api/v1/admin/analytics/violations",
+		"DELETE /api/v1/admin/analytics/violations", "POST /api/v1/admin/analytics/violations/allow",
 	}
 	for _, route := range required {
 		if !routes[route] {
