@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.27`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.28`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.27`은 Flow를 읽는 동안 첨부 이미지가 도착해도 아래 카드가 밀리지 않습니다. 서버는 이미 미디어 응답에 `width`·`height`를 담아 주는데 웹 앱이 두 값을 버리고 있어서 `img`가 크기를 모른 채 렌더링됐고, `min-height`만 잡힌 자리가 이미지 도착 순간 실제 비율로 늘어나면서 읽고 있던 위치가 흔들렸습니다. 이제 웹 앱이 양수 정수인 크기만 받아(서버가 크기를 읽지 못해 `0`을 주는 동영상 등은 그대로 생략) 두 값이 모두 있을 때만 `img`에 `width`·`height` 속성으로 넘기고, 브라우저는 로드 전에 그 비율만큼 자리를 예약합니다. 속성으로 준 비율은 로드 전 자리 예약에만 쓰이고 실제 그림이 도착하면 그림의 비율이 이기므로, EXIF로 회전된 사진을 포함해 로드 후 배치는 이전과 같습니다. `v0.1.26`의 업로드 API HEIC 거절 안내, `v0.1.25`의 아이폰 HEIC 첨부·프로필 이미지 JPEG 전환 안내, `v0.1.24`의 미디어 응답 `private, no-cache`와 SHA-256 강한 `ETag` 재검증, `v0.1.23`의 화면 밖 Flow 카드 style·layout 비용 제거와 `type=all` 검색 병렬 실행, `v0.1.21`의 MCP `tools/call` 인자 스키마 검증과 본문 주소 안 `#fragment`·`@handle`을 뺀 Topic·멘션 추출, `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
+`v0.1.28`은 EXIF orientation으로 돌려 찍은 사진의 표시 크기를 알려 줍니다. 세로로 든 휴대전화는 사진을 센서 방향 그대로(가로) 저장하고 orientation만 남기는 경우가 많은데, 서버가 미디어 응답의 `width`·`height`에 저장된 픽셀 크기를 그대로 담아 orientation 5~8인 사진은 브라우저가 그리는 크기와 반대였습니다. `v0.1.27`부터 웹 앱이 이 값으로 로드 전 자리를 예약하기 때문에 세로 사진은 가로 자리를 잡았다가 그림이 도착하는 순간 오히려 배치가 밀렸습니다. 이제 업로드 시 이미 sniff한 앞부분에서 APP1 Exif의 IFD0 orientation을 읽어 5~8이면 두 값을 뒤바꿔 표시 크기를 보고하고, JPEG이 아니거나 헤더가 잘려 확실히 읽지 못하면 크기를 그대로 두어 멀쩡한 첨부가 뒤집히지 않습니다. 새 의존성은 없으며 이 계약은 `api/openapi.yaml`에 적혀 있습니다. 함께 화면 캡처가 실린 [사용자 가이드](docs/USER_GUIDE.md)와 [관리자 가이드](docs/ADMIN_GUIDE.md) 정본(PDF 포함)을 추가했습니다. `v0.1.27`의 첨부 이미지 로드 전 자리 예약, `v0.1.26`의 업로드 API HEIC 거절 안내, `v0.1.25`의 아이폰 HEIC 첨부·프로필 이미지 JPEG 전환 안내, `v0.1.24`의 미디어 응답 `private, no-cache`와 SHA-256 강한 `ETag` 재검증, `v0.1.23`의 화면 밖 Flow 카드 style·layout 비용 제거와 `type=all` 검색 병렬 실행, `v0.1.21`의 MCP `tools/call` 인자 스키마 검증과 본문 주소 안 `#fragment`·`@handle`을 뺀 Topic·멘션 추출, `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
 
 ## 주요 기능
 
@@ -102,7 +102,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.27
+moina:v0.1.28
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -120,20 +120,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.27.tar.gz
-dist/moina-v0.1.27.tar.gz.sha256
+dist/moina-v0.1.28.tar.gz
+dist/moina-v0.1.28.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.27.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.28.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.27.tar.gz
-gzip -dc moina-v0.1.27.tar.gz | docker image load
-docker image inspect moina:v0.1.27
+sha256sum moina-v0.1.28.tar.gz
+gzip -dc moina-v0.1.28.tar.gz | docker image load
+docker image inspect moina:v0.1.28
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -182,15 +182,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.27 -m "moina v0.1.27"
-git push origin v0.1.27
+git tag -a v0.1.28 -m "moina v0.1.28"
+git push origin v0.1.28
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.27
-file:  moina-v버전.tar.gz  예: moina-v0.1.27.tar.gz
+image: moina:v버전          예: moina:v0.1.28
+file:  moina-v버전.tar.gz  예: moina-v0.1.28.tar.gz
 ```
 
 ## 라이선스
