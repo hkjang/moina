@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -787,14 +788,104 @@ func asciiFilename(filename string) string {
 func imageDimensionsFrom(file multipart.File, sniff []byte) (int, int) {
 	// 표준 라이브러리에는 WebP 디코더가 없어 image.DecodeConfig이 실패하므로
 	// 지원 형식인 WebP는 헤더에서 직접 읽습니다.
-	if width, height, ok := webpDimensions(sniff); ok {
-		return width, height
+	width, height, ok := webpDimensions(sniff)
+	if !ok {
+		config, _, err := image.DecodeConfig(file)
+		if err != nil {
+			return 0, 0
+		}
+		width, height = config.Width, config.Height
 	}
-	config, _, err := image.DecodeConfig(file)
-	if err != nil {
-		return 0, 0
+	// EXIF orientation 5~8은 그림을 90도 돌려 그리라는 뜻이라 저장된 픽셀 크기와
+	// 화면에 보이는 크기가 뒤바뀝니다. client가 이 값으로 로드 전 자리를 예약하므로
+	// 표시 크기, 즉 브라우저가 실제로 그리는 크기를 알려 줍니다.
+	if orientation, ok := jpegEXIFOrientation(sniff); ok && orientation >= 5 && orientation <= 8 {
+		width, height = height, width
 	}
-	return config.Width, config.Height
+	return width, height
+}
+
+// jpegEXIFOrientation은 JPEG의 APP1 Exif에서 IFD0 tag 0x0112(orientation)를 읽습니다.
+// 세로로 든 휴대전화가 찍은 사진은 센서 방향 그대로(가로) 저장하고 orientation만
+// 남기는 경우가 많아, 이 값을 보지 않으면 세로 사진을 가로 크기로 보고하게 됩니다.
+// IFD0은 TIFF 헤더 바로 뒤에 오므로 sniff한 앞부분만으로 충분하고, 필요한 구간이
+// 그 밖으로 넘어가면 크기를 그대로 둡니다(잘못 돌리는 것보다 안전합니다).
+func jpegEXIFOrientation(data []byte) (int, bool) {
+	if len(data) < 4 || data[0] != 0xff || data[1] != 0xd8 {
+		return 0, false
+	}
+	for offset := 2; offset+4 <= len(data); {
+		if data[offset] != 0xff {
+			return 0, false
+		}
+		marker := data[offset+1]
+		// 0xff 채움 바이트는 다음 marker의 일부이고, SOS(0xda) 뒤부터는 압축 데이터라
+		// 더 읽을 segment가 없습니다.
+		if marker == 0xff {
+			offset++
+			continue
+		}
+		if marker == 0xd8 || marker == 0x01 || (marker >= 0xd0 && marker <= 0xd7) {
+			offset += 2
+			continue
+		}
+		if marker == 0xda || marker == 0xd9 {
+			return 0, false
+		}
+		length := int(data[offset+2])<<8 | int(data[offset+3])
+		if length < 2 || offset+2+length > len(data) {
+			return 0, false
+		}
+		segment := data[offset+4 : offset+2+length]
+		if marker == 0xe1 && len(segment) > 6 && string(segment[:6]) == "Exif\x00\x00" {
+			return tiffOrientation(segment[6:])
+		}
+		offset += 2 + length
+	}
+	return 0, false
+}
+
+// tiffOrientation은 Exif가 담고 있는 TIFF 블록의 IFD0에서 orientation을 찾습니다.
+func tiffOrientation(tiff []byte) (int, bool) {
+	if len(tiff) < 8 {
+		return 0, false
+	}
+	var order binary.ByteOrder
+	switch string(tiff[:2]) {
+	case "II":
+		order = binary.LittleEndian
+	case "MM":
+		order = binary.BigEndian
+	default:
+		return 0, false
+	}
+	if order.Uint16(tiff[2:4]) != 42 {
+		return 0, false
+	}
+	directory := int(order.Uint32(tiff[4:8]))
+	if directory < 8 || directory+2 > len(tiff) {
+		return 0, false
+	}
+	entries := int(order.Uint16(tiff[directory : directory+2]))
+	for index := 0; index < entries; index++ {
+		entry := directory + 2 + index*12
+		if entry+12 > len(tiff) {
+			return 0, false
+		}
+		// orientation은 SHORT 하나라 값이 offset 자리에 그대로 들어 있습니다.
+		if order.Uint16(tiff[entry:entry+2]) != 0x0112 || order.Uint16(tiff[entry+2:entry+4]) != 3 {
+			continue
+		}
+		if order.Uint32(tiff[entry+4:entry+8]) != 1 {
+			return 0, false
+		}
+		orientation := int(order.Uint16(tiff[entry+8 : entry+10]))
+		if orientation < 1 || orientation > 8 {
+			return 0, false
+		}
+		return orientation, true
+	}
+	return 0, false
 }
 
 // webpDimensions는 RIFF 컨테이너의 첫 chunk에서 WebP 이미지 크기를 읽습니다.
