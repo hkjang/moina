@@ -51,7 +51,7 @@ Root key는 source, image, DB와 함께 저장하지 않습니다. `v0.1.28`에�
 - 모임 Moin의 Echo·인용·Remoin은 요청의 공개 범위를 신뢰하지 않고 서버가 부모의 `moim_id`와 `moim` 공개 범위를 강제합니다. 작성자도 현재 모임 회원이어야 하며 비회원 조회에는 존재 여부를 숨깁니다.
 - SQL은 parameter binding을 사용합니다.
 - 업로드는 body 크기를 제한하고 실제 바이트의 MIME을 식별해 허용된 이미지·영상 형식만 PostgreSQL Large Object에 고정 크기 buffer로 streaming 저장합니다.
-- Content-Security-Policy, frame-ancestors, nosniff와 referrer policy를 reverse proxy와 앱에서 설정합니다.
+- Content-Security-Policy, frame-ancestors, nosniff와 referrer policy를 reverse proxy와 앱에서 설정합니다. 화면 정책은 `script-src 'self'`이며, 관리자가 방문 추적을 켠 경우에만 요청별 nonce와 스니펫이 가리키는 출처가 더해집니다(`'unsafe-inline'`은 쓰지 않음).
 - WebSocket handshake의 session, Origin과 권한을 확인합니다.
 - 미디어 대체 텍스트는 일반 text로만 렌더링하며, Moin·프로필에 연결되지 않은 업로드는 관리자 TTL이 지난 뒤 동시 실행에 안전한 정리 작업이 삭제합니다.
 - 인증된 작성 client에는 `GET /api/v1/media/config`로 현재 크기·개수·허용 MIME만 제공하고 관리자 전용 orphan TTL은 노출하지 않습니다. Client의 사전 검사는 편의 기능이며 업로드 API가 같은 정책을 다시 강제합니다.
