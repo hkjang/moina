@@ -78,6 +78,7 @@ type OIDCConfig struct {
 	RedirectURL         string              `json:"redirectUrl,omitempty"`
 	Scopes              []string            `json:"scopes"`
 	AutoProvision       bool                `json:"autoProvision"`
+	AutoLogin           bool                `json:"autoLogin"` // silent prompt=none sign-in while the provider session lives; off by default
 	DefaultRoles        []string            `json:"defaultRoles"`
 	RoleClaim           string              `json:"roleClaim,omitempty"`
 	RoleMappings        map[string][]string `json:"roleMappings,omitempty"`

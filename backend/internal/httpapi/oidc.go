@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -26,12 +27,15 @@ import (
 )
 
 type oidcFlow struct {
-	State       string    `json:"state"`
-	Nonce       string    `json:"nonce"`
-	Verifier    string    `json:"verifier"`
-	ReturnTo    string    `json:"returnTo"`
-	RedirectURL string    `json:"redirectUrl"`
-	ExpiresAt   time.Time `json:"expiresAt"`
+	State       string `json:"state"`
+	Nonce       string `json:"nonce"`
+	Verifier    string `json:"verifier"`
+	ReturnTo    string `json:"returnTo"`
+	RedirectURL string `json:"redirectUrl"`
+	// Silent marks a prompt=none leg so the callback can tell a provider's
+	// "no session" answer apart from a real error.
+	Silent    bool      `json:"silent,omitempty"`
+	ExpiresAt time.Time `json:"expiresAt"`
 }
 
 func (s *Server) oidcStatus(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +50,48 @@ func (s *Server) oidcStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirect := resolveOIDCRedirect(cfg, general.PublicBaseURL, r)
-	writeData(w, http.StatusOK, map[string]any{"enabled": cfg.Enabled, "configured": cfg.IssuerURL != "" && cfg.ClientID != "", "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": redirect, "clientSecretConfigured": cfg.ClientSecret != "", "allowRegistration": general.AllowRegistration, "registrationEnabled": general.AllowRegistration})
+	// autoLogin is published so the browser knows whether to attempt a silent
+	// sign-in before showing the login screen.
+	writeData(w, http.StatusOK, map[string]any{"enabled": cfg.Enabled, "configured": cfg.IssuerURL != "" && cfg.ClientID != "", "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": redirect, "clientSecretConfigured": cfg.ClientSecret != "", "autoLogin": cfg.Enabled && cfg.AutoLogin, "allowRegistration": general.AllowRegistration, "registrationEnabled": general.AllowRegistration})
+}
+
+// silentOIDCRequested reports whether this login leg should carry prompt=none.
+// The query parameter alone is not enough: unless the administrator turned
+// auto-login on, an unrequested silent attempt is quietly downgraded to an
+// ordinary login, so nobody can change the flow by editing the address.
+func silentOIDCRequested(r *http.Request, cfg model.OIDCConfig) bool {
+	return cfg.AutoLogin && r.URL.Query().Get("prompt") == "none"
+}
+
+// oidcAuthCodeURL builds the authorization request for a flow. prompt=none asks
+// the provider to answer from its existing session only and never renders a
+// page: either a code comes straight back, or error=login_required does.
+func oidcAuthCodeURL(oauthCfg *oauth2.Config, flow oidcFlow) string {
+	options := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(flow.Verifier), oauth2.SetAuthURLParam("nonce", flow.Nonce)}
+	if flow.Silent {
+		options = append(options, oauth2.SetAuthURLParam("prompt", "none"))
+	}
+	return oauthCfg.AuthCodeURL(flow.State, options...)
+}
+
+// oidcProviderErrorTarget picks where the browser lands when the provider
+// answered with an error instead of a code. A silent attempt is refused with
+// login_required whenever the provider has no session — that is its ordinary
+// answer, not a failure — and the login page must learn not to try again, so
+// the marker travels in the address where cleared browser storage cannot lose
+// it. Any other error shows the login page with a notice. The original deep
+// link is kept so a manual login still lands where the visitor was heading.
+func oidcProviderErrorTarget(flow oidcFlow) string {
+	query := url.Values{}
+	if flow.Silent {
+		query.Set("sso", "none")
+	} else {
+		query.Set("sso", "error")
+	}
+	if flow.ReturnTo != "/" && safeReturnTo(flow.ReturnTo) {
+		query.Set("returnTo", flow.ReturnTo)
+	}
+	return "/login?" + query.Encode()
 }
 
 func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +140,7 @@ func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 	if !safeReturnTo(returnTo) {
 		returnTo = "/"
 	}
-	flow := oidcFlow{State: state, Nonce: nonce, Verifier: oauth2.GenerateVerifier(), ReturnTo: returnTo, RedirectURL: redirect, ExpiresAt: time.Now().UTC().Add(10 * time.Minute)}
+	flow := oidcFlow{State: state, Nonce: nonce, Verifier: oauth2.GenerateVerifier(), ReturnTo: returnTo, RedirectURL: redirect, Silent: silentOIDCRequested(r, cfg), ExpiresAt: time.Now().UTC().Add(10 * time.Minute)}
 	raw, _ := json.Marshal(flow)
 	encrypted, err := s.secrets.Encrypt(raw, "oidc:flow")
 	if err != nil {
@@ -103,9 +148,7 @@ func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: OIDCCookie, Value: base64.RawURLEncoding.EncodeToString(encrypted), Path: "/api/v1/auth/oidc", HttpOnly: true, Secure: isHTTPS(r), SameSite: http.SameSiteLaxMode, MaxAge: 600, Expires: flow.ExpiresAt})
-	oauthCfg := oauthConfig(cfg, provider, redirect)
-	authURL := oauthCfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(flow.Verifier), oauth2.SetAuthURLParam("nonce", nonce))
-	http.Redirect(w, r, authURL, http.StatusFound)
+	http.Redirect(w, r, oidcAuthCodeURL(oauthConfig(cfg, provider, redirect), flow), http.StatusFound)
 }
 
 func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +177,16 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	if json.Unmarshal(raw, &flow) != nil || time.Now().After(flow.ExpiresAt) || subtle.ConstantTimeCompare([]byte(flow.State), []byte(state)) != 1 {
 		writeError(w, http.StatusBadRequest, "invalid_oidc_state", "SSO state 검증에 실패했습니다")
+		return
+	}
+	// The provider reports a refusal as an error parameter rather than a code.
+	// Only a state-verified flow gets this treatment, so a crafted address
+	// cannot steer the browser without having started a login here.
+	if providerError := r.URL.Query().Get("error"); providerError != "" {
+		if !flow.Silent {
+			slog.WarnContext(r.Context(), "SSO provider가 오류로 응답", "error", truncateRunes(providerError, 64))
+		}
+		http.Redirect(w, r, oidcProviderErrorTarget(flow), http.StatusFound)
 		return
 	}
 	code := r.URL.Query().Get("code")
@@ -219,7 +272,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	permissions, _ := s.repo.PermissionsForRoles(r.Context(), user.Roles)
 	r = r.WithContext(withPrincipal(r, principal{User: user, Permissions: permissions}))
-	s.audit(r, "auth.oidc.login", "user", user.ID, true, map[string]string{"issuer": cfg.IssuerURL})
+	s.audit(r, "auth.oidc.login", "user", user.ID, true, map[string]any{"issuer": cfg.IssuerURL, "silent": flow.Silent})
 	http.Redirect(w, r, flow.ReturnTo, http.StatusFound)
 }
 

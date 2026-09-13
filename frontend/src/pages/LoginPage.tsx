@@ -62,6 +62,7 @@ export default function LoginPage() {
       <div className="login-card">
         <div className="login-heading"><p className="eyebrow">{mode === 'login' ? '다시 만나서 반가워요' : '새로운 연결을 시작해요'}</p><h2>{mode === 'login' ? '로그인' : '계정 만들기'}</h2><p>{mode === 'login' ? 'MOINA 계정으로 안전하게 시작하세요.' : '관리자가 허용한 로컬 계정을 만듭니다.'}</p></div>
         {params.get('expired') === '1' && <div className="login-notice" role="status">세션이 만료되었습니다. 다시 로그인해 주세요.</div>}
+        {params.get('sso') === 'error' && <div className="login-notice" role="status">SSO 로그인이 취소되었거나 완료되지 않았습니다. 다시 시도해 주세요.</div>}
         {error && <div className="login-error" role="alert">{error}</div>}
         <form className="login-form" onSubmit={submit}>
           {mode === 'register' && <><label><span>표시 이름</span><input required maxLength={80} autoComplete="name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} disabled={submitting} placeholder="대화에 표시할 이름"/></label><label><span>이메일</span><input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={submitting} placeholder="name@example.com"/></label></>}

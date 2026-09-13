@@ -340,7 +340,7 @@ func (s *Server) adminGetOIDC(w http.ResponseWriter, r *http.Request) {
 }
 
 func oidcView(cfg model.OIDCConfig, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource string) map[string]any {
-	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "effectiveRedirectUrl": effectiveRedirect, "defaultRedirectUrl": defaultRedirect, "redirectUrlSource": redirectSource, "defaultRedirectUrlSource": defaultRedirectSource, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
+	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "effectiveRedirectUrl": effectiveRedirect, "defaultRedirectUrl": defaultRedirect, "redirectUrlSource": redirectSource, "defaultRedirectUrlSource": defaultRedirectSource, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "autoLogin": cfg.AutoLogin, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
 }
 
 func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
@@ -377,7 +377,7 @@ func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "storage_error", "OIDC 설정을 저장할 수 없습니다")
 		return
 	}
-	s.audit(r, "oidc.config.update", "setting", settingOIDC, true, map[string]any{"issuerUrl": cfg.IssuerURL, "enabled": cfg.Enabled})
+	s.audit(r, "oidc.config.update", "setting", settingOIDC, true, map[string]any{"issuerUrl": cfg.IssuerURL, "enabled": cfg.Enabled, "autoLogin": cfg.AutoLogin})
 	effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource, _ := s.oidcRedirectDetails(r, cfg)
 	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource))
 }

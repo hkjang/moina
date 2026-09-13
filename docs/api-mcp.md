@@ -132,6 +132,8 @@ Content-Type: application/json
 
 OIDC와 AI 관리 설정의 `allowedHosts`에는 정확한 DNS 이름/IP 또는 `host:port`를 넣습니다. port 없는 값은 URL scheme의 기본 port(HTTPS 443, HTTP 80)에만 일치합니다. RFC1918/ULA로 해석되는 내부 DNS hostname은 같은 authority를 `allowedHosts`와 `privateAllowedHosts` 양쪽에 등록합니다. `privateAllowedHosts`에는 IP literal을 넣을 수 없고, loopback·link-local·cloud metadata·CGNAT·unspecified·multicast는 어떤 설정으로도 허용되지 않습니다.
 
+OIDC 관리 설정의 `autoLogin`(기본 false)을 켜면 웹 앱이 세션 없는 방문자를 `GET /auth/oidc/login?prompt=none&returnTo=…`으로 보내 provider 세션이 살아 있을 때 로그인 화면 없이 로그인시킵니다. 서버는 `autoLogin`이 꺼져 있으면 `prompt=none`을 무시하고 평범한 로그인으로 진행하며, callback은 provider의 `error`를 state 검증 뒤에만 처리해 조용한 시도의 `login_required`는 `/login?sso=none`, 그 밖의 오류는 `/login?sso=error`로 보냅니다. 이 흐름은 브라우저 화면 전용이고 API key·MCP 요청에는 해당하지 않습니다.
+
 `service.general.publicBaseUrl`은 path/query/fragment 없는 외부 HTTP(S) origin입니다. OIDC의 명시적 `redirectUrl`이 없으면 이 값으로 callback을 만들며, 관리자 OIDC 조회 응답의 `effectiveRedirectUrl`에서 실제 등록할 주소를 확인할 수 있습니다. `defaultRedirectUrl`은 직접 지정 override를 제거했을 때의 주소이고 `redirectUrlSource`와 `defaultRedirectUrlSource`는 각각의 계산 출처입니다. 연결 테스트는 Discovery뿐 아니라 authorization endpoint에 PKCE `prompt=none` 사전 요청을 보내 실제 Redirect URI 허용 여부도 확인하며, Keycloak이 거부하면 `oidc_redirect_rejected`를 반환합니다. 그 밖에 `oidc_private_host_denied`, `oidc_egress_denied`, `oidc_dns_failed`, `oidc_tls_failed`, `oidc_timeout`, `oidc_issuer_mismatch`, `oidc_authorization_failed`를 구분합니다.
 
 `v0.1.0`의 기존 사설 OIDC·AI 설정은 업그레이드 후 자동으로 `privateAllowedHosts`를 얻지 않습니다. 로컬 bootstrap 최고 관리자로 로그인해 각 hostname을 명시 저장하고 관리 API 연결 테스트를 통과시켜야 합니다. Bootstrap 환경변수의 비밀번호 변경은 이미 생성된 로컬 계정을 재설정하지 않습니다.

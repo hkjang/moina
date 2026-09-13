@@ -118,6 +118,18 @@ describe("관리자 공급자 설정 저장 계약", () => {
     },
   );
 
+  it("SSO 자동 로그인은 기본 꺼짐이고 스위치를 켜야 autoLogin: true를 보낸다", async () => {
+    renderPage(<AdminOIDCPage />);
+    await screen.findByDisplayValue("https://keycloak.internal/realms/moina");
+    fireEvent.click(screen.getByRole("button", { name: "OIDC 설정 저장" }));
+    await waitFor(() => expect(updateBody("/admin/oidc")).toMatchObject({ autoLogin: false }));
+    mocks.apiRequest.mockClear();
+
+    fireEvent.click(await screen.findByRole("switch", { name: /^SSO 자동 로그인/ }));
+    fireEvent.click(screen.getByRole("button", { name: "OIDC 설정 저장" }));
+    await waitFor(() => expect(updateBody("/admin/oidc")).toMatchObject({ autoLogin: true }));
+  });
+
   it("OIDC Secret 삭제 의도를 명시적으로 보낸다", async () => {
     renderPage(<AdminOIDCPage />);
     expect(
