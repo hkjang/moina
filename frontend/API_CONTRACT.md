@@ -9,8 +9,8 @@
 | GET | `/version` | 로그인·프로필 메뉴 버전 |
 | POST | `/auth/login` | 로컬 로그인 |
 | POST | `/auth/register` | 관리자가 허용한 로컬 가입 |
-| GET | `/auth/oidc/status` | OIDC와 가입 허용 상태 |
-| GET | `/auth/oidc/login`, `/auth/oidc/callback` | Keycloak OIDC |
+| GET | `/auth/oidc/status` | OIDC와 가입 허용 상태, `autoLogin`(SSO 자동 로그인) 여부 |
+| GET | `/auth/oidc/login`, `/auth/oidc/callback` | Keycloak OIDC. `login?prompt=none`은 `autoLogin`이 켜진 경우에만 silent SSO를 시도하고, callback은 provider의 `error`를 `/login?sso=none`(조용한 시도의 거절)·`/login?sso=error`로 돌려보냅니다 |
 | GET | `/auth/me` | 현재 세션 |
 | POST | `/auth/logout` | 로그아웃 |
 
@@ -58,6 +58,6 @@
 | PUT | `/admin/settings/{key}` |
 | PUT | `/admin/roles` |
 
-일반 설정 key는 `service.general`, `api.access`, `media.config`입니다. OIDC, AI와 SMTP 비밀 값은 조회하지 않고 GET 응답의 `clientSecretConfigured`, `apiKeyConfigured`, `passwordConfigured`로 설정 여부만 확인합니다. 이 필드는 조회 전용이므로 PUT 입력에 포함하지 않습니다. SMTP는 전용 저장·테스트 API를 사용하고 사용자 `notifications.email.enabled`가 켜진 알림을 독립 Outbox로 전달합니다. OIDC는 `redirectUrl`, `roleClaim`, `roleMappings`, `allowInsecureHttp`, AI는 `allowInsecureHttp`, 미디어는 `maxUploadBytes`, `maxPerPost`를 관리 화면에서 편집합니다.
+일반 설정 key는 `service.general`, `api.access`, `media.config`입니다. OIDC, AI와 SMTP 비밀 값은 조회하지 않고 GET 응답의 `clientSecretConfigured`, `apiKeyConfigured`, `passwordConfigured`로 설정 여부만 확인합니다. 이 필드는 조회 전용이므로 PUT 입력에 포함하지 않습니다. SMTP는 전용 저장·테스트 API를 사용하고 사용자 `notifications.email.enabled`가 켜진 알림을 독립 Outbox로 전달합니다. OIDC는 `redirectUrl`, `roleClaim`, `roleMappings`, `allowInsecureHttp`, `autoLogin`, AI는 `allowInsecureHttp`, 미디어는 `maxUploadBytes`, `maxPerPost`를 관리 화면에서 편집합니다.
 
 Streamable HTTP MCP의 서비스 endpoint는 `/mcp`이며 개인 키의 `mcp:use` 권한을 사용합니다.

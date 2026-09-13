@@ -17,6 +17,7 @@ export interface PublicConfig {
   version?: string;
   oidc?: {
     enabled?: boolean;
+    autoLogin?: boolean;
     label?: string;
     providerName?: string;
     allowRegistration?: boolean;

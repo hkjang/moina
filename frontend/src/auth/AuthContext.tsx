@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiRequest, readableError } from '../api/client';
 import { clearApiQueryCache } from '../hooks/apiQueryClient';
-import type { SessionUser } from '../types';
+import type { PublicConfig, SessionUser } from '../types';
+import { beginSilentSso, clearSilentSsoState, markSignedOut, shouldAttemptSilentSso } from './silentSso';
 
 interface AuthContextValue {
   user: SessionUser | null;
@@ -34,15 +35,45 @@ function normalizeUser(payload: unknown): SessionUser | null {
   };
 }
 
+async function loadPublicConfig(): Promise<PublicConfig | undefined> {
+  try { return { oidc: await apiRequest<PublicConfig['oidc']>('/auth/oidc/status', { suppressUnauthorized: true }) }; }
+  catch { return undefined; }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const refresh = useCallback(async () => {
-    try { setUser(normalizeUser(await apiRequest<unknown>('/auth/me', { suppressUnauthorized: true }))); }
-    catch { setUser(null); }
-    finally { setLoading(false); }
+  const loadUser = useCallback(async () => {
+    try { return normalizeUser(await apiRequest<unknown>('/auth/me', { suppressUnauthorized: true })); }
+    catch { return null; }
   }, []);
-  useEffect(() => { void refresh(); }, [refresh]);
+  const refresh = useCallback(async () => {
+    setUser(await loadUser());
+    setLoading(false);
+  }, [loadUser]);
+  useEffect(() => {
+    // The first load is the one place a silent SSO attempt may start: a visitor
+    // without a session whose Keycloak session is still alive is sent to the
+    // provider before anything renders, so they never see the login screen.
+    // The attempt is a top-level navigation and `loading` stays true until the
+    // page unloads, so nothing flashes in between.
+    let cancelled = false;
+    void (async () => {
+      const current = await loadUser();
+      if (cancelled) return;
+      if (!current && await shouldAttemptSilentSso(loadPublicConfig)) {
+        if (cancelled) return;
+        beginSilentSso(`${window.location.pathname}${window.location.search}`);
+        return;
+      }
+      setUser(current);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [loadUser]);
+  // Once a session exists again, an earlier sign-out or refused attempt no
+  // longer has to suppress auto-login.
+  useEffect(() => { if (user) clearSilentSsoState(); }, [user]);
   useEffect(() => {
     const unauthorized = () => {
       clearApiQueryCache({ abort: true });
@@ -64,6 +95,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) { throw new Error(readableError(error), { cause: error }); }
   }, [refresh]);
   const logout = useCallback(async () => {
+    // An explicit sign-out must stick even while the Keycloak session is still
+    // alive, otherwise auto-login would immediately undo it.
+    markSignedOut();
     try { await apiRequest('/auth/logout', { method: 'POST', suppressUnauthorized: true }); } catch { /* Local state is still cleared. */ }
     finally { clearApiQueryCache({ abort: true }); setUser(null); }
   }, []);

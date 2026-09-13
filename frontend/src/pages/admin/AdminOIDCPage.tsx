@@ -30,6 +30,7 @@ interface OIDCUpdateSettings {
   redirectUrl?: string;
   scopes?: string[];
   autoProvision?: boolean;
+  autoLogin?: boolean;
   defaultRoles?: string[];
   roleClaim?: string;
   roleMappings?: Record<string, string[]>;
@@ -190,6 +191,7 @@ export function AdminOIDCPage() {
           redirectUrl: form.redirectUrl,
           scopes: form.scopes,
           autoProvision: form.autoProvision,
+          autoLogin: form.autoLogin === true,
           defaultRoles: form.defaultRoles,
           roleClaim: form.roleClaim,
           roleMappings,
@@ -453,6 +455,12 @@ export function AdminOIDCPage() {
             description="OIDC 프로필로 사용자를 만들고 기본 역할을 부여합니다."
             checked={form.autoProvision !== false}
             onChange={(checked) => setForm({ ...form, autoProvision: checked })}
+          />
+          <SwitchField
+            label="SSO 자동 로그인"
+            description="Keycloak에 이미 로그인한 사용자는 로그인 화면 없이 바로 들어옵니다. 세션이 없으면 로그인 화면을 한 번만 보여 주고, 직접 로그아웃한 탭에서는 다시 시도하지 않습니다."
+            checked={form.autoLogin === true}
+            onChange={(checked) => setForm({ ...form, autoLogin: checked })}
           />
           <SwitchField
             label="폐쇄망 HTTP 허용"
