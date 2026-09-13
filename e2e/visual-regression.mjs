@@ -53,6 +53,11 @@ const expectedEntries = variants.flatMap(({ theme, viewport }) => screens.map((s
   viewport: { name: viewport.name, width: viewport.width, height: viewport.height },
   public: Boolean(screen.public),
 })));
+// MOINA_VISUAL_ONLY=admin-settings,login 처럼 slug를 고르면 그 화면만 비교·갱신합니다.
+// 52장 전체 계약(manifest 검증)은 그대로 두고 캡처 대상만 줄이므로, 화면 하나를
+// 바꾼 뒤 나머지 48장과 manifest 해시를 손으로 되돌리지 않고 그 화면만 승인할 수 있습니다.
+const onlySlugs = slugsFromEnvironment('MOINA_VISUAL_ONLY');
+const selectedScreens = onlySlugs ? screens.filter((screen) => onlySlugs.has(screen.slug)) : screens;
 
 if (process.argv.includes('--list')) {
   console.log(JSON.stringify({ screens: screens.length, baselines: expectedEntries.length, entries: expectedEntries }, null, 2));
@@ -77,7 +82,9 @@ let storedSession;
 
 try {
   storedSession = await createAuthenticatedSession(browser);
-  const manifest = updateBaselines ? null : await loadAndValidateManifest();
+  // 부분 갱신은 고르지 않은 화면의 해시를 기존 manifest에서 이어받으므로, 비교와 같은
+  // 검증(계약·Chromium 버전 일치)을 먼저 통과한 manifest가 있어야 합니다.
+  const manifest = updateBaselines && !onlySlugs ? null : await loadAndValidateManifest();
   const comparator = updateBaselines ? null : await browser.newPage();
 
   try {
@@ -98,7 +105,7 @@ try {
 
       try {
         await persistTheme(context, variant.theme);
-        for (const screen of screens) {
+        for (const screen of selectedScreens) {
           const entry = expectedEntries.find((candidate) => candidate.theme === variant.theme
             && candidate.viewport.name === variant.viewport.name && candidate.path === screen.path);
           assert.ok(entry, `시각 회귀 entry를 찾을 수 없습니다: ${screen.path}`);
@@ -182,7 +189,12 @@ try {
   }
 
   if (updateBaselines) {
-    const entries = results.map(({ id, path, theme, viewport, sha256: digest }) => ({ id, path, theme, viewport, sha256: digest }));
+    // 고른 화면은 새 해시를, 나머지는 검증을 통과한 기존 manifest의 해시를 그대로 씁니다.
+    const entries = expectedEntries.map(({ id, path, theme, viewport }) => {
+      const updated = results.find((result) => result.id === id);
+      const digest = updated ? updated.sha256 : manifest.entries.find((entry) => entry.id === id).sha256;
+      return { id, path, theme, viewport, sha256: digest };
+    });
     for (const image of updatedImages) await writeFile(image.path, image.content);
     await writeFile(manifestPath, `${JSON.stringify({
       schemaVersion: 1,
@@ -197,9 +209,10 @@ try {
 
   await writeResult({ ok: failures.length === 0, mode: updateBaselines ? 'update' : 'compare' });
   assert.equal(failures.length, 0, `시각 회귀 ${failures.length}건 실패\n${failures.map((failure) => `- ${failure.id}: ${failure.reason}`).join('\n')}`);
+  const scope = onlySlugs ? `선택 화면 ${selectedScreens.length}개` : `화면 ${screens.length}개`;
   console.log(updateBaselines
-    ? `시각 회귀 베이스라인 ${results.length}개를 갱신했습니다.`
-    : `시각 회귀 ${results.length}개 통과(화면 ${screens.length}개 × 테마 2 × viewport 2).`);
+    ? `시각 회귀 베이스라인 ${results.length}개를 갱신했습니다(${scope} × 테마 2 × viewport 2${onlySlugs ? `, 나머지 ${expectedEntries.length - results.length}개는 기존 manifest 유지` : ''}).`
+    : `시각 회귀 ${results.length}개 통과(${scope} × 테마 2 × viewport 2).`);
 } catch (error) {
   await writeResult({ ok: false, mode: updateBaselines ? 'update' : 'compare', error: error instanceof Error ? error.stack : String(error) }).catch(() => undefined);
   throw error;
@@ -215,6 +228,19 @@ function numberFromEnvironment(name, fallback, { minimum, maximum }) {
     throw new Error(`${name}은 ${minimum} 이상 ${maximum} 이하의 숫자여야 합니다.`);
   }
   return parsed;
+}
+
+// slugsFromEnvironment는 쉼표로 나열한 화면 slug를 Set으로 돌려주고, 비어 있으면 undefined입니다.
+// 오타가 난 slug를 조용히 무시하면 아무 화면도 갱신하지 않은 채 성공으로 끝나므로 즉시 거절합니다.
+function slugsFromEnvironment(name) {
+  const raw = (process.env[name] || '').split(',').map((slug) => slug.trim()).filter(Boolean);
+  if (raw.length === 0) return undefined;
+  const known = new Set(screens.map((screen) => screen.slug));
+  const unknown = raw.filter((slug) => !known.has(slug));
+  if (unknown.length > 0) {
+    throw new Error(`${name}에 알 수 없는 화면 slug가 있습니다: ${unknown.join(', ')}. 사용 가능: ${[...known].join(', ')}`);
+  }
+  return new Set(raw);
 }
 
 function assertSafeDirectory(directory, parent, label) {
@@ -405,7 +431,7 @@ async function normalizeDynamicContent(page, currentUsername) {
 async function loadAndValidateManifest() {
   const raw = await readFile(manifestPath, 'utf8').catch((error) => {
     if (error?.code === 'ENOENT') {
-      throw new Error(`${relative(projectRoot, manifestPath)}이 없습니다. MOINA_UPDATE_VISUALS=1로 베이스라인을 먼저 생성하세요.`);
+      throw new Error(`${relative(projectRoot, manifestPath)}이 없습니다. MOINA_VISUAL_ONLY 없이 MOINA_UPDATE_VISUALS=1로 전체 베이스라인을 먼저 생성하세요.`);
     }
     throw error;
   });
@@ -503,6 +529,7 @@ async function writeResult(extra) {
     ...extra,
     baseURL: baseURL.origin,
     screenCount: screens.length,
+    selectedScreens: selectedScreens.map((screen) => screen.slug),
     expectedBaselineCount: expectedEntries.length,
     thresholds: { pixelThreshold, maxDiffRatio },
     results,
