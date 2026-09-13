@@ -40,6 +40,22 @@ node e2e/visual-regression.mjs                                                  
 
 릴리스에 커밋하는 승인 베이스라인의 기준 renderer는 CI의 `ubuntu-24.04`와 lockfile에 고정된 Playwright Chromium입니다. 같은 Chromium 버전이어도 OS font package와 rasterizer가 다르면 모든 화면에 픽셀 차이가 생길 수 있으므로, 로컬 갱신 결과만으로 승인하지 않습니다. UI 변경 후 CI가 실패하면 `moina-ci-diagnostics` artifact의 `*-actual.png`와 `*-diff.png`를 검토하고, 동일 CI renderer에서 생성된 actual과 manifest SHA-256을 함께 반영한 뒤 CI 비교가 52개 모두 통과하는지 확인합니다.
 
+### CI renderer를 로컬에서 재현하기
+
+artifact를 받을 수 없거나 CI를 기다리지 않고 갱신하려면, lockfile의 Playwright 버전과 같은 공식 이미지(`mcr.microsoft.com/playwright:v<버전>-noble`, Ubuntu 24.04 + `--with-deps` font package)에서 이 스크립트를 실행합니다. WSL·macOS 등 개발 환경은 Korean fallback font가 달라(예: NanumGothic) 52장 전부 2~12% 어긋나지만, 이 이미지에서는 변경하지 않은 화면이 `0.000~0.35%`로 CI와 같은 결과가 나옵니다 — 갱신 전에 먼저 비교를 돌려 **변경하지 않은 화면이 모두 통과하는지** 확인한 뒤에만 그 결과를 승인합니다.
+
+```bash
+docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD/e2e:/work/e2e" -w /work/e2e \
+  -e MOINA_E2E_BASE_URL=http://127.0.0.1:18080 \
+  -e MOINA_E2E_USERNAME=ci-admin -e MOINA_E2E_PASSWORD='test-password-12345' \
+  mcr.microsoft.com/playwright:v1.62.1-noble npm run test:visual   # 먼저 비교
+```
+
+- 앱은 CI와 같은 `http://127.0.0.1:18080`에 띄웁니다. 관리 설정 화면의 "사이트 기본 주소" placeholder가 요청 origin을 그대로 보여 주므로 다른 포트에서 찍은 베이스라인은 CI에서 그 글자만큼 어긋납니다.
+- `visual:update`는 52장을 모두 다시 쓰므로, 의도한 화면 외의 PNG는 `git checkout`으로 되돌리고 `manifest.json`의 해당 `sha256`도 HEAD 값으로 되돌려 변경 범위를 바꾼 화면으로만 한정합니다.
+- 로그인은 client IP당 5분에 5회로 제한됩니다. 같은 IP에서 비교·갱신·전체 `npm test`를 연달아 돌리면 429로 세션 생성이 멈추므로 5분을 기다리거나 새 container network에서 실행합니다.
+
 ## 결정성 계약
 
 - Locale은 `ko-KR`, 시간대는 `Asia/Seoul`, device scale은 `1`, 모션은 `reduce`로 고정합니다.

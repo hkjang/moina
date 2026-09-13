@@ -158,7 +158,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "ae7e8dbf734cb30b23081604ab37c68aac70bd2137f0fe6530254baeca6f296c"
+      "sha256": "fce63e6b82bd85b30eb699892cacdaacac9cf2a74874f946e828817211fd0f35"
     },
     {
       "id": "light-mobile-login",
@@ -301,7 +301,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "f2cfbd6ae7498929941bd35f1b65ce3e1cdfb73772a92ccbbd52d5c49884d2dd"
+      "sha256": "492c680eb8c290aa8d84e3eedaec58e34c8acd81f189fb082b32b484846d6188"
     },
     {
       "id": "dark-desktop-login",
@@ -444,7 +444,7 @@
         "width": 1440,
         "height": 1000
       },
-      "sha256": "5c50ebcda4eb41a012a9034574efd12e2fc346899d59e12709efdc3ab1eeb416"
+      "sha256": "7aca1d317e0d14537226fb5e108859aecc9feca90aab240ff24c9895a5a06aba"
     },
     {
       "id": "dark-mobile-login",
@@ -587,7 +587,7 @@
         "width": 390,
         "height": 844
       },
-      "sha256": "37672ef20e0e198f803d886fbd9118448508ac7d49b9dbe03a06701832c1e7ec"
+      "sha256": "cb733f8618a084e2b833b164c0d4f502039e0993204b8292e8b679ec3daf9af9"
     }
   ]
 }
