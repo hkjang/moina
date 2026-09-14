@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.29`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.30`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.29`는 시각 회귀 베이스라인을 화면 단위로 부분 갱신할 수 있습니다. `visual:update`는 52장을 모두 다시 써서 화면 하나를 바꿔 승인할 때마다 나머지 48장 PNG와 `manifest.json`의 sha256을 손으로 되돌려야 했습니다. 이제 `MOINA_VISUAL_ONLY=admin-settings,login`처럼 화면 slug를 나열하면 그 화면의 4장(Light·Dark × Desktop·Mobile)만 찍고 고르지 않은 entry의 해시는 기존 manifest에서 이어받아 다시 쓰며, 부분 갱신은 비교와 같은 manifest 검증(계약·Chromium 버전 일치)을 먼저 통과해야 하므로 다른 renderer로 찍은 장이 섞이지 않고 모르는 slug는 즉시 거절합니다. 같은 변수는 비교에도 적용됩니다. 서비스 코드와 이미지 내용은 `v0.1.28`과 같으며 절차는 [시각 회귀 안내](e2e/VISUAL_REGRESSION.md)에 적혀 있습니다. `v0.1.28`의 EXIF orientation 표시 크기 보고와 사용자·관리자 가이드, `v0.1.27`의 첨부 이미지 로드 전 자리 예약, `v0.1.26`의 업로드 API HEIC 거절 안내, `v0.1.25`의 아이폰 HEIC 첨부·프로필 이미지 JPEG 전환 안내, `v0.1.24`의 미디어 응답 `private, no-cache`와 SHA-256 강한 `ETag` 재검증, `v0.1.23`의 화면 밖 Flow 카드 style·layout 비용 제거와 `type=all` 검색 병렬 실행, `v0.1.21`의 MCP `tools/call` 인자 스키마 검증과 본문 주소 안 `#fragment`·`@handle`을 뺀 Topic·멘션 추출, `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
+`v0.1.30`은 Keycloak 세션이 살아 있으면 로그인 화면 없이 조용히 로그인하는 **SSO 자동 로그인**과 관리자가 화면에서 붙이는 **방문 추적 스니펫**을 더합니다. 관리자 **Keycloak OIDC** 화면의 **SSO 자동 로그인**(`autoLogin`, 기본 꺼짐)을 켜면 세션 없는 방문자를 `GET /api/v1/auth/oidc/login?prompt=none`으로 최상위 이동시켜 provider 세션이 있을 때만 바로 로그인하고, 없으면 `/login?sso=none`으로 로그인 화면을 보여 주며, 그 밖의 provider 오류는 `/login?sso=error`로 안내합니다(`/`로 시작하고 `//`로 시작하지 않는 `returnTo`만 유지). 웹 앱은 탭 세션당 한 번·로그아웃 억제·주소 표시 세 겹으로 루프를 막고 `/login`·`/api`·`/auth`·`/mcp`·상태 점검 경로에서는 시도하지 않으며, 설정이 꺼져 있으면 서버가 `prompt=none`을 평범한 로그인으로 바꿉니다. **일반 설정**의 **방문 추적** 카드에서는 provider(Momento·GA4·GTM·Matomo·직접 붙여 넣기)와 스니펫을 저장하면 추적이 켜진 화면 문서에만 요청별 nonce를 붙인 스니펫이 들어가고 CSP에는 같은 nonce와 스니펫이 가리키는 출처만 더해집니다. `'unsafe-inline'`은 쓰지 않고 기본값은 꺼짐이며, Momento는 같은 오리진 프록시(`/momento/*`)를 기본으로 써 정책에 외부 출처가 등장하지 않고, 켜진 동안 `report-uri`로 모은 차단 출처는 카드에서 한 번에 허용 목록에 넣습니다. 두 설정은 [관리자 가이드](docs/ADMIN_GUIDE.md) 3.4절·3.8절과 `api/openapi.yaml`에 적혀 있습니다. `v0.1.29`의 시각 회귀 베이스라인 화면 단위 부분 갱신(`MOINA_VISUAL_ONLY`), `v0.1.28`의 EXIF orientation 표시 크기 보고와 사용자·관리자 가이드, `v0.1.27`의 첨부 이미지 로드 전 자리 예약, `v0.1.26`의 업로드 API HEIC 거절 안내, `v0.1.25`의 아이폰 HEIC 첨부·프로필 이미지 JPEG 전환 안내, `v0.1.24`의 미디어 응답 `private, no-cache`와 SHA-256 강한 `ETag` 재검증, `v0.1.23`의 화면 밖 Flow 카드 style·layout 비용 제거와 `type=all` 검색 병렬 실행, `v0.1.21`의 MCP `tools/call` 인자 스키마 검증과 본문 주소 안 `#fragment`·`@handle`을 뺀 Topic·멘션 추출, `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
 
 ## 주요 기능
 
@@ -102,7 +102,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.29
+moina:v0.1.30
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -120,20 +120,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.29.tar.gz
-dist/moina-v0.1.29.tar.gz.sha256
+dist/moina-v0.1.30.tar.gz
+dist/moina-v0.1.30.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.29.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.30.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.29.tar.gz
-gzip -dc moina-v0.1.29.tar.gz | docker image load
-docker image inspect moina:v0.1.29
+sha256sum moina-v0.1.30.tar.gz
+gzip -dc moina-v0.1.30.tar.gz | docker image load
+docker image inspect moina:v0.1.30
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -182,15 +182,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.29 -m "moina v0.1.29"
-git push origin v0.1.29
+git tag -a v0.1.30 -m "moina v0.1.30"
+git push origin v0.1.30
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.29
-file:  moina-v버전.tar.gz  예: moina-v0.1.29.tar.gz
+image: moina:v버전          예: moina:v0.1.30
+file:  moina-v버전.tar.gz  예: moina-v0.1.30.tar.gz
 ```
 
 ## 라이선스
