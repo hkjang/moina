@@ -80,7 +80,7 @@ func TestRetentionSweepsAreBatchedAndTargetOneTableEach(t *testing.T) {
 			t.Fatalf("%s sweep이 cutoff를 적용하지 않습니다: %s", sweep.name, sweep.query)
 		}
 	}
-	for _, table := range []string{"audit_events", "notifications", "outbox_events", "ai_usage_events"} {
+	for _, table := range []string{"audit_events", "notifications", "mail_deliveries", "outbox_events", "ai_usage_events"} {
 		if !seen[table] {
 			t.Fatalf("%s에 보존 sweep이 없습니다", table)
 		}
@@ -90,11 +90,14 @@ func TestRetentionSweepsAreBatchedAndTargetOneTableEach(t *testing.T) {
 func TestRetentionSweepsSkipDisabledWindows(t *testing.T) {
 	// purgeExpiredRecords skips a window of zero; assert the configuration that
 	// drives that decision carries the zero through rather than defaulting.
+	// Mail delivery records share the notification window: they are that
+	// notification's outbound trace.
 	for _, sweep := range retentionSweeps(retentionConfig{NotificationDays: 30}) {
-		if sweep.name == "notifications" && sweep.days != 30 {
-			t.Fatalf("notifications days=%d, 30을 기대했습니다", sweep.days)
+		notificationWindow := sweep.name == "notifications" || sweep.name == "mail_deliveries"
+		if notificationWindow && sweep.days != 30 {
+			t.Fatalf("%s days=%d, 30을 기대했습니다", sweep.name, sweep.days)
 		}
-		if sweep.name != "notifications" && sweep.days != 0 {
+		if !notificationWindow && sweep.days != 0 {
 			t.Fatalf("%s days=%d, 비활성(0)을 기대했습니다", sweep.name, sweep.days)
 		}
 	}

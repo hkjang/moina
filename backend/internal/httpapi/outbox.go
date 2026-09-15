@@ -245,7 +245,9 @@ func (s *Server) handleOutboxEvent(ctx context.Context, item event.Event) error 
 		return fmt.Errorf("notification insert: %w", err)
 	}
 	if tag.RowsAffected() > 0 {
-		if notificationEmailEnabled(preferences.Notifications, payload.Type) {
+		// Only the few types a person waits for become a mail event; the rest
+		// stay in the notification centre and the digest (see mailEventFor).
+		if mailEventFor(payload.Type) != "" && notificationEmailEnabled(preferences.Notifications, payload.Type) {
 			emailPayload, marshalErr := json.Marshal(notificationEmailEventPayload{NotificationID: item.ID, UserID: payload.UserID})
 			if marshalErr != nil {
 				return fmt.Errorf("notification email event marshal: %w", marshalErr)
@@ -304,8 +306,20 @@ func (s *Server) handleNotificationEmailEvent(ctx context.Context, item event.Ev
 	if _, recipientConfigured := bareEmailAddress(recipient); !recipientConfigured {
 		return nil
 	}
-	if !notificationEmailEnabled(preferences.Notifications, notification.Type) {
+	// The receiver's channel choice and the administrator's per-event switch
+	// both have to be on. Switching an event off stops that kind only.
+	mailEvent := mailEventFor(notification.Type)
+	if mailEvent == "" || !cfg.allows(mailEvent) || !notificationEmailEnabled(preferences.Notifications, notification.Type) {
 		return nil
+	}
+	if mailEvent == mailEventMention {
+		bundled, err := s.mentionBundledWithReply(ctx, notification)
+		if err != nil {
+			return fmt.Errorf("notification email bundle check: %w", err)
+		}
+		if bundled {
+			return nil
+		}
 	}
 	s.decorateNotification(ctx, &notification)
 	general := defaultGeneral()
@@ -314,13 +328,34 @@ func (s *Server) handleNotificationEmailEvent(ctx context.Context, item event.Ev
 	}
 	normalizeGeneral(&general)
 	message := notificationEmailMessage(general.ServiceName, general.PublicBaseURL, recipient, notification)
-	if err := deliverSMTP(ctx, cfg, message); err != nil {
+	// The notification ID doubles as the delivery ID, so an outbox retry of
+	// this event updates the same record instead of adding a row per attempt.
+	delivery := mailDelivery{ID: notification.ID, Event: mailEvent, UserID: notification.UserID, ActorID: notification.ActorID, Recipient: recipient, Subject: message.Subject}
+	s.recordMailAttempt(ctx, delivery)
+	err = deliverSMTP(ctx, cfg, message)
+	s.completeMailAttempt(ctx, delivery, err)
+	if err != nil {
 		return fmt.Errorf("notification email delivery: %w", err)
 	}
 	if _, err := s.repo.Pool().Exec(ctx, `UPDATE notifications SET emailed_at=now() WHERE id=$1 AND user_id=$2 AND emailed_at IS NULL`, notification.ID, notification.UserID); err != nil {
 		return fmt.Errorf("notification email marker: %w", err)
 	}
 	return nil
+}
+
+// mentionBundledWithReply reports whether a mention came from an Echo on the
+// mentioned person's own Moin. That one action already produced a reply
+// notification for them, and the reply mail carries the same link, so the
+// mention is folded into it rather than sent as a second message.
+func (s *Server) mentionBundledWithReply(ctx context.Context, notification model.Notification) (bool, error) {
+	if notification.TargetID == "" {
+		return false, nil
+	}
+	var bundled bool
+	err := s.repo.Pool().QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1 FROM notifications WHERE user_id=$1 AND target_id=$2 AND type='reply' AND id<>$3
+	)`, notification.UserID, notification.TargetID, notification.ID).Scan(&bundled)
+	return bundled, err
 }
 
 func (s *Server) listenNotificationSignals(ctx context.Context, signals chan<- event.NotificationSignal) error {

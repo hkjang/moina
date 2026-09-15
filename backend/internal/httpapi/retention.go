@@ -71,6 +71,9 @@ func retentionSweeps(cfg retentionConfig) []retentionSweep {
 			`DELETE FROM audit_events WHERE id IN (SELECT id FROM audit_events WHERE created_at<$1 LIMIT $2)`},
 		{"notifications", cfg.NotificationDays,
 			`DELETE FROM notifications WHERE id IN (SELECT id FROM notifications WHERE created_at<$1 LIMIT $2)`},
+		// A mail record is the notification's outbound trace and lives as long.
+		{"mail_deliveries", cfg.NotificationDays,
+			`DELETE FROM mail_deliveries WHERE id IN (SELECT id FROM mail_deliveries WHERE created_at<$1 LIMIT $2)`},
 		// Only delivered events are disposable. A dead letter stays until an
 		// administrator retries or the delivery is written off, so the sweep
 		// must not confuse "old" with "done".
