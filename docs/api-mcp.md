@@ -111,9 +111,9 @@ Client는 이 값을 파일 선택 UI와 사전 검사에 사용하되 업로드
 
 `digest.mode`는 `off`, `hourly`, `daily` 중 하나이고 시각은 서비스 기본 시간대의 `HH:MM`입니다. Digest를 새로 켜거나 mode·일별 시각을 바꾸면 worker가 변경을 감지한 시점부터 새 집계 구간을 시작하며, 꺼져 있던 기간이나 이전 일정의 알림을 한꺼번에 재생하지 않습니다. Worker는 1분 간격으로 설정을 확인합니다. In App의 Signal·Mention·Follow·Echo는 알림 센터 노출과 미확인 수 포함 여부를 제어합니다. In App을 끈 유형도 cross-instance Toast/Desktop fanout을 위해 `inApp=false`와 읽음 상태의 durable 전달 row로 저장하며 목록에서는 숨깁니다. 승인·보안 알림은 운영상 필수이므로 `approvals`를 false로 보내도 true로 정규화됩니다. Toast와 Desktop은 독립 실시간 표시 채널이며 조용한 시간에는 보류되지만 durable 전달 기록은 유지됩니다. Desktop은 이 설정과 별도로 사용자 동작으로 Browser Notification 권한을 허용해야 합니다.
 
-`email.enabled`는 관리자가 SMTP를 활성화하고 사용자 프로필에 올바른 수신 이메일이 있을 때 UI에서 켤 수 있습니다. In App의 활동 종류 선택을 이메일에도 공통 적용하고, Digest mode가 켜지면 일반 활동 메일은 요약 알림 하나로 묶습니다. 멘션·승인·보안 알림은 Digest와 관계없이 즉시 메일 Outbox를 생성합니다. `GET /api/v1/notifications/email/status`는 SMTP 세부 값을 노출하지 않고 `available`, `smtpConfigured`, `recipientConfigured`로 사용자 이메일 채널의 준비 상태만 반환합니다.
+`email.enabled`는 관리자가 SMTP를 활성화하고 사용자 프로필에 올바른 수신 이메일이 있을 때 UI에서 켤 수 있습니다. In App의 활동 종류 선택을 이메일에도 공통 적용하고, Digest mode가 켜지면 일반 활동 메일은 요약 알림 하나로 묶습니다. 멘션·승인·보안 알림은 Digest와 관계없이 즉시 메일 Outbox를 생성합니다. 개별 메일이 되는 이벤트는 사람이 실제로 기다리는 일(승인 요청·승인 결과·멘션·내 Moin의 Echo·요약·계정 보안)뿐이며 Signal·Link·Quote·Remoin은 알림 센터와 요약에만 남습니다. 관리자는 `notify`로 이벤트 종류별로 끌 수 있고, 내 Moin의 Echo에서 나온 멘션은 Echo 메일 한 통으로 묶입니다. `GET /api/v1/notifications/email/status`는 SMTP 세부 값을 노출하지 않고 `available`, `smtpConfigured`, `recipientConfigured`로 사용자 이메일 채널의 준비 상태만 반환합니다.
 
-관리자 전용 `GET/PUT /api/v1/admin/smtp`는 password 원문 대신 `passwordConfigured`를 사용합니다. `POST /api/v1/admin/smtp/test`는 저장된 설정으로 현재 관리자 프로필 이메일에 실제 테스트 메일을 보냅니다. `host`와 `port`를 분리해 입력하며 `allowPrivateNetwork`는 그 정확한 DNS authority만 RFC1918/ULA에 연결하도록 허용합니다.
+관리자 전용 `GET/PUT /api/v1/admin/smtp`는 password 원문 대신 `passwordConfigured`를 사용합니다. `POST /api/v1/admin/smtp/test`는 저장된 설정으로 현재 관리자 프로필 이메일에 실제 테스트 메일을 보냅니다. `host`와 `port`를 분리해 입력하며 `allowPrivateNetwork`는 그 정확한 DNS authority만 RFC1918/ULA에 연결하도록 허용합니다. 기본값은 포트 25·`security: auto`(465는 TLS, STARTTLS를 알리면 STARTTLS, 아니면 평문 — 인증 정보는 어떤 모드에서도 평문으로 보내지 않음)·인증 없음이고, `skipTlsVerify`는 사설 CA 릴레이에서 인증서 체인 검사만 생략합니다. `GET /api/v1/admin/smtp/deliveries?status=&limit=`는 나간 메일의 기록(언제·어떤 이벤트·누구에게·제목·결과·시도 횟수·마지막 오류)을 최신순으로 돌려주며 본문은 담지 않습니다.
 
 ## AI SSE
 

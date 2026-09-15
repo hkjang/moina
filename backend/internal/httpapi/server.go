@@ -261,6 +261,7 @@ func (s *Server) Handler() http.Handler {
 				admin.With(s.requirePermission("settings:manage")).Get("/smtp", s.adminGetSMTP)
 				admin.With(s.requirePermission("settings:manage")).Put("/smtp", s.adminPutSMTP)
 				admin.With(s.requirePermission("settings:manage")).Post("/smtp/test", s.adminTestSMTP)
+				admin.With(s.requirePermission("settings:manage")).Get("/smtp/deliveries", s.adminListMailDeliveries)
 				admin.With(s.requirePermission("settings:manage")).Get("/workflow", s.adminGetWorkflow)
 				admin.With(s.requirePermission("settings:manage")).Put("/workflow", s.adminPutWorkflow)
 				admin.With(s.requirePermission("settings:manage")).Get("/analytics", s.adminGetAnalytics)

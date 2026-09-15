@@ -20,23 +20,43 @@ import (
 
 	"github.com/hkjang/moina/backend/internal/model"
 	"github.com/hkjang/moina/backend/internal/outbound"
+	"github.com/hkjang/moina/backend/internal/secure"
 	"github.com/hkjang/moina/backend/internal/store"
 )
 
 const settingSMTP = "notifications.smtp"
 
+// Mail events are the handful of things a person actually waits for. The rule
+// for the list: if this mail does not arrive, someone loses something or keeps
+// refreshing a screen. A Signal, a Link or a Remoin is "something changed" and
+// stays in the notification centre and the digest. Each event has an
+// administrator switch (mail.notify_<event>) that defaults to on.
+const (
+	mailEventApprovalRequested = "approval_requested" // an approver must act before a Moin is published
+	mailEventApprovalDecided   = "approval_decided"   // the requester is waiting for the outcome
+	mailEventMention           = "mention"            // someone called on you directly
+	mailEventEcho              = "echo"               // a reply to your Moin — the conversation waits on you
+	mailEventDigest            = "digest"             // the one bundled message the user opted into
+	mailEventSecurity          = "security"           // account security notices; never optional in-app, so never silently dropped here
+	mailEventTest              = "test"               // the administrator's test button
+)
+
+var mailEvents = []string{mailEventApprovalRequested, mailEventApprovalDecided, mailEventMention, mailEventEcho, mailEventDigest, mailEventSecurity}
+
 type smtpConfig struct {
-	Enabled             bool   `json:"enabled"`
-	Host                string `json:"host"`
-	Port                int    `json:"port"`
-	Security            string `json:"security"`
-	Username            string `json:"username"`
-	Password            string `json:"password,omitempty"`
-	ClearPassword       bool   `json:"clearPassword,omitempty"`
-	FromAddress         string `json:"fromAddress"`
-	FromName            string `json:"fromName"`
-	TimeoutSeconds      int    `json:"timeoutSeconds"`
-	AllowPrivateNetwork bool   `json:"allowPrivateNetwork"`
+	Enabled             bool            `json:"enabled"`
+	Host                string          `json:"host"`
+	Port                int             `json:"port"`
+	Security            string          `json:"security"`
+	SkipTLSVerify       bool            `json:"skipTlsVerify"`
+	Username            string          `json:"username"`
+	Password            string          `json:"password,omitempty"`
+	ClearPassword       bool            `json:"clearPassword,omitempty"`
+	FromAddress         string          `json:"fromAddress"`
+	FromName            string          `json:"fromName"`
+	TimeoutSeconds      int             `json:"timeoutSeconds"`
+	AllowPrivateNetwork bool            `json:"allowPrivateNetwork"`
+	Notify              map[string]bool `json:"notify"` // mail event → on/off; a missing key means on
 }
 
 type smtpMessage struct {
@@ -45,8 +65,49 @@ type smtpMessage struct {
 	Body    string
 }
 
+// Defaults match the common company relay: port 25, no credentials, and a
+// security mode that follows whatever the server advertises.
 func defaultSMTP() smtpConfig {
-	return smtpConfig{Port: 587, Security: "starttls", FromName: "MOINA", TimeoutSeconds: 15}
+	return smtpConfig{Port: 25, Security: "auto", FromName: "MOINA", TimeoutSeconds: 10, Notify: defaultMailNotify()}
+}
+
+func defaultMailNotify() map[string]bool {
+	notify := make(map[string]bool, len(mailEvents))
+	for _, event := range mailEvents {
+		notify[event] = true
+	}
+	return notify
+}
+
+// mailEventFor maps a notification type to its mail event, or "" when that
+// type is never mailed on its own (it still reaches the digest).
+func mailEventFor(notificationType string) string {
+	switch strings.TrimSpace(notificationType) {
+	case "approval_requested":
+		return mailEventApprovalRequested
+	case "approval_approved", "approval_rejected":
+		return mailEventApprovalDecided
+	case "mention":
+		return mailEventMention
+	case "reply":
+		return mailEventEcho
+	case "digest":
+		return mailEventDigest
+	case "security":
+		return mailEventSecurity
+	default:
+		return ""
+	}
+}
+
+// allows reports whether the administrator left a mail event switched on. The
+// test message has no switch; it is only ever sent by hand.
+func (cfg smtpConfig) allows(event string) bool {
+	if event == mailEventTest {
+		return true
+	}
+	enabled, known := cfg.Notify[event]
+	return known && enabled
 }
 
 func (s *Server) smtpConfigContext(ctx context.Context) (smtpConfig, error) {
@@ -65,22 +126,32 @@ func normalizeSMTP(cfg *smtpConfig) {
 	cfg.FromAddress = strings.TrimSpace(cfg.FromAddress)
 	cfg.FromName = strings.TrimSpace(cfg.FromName)
 	if cfg.Port == 0 {
-		cfg.Port = 587
+		cfg.Port = 25
 	}
 	if cfg.Security == "" {
-		cfg.Security = "starttls"
+		cfg.Security = "auto"
 	}
 	if cfg.TimeoutSeconds == 0 {
-		cfg.TimeoutSeconds = 15
+		cfg.TimeoutSeconds = 10
 	}
+	// A configuration saved before the event switches existed, or a PUT that
+	// omits some, keeps every known event on. Unknown keys are dropped so the
+	// stored document only ever lists events this build can send.
+	notify := defaultMailNotify()
+	for event, enabled := range cfg.Notify {
+		if _, known := notify[event]; known {
+			notify[event] = enabled
+		}
+	}
+	cfg.Notify = notify
 }
 
 func validateSMTP(cfg smtpConfig) error {
 	if cfg.Port < 1 || cfg.Port > 65535 || cfg.TimeoutSeconds < 3 || cfg.TimeoutSeconds > 60 {
 		return errors.New("SMTP 포트와 제한 시간을 확인해 주세요")
 	}
-	if cfg.Security != "starttls" && cfg.Security != "tls" && cfg.Security != "none" {
-		return errors.New("SMTP 보안 방식은 STARTTLS, TLS 또는 암호화 없음 중 하나여야 합니다")
+	if cfg.Security != "auto" && cfg.Security != "starttls" && cfg.Security != "tls" && cfg.Security != "none" {
+		return errors.New("SMTP 보안 방식은 자동, STARTTLS, TLS 또는 암호화 없음 중 하나여야 합니다")
 	}
 	if !cfg.Enabled {
 		return nil
@@ -117,9 +188,9 @@ func validateSMTP(cfg smtpConfig) error {
 func smtpView(cfg smtpConfig) map[string]any {
 	return map[string]any{
 		"enabled": cfg.Enabled, "host": cfg.Host, "port": cfg.Port, "security": cfg.Security,
-		"username": cfg.Username, "fromAddress": cfg.FromAddress, "fromName": cfg.FromName,
-		"timeoutSeconds": cfg.TimeoutSeconds, "allowPrivateNetwork": cfg.AllowPrivateNetwork,
-		"passwordConfigured": cfg.Password != "",
+		"skipTlsVerify": cfg.SkipTLSVerify, "username": cfg.Username, "fromAddress": cfg.FromAddress,
+		"fromName": cfg.FromName, "timeoutSeconds": cfg.TimeoutSeconds, "allowPrivateNetwork": cfg.AllowPrivateNetwork,
+		"notify": cfg.Notify, "passwordConfigured": cfg.Password != "",
 	}
 }
 
@@ -183,12 +254,19 @@ func (s *Server) adminTestSMTP(w http.ResponseWriter, r *http.Request) {
 		To: recipient, Subject: general.ServiceName + " SMTP 연결 테스트",
 		Body: "SMTP 메일 설정이 정상적으로 연결되었습니다.\n\n이 메일은 관리자 연결 테스트에서 발송되었습니다.",
 	}
-	if err := deliverSMTP(r.Context(), cfg, message); err != nil {
+	// The test button is the one send that happens on a request, so the
+	// administrator sees the relay's answer right away. It is still recorded
+	// like every other message.
+	delivery := mailDelivery{ID: secure.NewID("mail"), Event: mailEventTest, UserID: getPrincipal(r).User.ID, ActorID: getPrincipal(r).User.ID, Recipient: recipient, Subject: message.Subject}
+	s.recordMailAttempt(r.Context(), delivery)
+	err = deliverSMTP(r.Context(), cfg, message)
+	s.completeMailAttempt(r.Context(), delivery, err)
+	if err != nil {
 		writeError(w, http.StatusBadGateway, "smtp_test_failed", "SMTP 테스트 메일을 보낼 수 없습니다: "+err.Error())
 		return
 	}
 	s.audit(r, "smtp.config.test", "setting", settingSMTP, true, map[string]any{"recipient": recipient})
-	writeData(w, http.StatusOK, map[string]any{"ok": true, "recipient": recipient})
+	writeData(w, http.StatusOK, map[string]any{"ok": true, "recipient": recipient, "deliveryId": delivery.ID})
 }
 
 func (s *Server) notificationEmailStatus(w http.ResponseWriter, r *http.Request) {
@@ -239,8 +317,17 @@ func deliverSMTPWithDial(ctx context.Context, cfg smtpConfig, message smtpMessag
 	}
 	defer connection.Close()
 	_ = connection.SetDeadline(time.Now().Add(timeout))
-	tlsConfig := &tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12}
-	if cfg.Security == "tls" {
+	// skipTlsVerify exists for relays with a private CA certificate. It keeps
+	// the encryption and drops only the chain check, never the TLS itself.
+	tlsConfig := &tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: cfg.SkipTLSVerify}
+	// auto follows the server: implicit TLS on the SMTPS port, STARTTLS when the
+	// relay advertises it, plain otherwise — which is what a company relay on
+	// port 25 usually is.
+	security := cfg.Security
+	if security == "auto" && cfg.Port == 465 {
+		security = "tls"
+	}
+	if security == "tls" {
 		secureConnection := tls.Client(connection, tlsConfig)
 		if err := secureConnection.HandshakeContext(requestContext); err != nil {
 			return fmt.Errorf("SMTP TLS 연결 실패: %w", err)
@@ -252,15 +339,24 @@ func deliverSMTPWithDial(ctx context.Context, cfg smtpConfig, message smtpMessag
 		return fmt.Errorf("SMTP 응답 확인 실패: %w", err)
 	}
 	defer client.Close()
-	if cfg.Security == "starttls" {
-		if ok, _ := client.Extension("STARTTLS"); !ok {
+	encrypted := security == "tls"
+	if security == "starttls" || security == "auto" {
+		ok, _ := client.Extension("STARTTLS")
+		if !ok && security == "starttls" {
 			return errors.New("SMTP 서버가 STARTTLS를 지원하지 않습니다")
 		}
-		if err := client.StartTLS(tlsConfig); err != nil {
-			return fmt.Errorf("SMTP STARTTLS 실패: %w", err)
+		if ok {
+			if err := client.StartTLS(tlsConfig); err != nil {
+				return fmt.Errorf("SMTP STARTTLS 실패: %w", err)
+			}
+			encrypted = true
 		}
 	}
 	if cfg.Username != "" {
+		// Credentials never cross the wire in the clear, whatever the mode.
+		if !encrypted {
+			return errors.New("SMTP 서버가 STARTTLS를 알리지 않아 인증 정보를 보내지 않았습니다")
+		}
 		if ok, _ := client.Extension("AUTH"); !ok {
 			return errors.New("SMTP 서버가 인증을 지원하지 않습니다")
 		}

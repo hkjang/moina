@@ -119,15 +119,17 @@ AI URL은 기본적으로 HTTPS만 허용됩니다. 폐쇄망에서 HTTP가 꼭 
 
 ### SMTP 메일과 알림
 
-- 활성화 여부, SMTP DNS 이름과 port
-- STARTTLS, implicit TLS(SMTPS) 또는 폐쇄망 무인증 연결
-- 사용자 이름과 암호화해 저장하는 password
-- 보내는 이메일·이름과 3~60초 연결 제한 시간
+- 활성화 여부(기본 꺼짐), SMTP DNS 이름과 port(기본 25)
+- 연결 보안 `auto`(기본, 서버가 알리는 대로) · STARTTLS · implicit TLS(SMTPS) · 폐쇄망 무인증 연결, 사설 CA용 인증서 검증 건너뛰기
+- 선택 사항인 사용자 이름과 암호화해 저장하는 password
+- 보내는 이메일·이름과 3~60초 연결 제한 시간(기본 10초)
 - 설정한 정확한 SMTP DNS 이름에 대한 사설망 연결 허용 여부
+- 메일로 보내는 이벤트 종류별 스위치(승인 요청·승인 결과·멘션·내 Moin의 Echo·요약·계정 보안)
+- 시도마다 남는 발송 기록(성공·실패, 본문 없음) — 관리 화면과 `GET /api/v1/admin/smtp/deliveries`
 
-SMTP password는 OIDC·AI secret과 같은 `MOINA_ENCRYPTION_KEY`로 암호화하며 조회 API는 `passwordConfigured`만 반환합니다. **저장 후 테스트 메일**은 현재 관리자의 프로필 이메일로 실제 SMTP 전송을 확인합니다. SMTP host에는 port를 섞지 않고 정확한 DNS 이름을 입력합니다. 사설망 허용은 입력한 `host:port` 하나에만 적용하며 DNS 이름이 RFC1918/ULA로 해석되는 경우만 엽니다. IP literal 사설 예외, loopback, link-local, metadata와 CGNAT은 허용하지 않습니다. `none` 연결은 폐쇄망의 무인증 relay에만 사용할 수 있고 인증 정보는 보낼 수 없습니다.
+SMTP password는 OIDC·AI secret과 같은 `MOINA_ENCRYPTION_KEY`로 암호화하며 조회 API는 `passwordConfigured`만 반환합니다. **저장 후 테스트 메일**은 현재 관리자의 프로필 이메일로 실제 SMTP 전송을 확인합니다. SMTP host에는 port를 섞지 않고 정확한 DNS 이름을 입력합니다. 사설망 허용은 입력한 `host:port` 하나에만 적용하며 DNS 이름이 RFC1918/ULA로 해석되는 경우만 엽니다. IP literal 사설 예외, loopback, link-local, metadata와 CGNAT은 허용하지 않습니다. `none` 연결은 폐쇄망의 무인증 relay에만 사용할 수 있고 인증 정보는 보낼 수 없으며, `auto`에서도 relay가 STARTTLS를 알리지 않으면 인증 정보를 평문으로 보내지 않습니다. 표준 설정 이름 `mail.enabled`, `mail.smtp_host`, `mail.smtp_port`, `mail.security`, `mail.skip_tls_verify`, `mail.username`, `mail.password`, `mail.from_address`, `mail.from_name`, `mail.timeout_seconds`, `mail.notify_<이벤트>`가 관리 화면 항목에 하나씩 대응하고, `mail.base_url`은 일반 설정의 사이트 기본 주소를 씁니다(관리자 가이드 3.6절 표).
 
-사용자는 프로필에 올바른 수신 주소를 저장한 뒤 **알림 개인화 → 이메일 알림**에서 수신을 명시적으로 켭니다. 선택한 멘션·Signal·Link·Echo 유형이 이메일에도 공통 적용됩니다. Digest가 켜져 있으면 일반 활동은 시간별·일별 요약으로 묶고 멘션·승인·보안은 즉시 전달합니다. 메일 전송은 게시 transaction과 분리된 `notification.email` Outbox 이벤트이므로 SMTP 장애가 Moin 작성을 실패시키지 않으며, 재시도 한도를 넘은 이벤트는 관리자 실패 이벤트 복구 화면에 남습니다. 이메일을 제거한 계정의 이벤트는 재시도하지 않습니다.
+사용자는 프로필에 올바른 수신 주소를 저장한 뒤 **알림 개인화 → 이메일 알림**에서 수신을 명시적으로 켭니다. 선택한 멘션·Signal·Link·Echo 유형이 이메일에도 공통 적용되지만, 개별 메일이 되는 것은 사람이 실제로 기다리는 승인 요청·승인 결과·멘션·내 Moin의 Echo·요약·계정 보안뿐이고 Signal·Link·Quote·Remoin은 알림 센터와 요약에만 남습니다. Digest가 켜져 있으면 일반 활동은 시간별·일별 요약으로 묶고 멘션·승인·보안은 즉시 전달합니다. 자기가 한 일은 자기에게 보내지 않고, 내 Moin의 Echo에서 나온 멘션은 Echo 메일 한 통으로 묶습니다. 메일 전송은 게시 transaction과 분리된 `notification.email` Outbox 이벤트이므로 SMTP 장애가 Moin 작성을 실패시키지 않으며, 재시도 한도를 넘은 이벤트는 관리자 실패 이벤트 복구 화면에 남습니다. 이메일을 제거한 계정의 이벤트는 재시도하지 않습니다.
 
 ### 승인, 역할과 moderation
 
