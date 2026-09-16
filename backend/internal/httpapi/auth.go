@@ -325,6 +325,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	_ = s.repo.DeleteUserSessions(r.Context(), p.User.ID)
 	clearAuthCookies(w, r)
 	s.audit(r, "profile.password.update", "user", p.User.ID, true, nil)
+	s.notifySecurity(r, p.User.ID, securityEventPasswordChanged, securityNoticeBody(r, "비밀번호를 변경해 모든 로그인 세션을 종료했습니다."))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -381,6 +382,7 @@ func (s *Server) createMyKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "key.create", "api_key", key.ID, true, map[string]any{"permissions": permissions})
+	s.notifySecurity(r, p.User.ID, securityEventAPIKeyCreated, securityNoticeBody(r, "새 API·MCP 키 '"+key.Name+"'을(를) 만들었습니다."))
 	writeData(w, http.StatusCreated, keySecretView(key, token))
 }
 
@@ -427,6 +429,7 @@ func (s *Server) rotateMyKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "key.rotate", "api_key", key.ID, true, map[string]int{"version": key.Version})
+	s.notifySecurity(r, p.User.ID, securityEventAPIKeyRotated, securityNoticeBody(r, "API·MCP 키 '"+key.Name+"'을(를) 회전해 이전 토큰을 폐기했습니다."))
 	writeData(w, http.StatusOK, keySecretView(key, token))
 }
 

@@ -1,4 +1,4 @@
-import { AtSign, Bell, Heart, MessageCircle, UserPlus } from 'lucide-react';
+import { AtSign, Bell, Heart, MessageCircle, ShieldAlert, UserPlus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { apiRequest, readableError } from '../api/client';
 import { useToast } from '../components/ToastProvider';
@@ -8,7 +8,9 @@ import type { CursorPage, NotificationItem } from '../types';
 import { formatDate, formatRelativeTime } from '../utils/format';
 import { useState } from 'react';
 
-const iconFor = (type: string) => type === 'follow' ? UserPlus : type === 'signal' ? Heart : type === 'echo' ? MessageCircle : type === 'mention' ? AtSign : Bell;
+// 'security' is the account-security notice (password change, new API key); its
+// shield must stand out from activity so a notice the owner did not cause is read.
+const iconFor = (type: string) => type === 'follow' ? UserPlus : type === 'signal' ? Heart : type === 'echo' ? MessageCircle : type === 'mention' ? AtSign : type === 'security' ? ShieldAlert : Bell;
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState('all');

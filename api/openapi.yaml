@@ -1348,7 +1348,7 @@ components:
         id: {type: string}
         userId: {type: string}
         actorId: {type: string}
-        type: {type: string, examples: [follow, signal, echo, mention, approval_requested, digest]}
+        type: {type: string, examples: [follow, signal, echo, mention, approval_requested, digest, security], description: security는 비밀번호 변경·재설정과 API·MCP 키 생성·회전을 계정 소유자에게 알리는 필수 알림으로, payload.event(password_changed·password_reset·api_key_created·api_key_rotated)와 body를 담습니다.}
         targetId: {type: string}
         payload: {type: object, additionalProperties: true}
         title: {type: string}

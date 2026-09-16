@@ -223,6 +223,8 @@ func (s *Server) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.repo.DeleteUserSessions(r.Context(), id)
 	s.audit(r, "admin.user.password.reset", "user", id, true, nil)
+	// The administrator's address is theirs, not the owner's, so no request IP.
+	s.notifySecurity(r, id, securityEventPasswordReset, "관리자가 비밀번호를 재설정해 모든 로그인 세션을 종료했습니다.")
 	w.WriteHeader(http.StatusNoContent)
 }
 
