@@ -413,7 +413,7 @@ func (s *Server) decorateNotification(ctx context.Context, item *model.Notificat
 		"follow": "새로운 Link", "reaction": "새로운 Signal", "reply": "새로운 Echo", "mention": "새로운 멘션",
 		"quote": "새로운 Quote Moin", "remoin": "새로운 Remoin",
 		"approval_requested": "검토 요청", "approval_approved": "게시 승인", "approval_rejected": "게시 반려",
-		"digest": "알림 브리핑",
+		"digest": "알림 브리핑", "security": "계정 보안",
 	}
 	item.Title = labels[storedType]
 	if item.Title == "" {
@@ -446,6 +446,9 @@ func (s *Server) decorateNotification(ctx context.Context, item *model.Notificat
 		item.TargetPath = "/admin/approvals"
 	case "digest":
 		item.TargetPath = "/notifications"
+	case "security":
+		event, _ := payload["event"].(string)
+		item.TargetPath = securityNoticeTargetPath(event)
 	}
 	if storedType == "reaction" {
 		item.Type = "signal"
