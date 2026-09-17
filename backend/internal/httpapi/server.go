@@ -61,7 +61,11 @@ type principal struct {
 	Permissions []string
 	APIKey      bool
 	APIKeyID    string
-	CSRFHash    string
+	// OAuth marks a subject authenticated by a Keycloak access token on an
+	// MCP path. APIKey is set alongside it: such a subject passes exactly the
+	// checks a key does (no browser-only routes, no CSRF, API access on).
+	OAuth    bool
+	CSRFHash string
 }
 
 type principalKey struct{}
@@ -97,6 +101,8 @@ type Server struct {
 	momentoMu          sync.Mutex
 	momentoProxyClient *http.Client
 	momentoProxyKey    string
+	// mcpOAuth caches Keycloak discovery for MCP SSO tokens.
+	mcpOAuth mcpOAuthProviders
 }
 
 func New(repo *store.Store, secrets *secure.Manager, version string) *Server {
@@ -138,6 +144,11 @@ func (s *Server) Handler() http.Handler {
 	})
 	router.Get("/readyz", s.ready)
 	router.Get("/metrics", s.metricsEndpoint)
+	// RFC 9728: where an MCP client refused with 401 learns which authorization
+	// server to sign in with. Unauthenticated and 404 until an administrator
+	// turns MCP SSO on, so a fresh installation exposes nothing new here.
+	router.Get("/.well-known/oauth-protected-resource", s.protectedResourceMetadata)
+	router.Get("/.well-known/oauth-protected-resource/mcp", s.protectedResourceMetadata)
 	router.Route("/api/v1", func(api chi.Router) {
 		api.Get("/version", s.versionInfo)
 		api.Post("/auth/login", s.login)
@@ -470,9 +481,21 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var p principal
 		var err error
+		// One Authorization: Bearer header, two kinds of credential. A value
+		// with the key prefix is a key, exactly as before. On the MCP paths a
+		// value shaped like a JWT is a Keycloak access token while MCP SSO is
+		// in force; anywhere else, or with the feature off, it falls through
+		// to the session branch and is refused as it always was.
+		var oauth mcpOAuthState
+		if isMCPPath(r.URL.Path) {
+			oauth = s.mcpOAuthState(r)
+		}
+		var refusal *mcpOAuthRefusal
 		authorization := r.Header.Get("Authorization")
-		if strings.HasPrefix(authorization, "Bearer mk_") {
-			token := strings.TrimPrefix(authorization, "Bearer ")
+		bearer, hasBearer := strings.CutPrefix(authorization, "Bearer ")
+		switch {
+		case hasBearer && strings.HasPrefix(bearer, "mk_"):
+			token := bearer
 			var key model.APIKey
 			p.User, key, err = s.repo.APIKeyUser(r.Context(), s.secrets.HashToken(token))
 			p.APIKey = true
@@ -486,7 +509,13 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 					p.Permissions = intersectPermissions(permissions, key.Permissions)
 				}
 			}
-		} else {
+		case hasBearer && oauth.active && looksLikeJWT(bearer):
+			p, refusal = s.mcpOAuthPrincipal(r, oauth, bearer)
+			if refusal != nil {
+				logMCPOAuthRefusal(r, refusal)
+				err = refusal.err
+			}
+		default:
 			cookie, cookieErr := r.Cookie(SessionCookie)
 			if cookieErr != nil {
 				err = cookieErr
@@ -498,6 +527,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			}
 		}
 		if err != nil || !p.User.Active {
+			mcpOAuthChallenge(w, oauth, refusal != nil)
+			if refusal != nil {
+				writeError(w, http.StatusUnauthorized, "invalid_token", refusal.message)
+				return
+			}
 			writeError(w, http.StatusUnauthorized, "unauthorized", "인증이 필요합니다")
 			return
 		}
@@ -507,7 +541,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 				writeError(w, http.StatusServiceUnavailable, "api_disabled", "관리자가 API 키 접근을 비활성화했습니다")
 				return
 			}
-			allowed, rateErr := s.allow(r.Context(), "api-key|"+p.APIKeyID, cfg.RateLimitPerMinute, time.Minute)
+			rateKey := "api-key|" + p.APIKeyID
+			if p.OAuth {
+				rateKey = "oauth|" + p.User.ID
+			}
+			allowed, rateErr := s.allow(r.Context(), rateKey, cfg.RateLimitPerMinute, time.Minute)
 			if rateErr != nil {
 				writeError(w, http.StatusServiceUnavailable, "rate_limit_unavailable", "요청 한도 정책을 확인할 수 없습니다")
 				return

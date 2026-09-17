@@ -58,6 +58,6 @@
 | PUT | `/admin/settings/{key}` |
 | PUT | `/admin/roles` |
 
-일반 설정 key는 `service.general`, `api.access`, `media.config`입니다. OIDC, AI와 SMTP 비밀 값은 조회하지 않고 GET 응답의 `clientSecretConfigured`, `apiKeyConfigured`, `passwordConfigured`로 설정 여부만 확인합니다. 이 필드는 조회 전용이므로 PUT 입력에 포함하지 않습니다. SMTP는 전용 저장·테스트 API를 사용하고 사용자 `notifications.email.enabled`가 켜진 알림을 독립 Outbox로 전달합니다. OIDC는 `redirectUrl`, `roleClaim`, `roleMappings`, `allowInsecureHttp`, `autoLogin`, AI는 `allowInsecureHttp`, 미디어는 `maxUploadBytes`, `maxPerPost`를 관리 화면에서 편집합니다.
+일반 설정 key는 `service.general`, `api.access`, `media.config`입니다. OIDC, AI와 SMTP 비밀 값은 조회하지 않고 GET 응답의 `clientSecretConfigured`, `apiKeyConfigured`, `passwordConfigured`로 설정 여부만 확인합니다. 이 필드는 조회 전용이므로 PUT 입력에 포함하지 않습니다. SMTP는 전용 저장·테스트 API를 사용하고 사용자 `notifications.email.enabled`가 켜진 알림을 독립 Outbox로 전달합니다. OIDC는 `redirectUrl`, `roleClaim`, `roleMappings`, `allowInsecureHttp`, `autoLogin`, `mcpOauth`(MCP SSO — `enabled`·`resource`·`audience`·`scopes`; GET 응답의 `mcpOauthStatus`는 조회 전용), AI는 `allowInsecureHttp`, 미디어는 `maxUploadBytes`, `maxPerPost`를 관리 화면에서 편집합니다.
 
 Streamable HTTP MCP의 서비스 endpoint는 `/mcp`이며 개인 키의 `mcp:use` 권한을 사용합니다.

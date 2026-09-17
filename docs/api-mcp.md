@@ -23,6 +23,10 @@ Authorization: Bearer mk_...
 
 키는 사용자별로 만들고 필요한 permission과 만료일만 부여합니다. 원문은 한 번만 표시됩니다. URL, query, log와 source code에 넣지 않습니다.
 
+### Keycloak 액세스 토큰 (MCP 전용)
+
+관리자가 **MCP SSO(OAuth)**를 켠 곳에서는 같은 `Authorization: Bearer` 헤더에 Keycloak 액세스 토큰(JWT)을 실어 `/mcp`·`/api/v1/mcp`에 들어올 수 있습니다. `mk_` 접두사면 키, JWT 모양이면 토큰으로 가리며, 토큰은 MCP 경로에서만 받습니다 — REST·WebSocket·관리 API는 키와 세션만 받습니다. 자세한 흐름은 아래 [키 없이 SSO로 연결하기](#키-없이-sso로-연결하기)를 보세요.
+
 ## 주요 REST resource
 
 | 영역 | 대표 endpoint |
@@ -218,6 +222,25 @@ curl --fail --silent http://127.0.0.1:8080/mcp \
 `tools/call`의 `arguments`는 `tools/list`가 공표한 `inputSchema`대로 검증합니다. 선언에 없는 이름, 타입이 다른 값, `minimum`·`maximum` 범위를 벗어난 정수, `enum` 밖 문자열, 빠뜨린 필수 인자는 기본값으로 대체하지 않고 JSON-RPC 오류 `-32602`를 반환합니다. 예를 들어 `limit`을 101로 보내면 조용히 30개를 돌려주지 않고 오류로 알려 주므로, client는 자기 요청이 그대로 실행됐는지 알 수 있습니다.
 
 MCP가 호출하는 동작도 REST와 같은 service method, permission, 승인 정책, rate limit과 audit를 사용합니다. 승인 정책의 대상인 Moin 작성은 즉시 공개하지 않고 `pending_approval` 상태의 Moin 정보를 반환합니다.
+
+### 키 없이 SSO로 연결하기
+
+관리자가 **Keycloak OIDC → MCP SSO(OAuth)**를 켜 두었다면 개인 키를 만들 필요가 없습니다. MCP 클라이언트(Claude, Cursor 등)에 **MCP 주소 하나**(`https://<공개 주소>/mcp`)만 넣으면 됩니다. 클라이언트는 `/mcp`의 401에 붙은 `WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"`를 따라 메타데이터를 읽고, 거기 적힌 Keycloak으로 로그인 화면(PKCE)을 띄운 뒤 받은 액세스 토큰을 같은 `Authorization: Bearer` 헤더에 실어 다시 붙습니다. 이미 Keycloak에 로그인한 사람은 화면을 거의 보지 않습니다.
+
+- 먼저 **웹에서 SSO로 한 번 로그인**해 두어야 합니다. 토큰으로는 계정을 만들지 않으며, 연결된 활성 계정이 없으면 "먼저 웹으로 한 번 로그인하세요"로 거부됩니다.
+- 권한은 관리자가 정한 범위(기본 `posts:read mcp:use`)와 내 역할 권한의 교집합입니다. 키처럼 `tools/list`가 그 범위 안의 tool만 보여 줍니다.
+- Keycloak에서 로그아웃해도 이미 받은 토큰은 만료(보통 몇 분)까지 유효합니다. 클라이언트가 만료된 토큰으로 401을 받으면 스스로 갱신하거나 다시 로그인합니다.
+- 거부되면 401 본문의 `message`가 이유를 말합니다(예: 어떤 `aud`/`azp`를 봤고 관리자가 무엇을 적어야 하는지). 그 메시지를 관리자에게 전하면 됩니다.
+
+```bash
+# 메타데이터(인증 없음) — 꺼져 있으면 404
+curl --silent https://moina.example/.well-known/oauth-protected-resource/mcp
+# 받은 액세스 토큰으로 tools/list
+curl --silent -X POST https://moina.example/mcp -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+폐쇄망 자동화나 사람이 없는 스크립트처럼 로그인 화면을 띄울 수 없는 곳은 지금처럼 개인 키를 씁니다.
 
 ## Rotation 예시
 

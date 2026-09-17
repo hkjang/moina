@@ -27,6 +27,14 @@ const mocks = vi.hoisted(() => ({
     defaultRedirectUrl: "https://moina.example/api/v1/auth/oidc/callback",
     redirectUrlSource: "publicBaseUrl" as const,
     defaultRedirectUrlSource: "publicBaseUrl" as const,
+    mcpOauth: { enabled: false, resource: "", audience: [] as string[], scopes: ["posts:read", "mcp:use"] },
+    mcpOauthStatus: {
+      active: false,
+      resource: "https://moina.example/mcp",
+      resourceSource: "publicBaseUrl" as const,
+      metadataUrl: "https://moina.example/.well-known/oauth-protected-resource/mcp",
+      scopes: ["posts:read", "mcp:use"],
+    },
   },
   ai: {
     enabled: false,
@@ -128,6 +136,31 @@ describe("관리자 공급자 설정 저장 계약", () => {
     fireEvent.click(await screen.findByRole("switch", { name: /^SSO 자동 로그인/ }));
     fireEvent.click(screen.getByRole("button", { name: "OIDC 설정 저장" }));
     await waitFor(() => expect(updateBody("/admin/oidc")).toMatchObject({ autoLogin: true }));
+  });
+
+  it("MCP SSO(OAuth)는 기본 꺼짐이고 스위치·허용 대상·범위를 표준 필드로 보낸다", async () => {
+    renderPage(<AdminOIDCPage />);
+    await screen.findByDisplayValue("https://keycloak.internal/realms/moina");
+    expect(screen.getByText("https://moina.example/mcp")).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/moina\.example\/\.well-known\/oauth-protected-resource\/mcp/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "MCP SSO 설정 저장" }));
+    await waitFor(() =>
+      expect(updateBody("/admin/oidc")).toMatchObject({
+        mcpOauth: { enabled: false, resource: "", audience: [], scopes: ["posts:read", "mcp:use"] },
+      }),
+    );
+    expect(updateBody("/admin/oidc")).not.toHaveProperty("mcpOauthStatus");
+    mocks.apiRequest.mockClear();
+
+    fireEvent.click(await screen.findByRole("switch", { name: /^Keycloak 토큰으로 MCP 연결/ }));
+    fireEvent.change(screen.getByPlaceholderText("claude-mcp cursor-mcp"), { target: { value: " claude-mcp  cursor-mcp " } });
+    fireEvent.change(screen.getByPlaceholderText("posts:read mcp:use"), { target: { value: "mcp:use" } });
+    fireEvent.click(screen.getByRole("button", { name: "OIDC 설정 저장" }));
+    await waitFor(() =>
+      expect(updateBody("/admin/oidc")).toMatchObject({
+        mcpOauth: { enabled: true, resource: "", audience: ["claude-mcp", "cursor-mcp"], scopes: ["mcp:use"] },
+      }),
+    );
   });
 
   it("OIDC Secret 삭제 의도를 명시적으로 보낸다", async () => {

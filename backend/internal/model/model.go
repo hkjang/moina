@@ -85,6 +85,29 @@ type OIDCConfig struct {
 	AllowedHosts        []string            `json:"allowedHosts,omitempty"`
 	PrivateAllowedHosts []string            `json:"privateAllowedHosts,omitempty"`
 	AllowInsecureHTTP   bool                `json:"allowInsecureHttp,omitempty"`
+	// MCPOAuth lets Keycloak access tokens open /mcp next to personal keys. It
+	// lives inside the OIDC document because it reuses the issuer and client
+	// above and is edited on the same administrator card; the standard names
+	// (mcp.oauth.enabled, mcp.oauth.resource, mcp.oauth.audience,
+	// mcp.oauth.scopes) map onto these fields one to one.
+	MCPOAuth MCPOAuthConfig `json:"mcpOauth"`
+}
+
+// MCPOAuthConfig is the resource-server half of the MCP authorization
+// specification: nothing here issues a token, it only says which tokens this
+// deployment accepts for its MCP endpoint. Off by default.
+type MCPOAuthConfig struct {
+	Enabled bool `json:"enabled"`
+	// Resource is the RFC 8707 identifier this server claims. Empty derives
+	// it from the site's public base URL (or, last, the request) plus /mcp.
+	Resource string `json:"resource,omitempty"`
+	// Audience lists accepted aud or azp values beyond the resource itself —
+	// usually the Keycloak client id of the MCP client, which a real Keycloak
+	// puts in azp while aud stays ["account"].
+	Audience []string `json:"audience,omitempty"`
+	// Scopes are the permissions an SSO subject receives, intersected with the
+	// account's role permissions exactly as a key's scopes are.
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 type AIConfig struct {
