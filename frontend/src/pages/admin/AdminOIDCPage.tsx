@@ -1,4 +1,4 @@
-import { Copy, LockKeyhole, RotateCcw } from "lucide-react";
+import { Copy, LockKeyhole, Plug, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ApiError, apiRequest, readableError } from "../../api/client";
 import { useToast } from "../../components/ToastProvider";
@@ -37,10 +37,31 @@ interface OIDCUpdateSettings {
   allowInsecureHttp?: boolean;
   allowedHosts?: string[];
   privateAllowedHosts?: string[];
+  mcpOauth?: MCPOAuthSettings;
+}
+
+// MCP SSO(OAuth): the resource-server switch that lets a Keycloak access
+// token open /mcp next to personal keys. Field names follow the standard
+// (mcp.oauth.enabled / resource / audience / scopes).
+interface MCPOAuthSettings {
+  enabled?: boolean;
+  resource?: string;
+  audience?: string[];
+  scopes?: string[];
+}
+
+interface MCPOAuthStatus {
+  active?: boolean;
+  resource?: string;
+  resourceSource?: "explicit" | "publicBaseUrl" | "request";
+  metadataUrl?: string;
+  scopes?: string[];
+  reason?: string;
 }
 
 interface OIDCSettingsView extends OIDCUpdateSettings {
   clientSecretConfigured?: boolean;
+  mcpOauthStatus?: MCPOAuthStatus;
   effectiveRedirectUrl?: string;
   defaultRedirectUrl?: string;
   redirectUrlSource?: "explicit" | "publicBaseUrl" | "request";
@@ -95,6 +116,9 @@ export function AdminOIDCPage() {
     OIDCSettingsView["defaultRedirectUrlSource"]
   >("request");
   const [connectionDiagnostic, setConnectionDiagnostic] = useState<OIDCConnectionDiagnostic | null>(null);
+  const [mcpOauthStatus, setMcpOauthStatus] = useState<MCPOAuthStatus>({});
+  const [mcpAudienceText, setMcpAudienceText] = useState("");
+  const [mcpScopesText, setMcpScopesText] = useState("posts:read mcp:use");
   const [working, setWorking] = useState<"save" | "test" | null>(null);
   const roles = roleRows(rolesQuery.data);
   const issuerAuthority = endpointAuthority(form.issuerUrl);
@@ -125,9 +149,13 @@ export function AdminOIDCPage() {
         defaultRedirectUrl: defaultRedirect = "",
         redirectUrlSource: _redirectSource,
         defaultRedirectUrlSource: defaultSource = "request",
+        mcpOauthStatus: mcpStatus = {},
         ...editable
       } = query.data;
       setClientSecretConfigured(configured);
+      setMcpOauthStatus(mcpStatus);
+      setMcpAudienceText((query.data.mcpOauth?.audience || []).join(" "));
+      setMcpScopesText((query.data.mcpOauth?.scopes || ["posts:read", "mcp:use"]).join(" "));
       setEffectiveRedirectUrl(effectiveRedirect);
       setDefaultRedirectUrl(defaultRedirect || effectiveRedirect);
       setDefaultRedirectUrlSource(defaultSource);
@@ -198,6 +226,12 @@ export function AdminOIDCPage() {
           allowInsecureHttp: form.allowInsecureHttp,
           allowedHosts: hostResult.hosts,
           privateAllowedHosts: parseAllowedHosts(privateHostsText),
+          mcpOauth: {
+            enabled: form.mcpOauth?.enabled === true,
+            resource: form.mcpOauth?.resource?.trim() || "",
+            audience: mcpAudienceText.split(/\s+/).filter(Boolean),
+            scopes: mcpScopesText.split(/\s+/).filter(Boolean),
+          },
         },
       });
       if (test) await apiRequest("/admin/oidc/test", { method: "POST" });
@@ -532,6 +566,110 @@ export function AdminOIDCPage() {
               }
             >
               {working === "save" ? "저장 중…" : "OIDC 설정 저장"}
+            </Button>
+          </div>
+        </Card>
+      )}
+      {!query.loading && !rolesQuery.loading && !query.error && !rolesQuery.error && (
+        <Card>
+          <SectionHeader
+            title="MCP SSO(OAuth)"
+            description="개인 키 없이 Keycloak 액세스 토큰으로 /mcp에 연결합니다. 클라이언트에 MCP 주소 하나만 주면 스스로 로그인해 토큰을 받아 옵니다. 계정은 만들지 않으며 웹으로 한 번 로그인한 활성 사용자만 통과합니다."
+            action={
+              <SwitchField
+                label="Keycloak 토큰으로 MCP 연결"
+                description="위 Issuer URL과 Client ID를 재사용합니다. 웹 로그인 스위치와 별개입니다."
+                checked={form.mcpOauth?.enabled === true}
+                onChange={(enabled) =>
+                  setForm({ ...form, mcpOauth: { ...form.mcpOauth, enabled } })
+                }
+              />
+            }
+          />
+          <div className="form-grid">
+            <Field
+              label="리소스 식별자"
+              help="토큰의 aud가 가리켜야 하는 공개 MCP 주소입니다. 비우면 사이트 기본 주소 + /mcp를 씁니다."
+            >
+              <input
+                type="url"
+                value={form.mcpOauth?.resource || ""}
+                onChange={(event) =>
+                  setForm({ ...form, mcpOauth: { ...form.mcpOauth, resource: event.target.value } })
+                }
+                placeholder={mcpOauthStatus.resource || `${window.location.origin}/mcp`}
+              />
+            </Field>
+            <Field
+              label="허용 대상(aud/azp)"
+              help="MCP 클라이언트의 Keycloak Client ID를 공백으로 구분해 적습니다. Audience 매퍼 없이 통과시키는 호환 경로입니다."
+            >
+              <input
+                value={mcpAudienceText}
+                onChange={(event) => setMcpAudienceText(event.target.value)}
+                placeholder="claude-mcp cursor-mcp"
+              />
+            </Field>
+            <Field
+              label="SSO 주체 권한 범위"
+              help="토큰으로 들어온 사용자에게 주는 권한 상한입니다. 역할 권한과 교집합만 적용되며 mcp:use가 없으면 MCP를 열 수 없습니다."
+            >
+              <input
+                value={mcpScopesText}
+                onChange={(event) => setMcpScopesText(event.target.value)}
+                placeholder="posts:read mcp:use"
+              />
+            </Field>
+          </div>
+          {form.mcpOauth?.enabled && mcpOauthStatus.reason && (
+            <div className="redirect-warning" role="status">
+              지금은 동작하지 않습니다: {mcpOauthStatus.reason}
+            </div>
+          )}
+          <div className="callback-box">
+            <Plug />
+            <span>
+              <strong>클라이언트에 줄 MCP 주소</strong>
+              <code>{mcpOauthStatus.resource || `${window.location.origin}/mcp`}</code>
+              <small>
+                메타데이터 주소: {mcpOauthStatus.metadataUrl || `${window.location.origin}/.well-known/oauth-protected-resource/mcp`}
+                {mcpOauthStatus.active ? " · 지금 켜져 있습니다." : " · 저장 후 켜지면 이 주소가 열립니다."}
+              </small>
+            </span>
+            <div className="callback-actions">
+              <Button
+                size="small"
+                onClick={() => {
+                  const value = mcpOauthStatus.resource || `${window.location.origin}/mcp`;
+                  if (!navigator.clipboard?.writeText) {
+                    notify("MCP 주소를 복사하지 못했습니다.", "error");
+                    return;
+                  }
+                  void navigator.clipboard
+                    .writeText(value)
+                    .then(() => notify("MCP 주소를 복사했습니다.", "success"))
+                    .catch(() => notify("MCP 주소를 복사하지 못했습니다.", "error"));
+                }}
+              >
+                <Copy /> MCP 주소 복사
+              </Button>
+            </div>
+          </div>
+          <p className="callback-guide">
+            Keycloak에는 MCP 클라이언트용 <strong>Public client</strong>를 따로 만들고(Standard flow, PKCE S256)
+            Valid redirect URIs에 그 클라이언트의 콜백만 정확히 등록합니다. 거부되면 401 본문이 본 aud/azp와
+            고칠 값을 알려 줍니다.
+          </p>
+          <div className="form-actions">
+            <Button
+              variant="primary"
+              onClick={() => void save(false)}
+              disabled={
+                Boolean(working) ||
+                (form.mcpOauth?.enabled === true && (!form.issuerUrl || !form.clientId))
+              }
+            >
+              {working === "save" ? "저장 중…" : "MCP SSO 설정 저장"}
             </Button>
           </div>
         </Card>

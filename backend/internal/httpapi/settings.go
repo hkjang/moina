@@ -336,11 +336,11 @@ func (s *Server) adminGetOIDC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource, _ := s.oidcRedirectDetails(r, cfg)
-	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource))
+	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource, s.mcpOAuthStatusView(r, cfg)))
 }
 
-func oidcView(cfg model.OIDCConfig, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource string) map[string]any {
-	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "effectiveRedirectUrl": effectiveRedirect, "defaultRedirectUrl": defaultRedirect, "redirectUrlSource": redirectSource, "defaultRedirectUrlSource": defaultRedirectSource, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "autoLogin": cfg.AutoLogin, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != ""}
+func oidcView(cfg model.OIDCConfig, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource string, mcpOAuthStatus map[string]any) map[string]any {
+	return map[string]any{"enabled": cfg.Enabled, "issuerUrl": cfg.IssuerURL, "clientId": cfg.ClientID, "redirectUrl": cfg.RedirectURL, "effectiveRedirectUrl": effectiveRedirect, "defaultRedirectUrl": defaultRedirect, "redirectUrlSource": redirectSource, "defaultRedirectUrlSource": defaultRedirectSource, "scopes": cfg.Scopes, "autoProvision": cfg.AutoProvision, "autoLogin": cfg.AutoLogin, "defaultRoles": cfg.DefaultRoles, "roleClaim": cfg.RoleClaim, "roleMappings": cfg.RoleMappings, "allowedHosts": cfg.AllowedHosts, "privateAllowedHosts": cfg.PrivateAllowedHosts, "allowInsecureHttp": cfg.AllowInsecureHTTP, "clientSecretConfigured": cfg.ClientSecret != "", "mcpOauth": cfg.MCPOAuth, "mcpOauthStatus": mcpOAuthStatus}
 }
 
 func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
@@ -377,9 +377,9 @@ func (s *Server) adminPutOIDC(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "storage_error", "OIDC 설정을 저장할 수 없습니다")
 		return
 	}
-	s.audit(r, "oidc.config.update", "setting", settingOIDC, true, map[string]any{"issuerUrl": cfg.IssuerURL, "enabled": cfg.Enabled, "autoLogin": cfg.AutoLogin})
+	s.audit(r, "oidc.config.update", "setting", settingOIDC, true, map[string]any{"issuerUrl": cfg.IssuerURL, "enabled": cfg.Enabled, "autoLogin": cfg.AutoLogin, "mcpOauth": cfg.MCPOAuth.Enabled})
 	effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource, _ := s.oidcRedirectDetails(r, cfg)
-	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource))
+	writeData(w, http.StatusOK, oidcView(cfg, effectiveRedirect, defaultRedirect, redirectSource, defaultRedirectSource, s.mcpOAuthStatusView(r, cfg)))
 }
 
 func normalizeOIDC(cfg *model.OIDCConfig) {
@@ -411,13 +411,70 @@ func normalizeOIDC(cfg *model.OIDCConfig) {
 	if cfg.RoleMappings == nil {
 		cfg.RoleMappings = map[string][]string{}
 	}
+	normalizeMCPOAuth(&cfg.MCPOAuth)
+}
+
+func normalizeMCPOAuth(cfg *model.MCPOAuthConfig) {
+	cfg.Resource = strings.TrimRight(strings.TrimSpace(cfg.Resource), "/")
+	cfg.Audience = splitSettingWords(cfg.Audience)
+	cfg.Scopes = splitSettingWords(cfg.Scopes)
+	if len(cfg.Scopes) == 0 {
+		cfg.Scopes = defaultMCPOAuthScopes()
+	}
+}
+
+// splitSettingWords accepts both a proper list and one "a b c" entry, the way
+// an administrator types a space separated value, and returns distinct words.
+func splitSettingWords(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, word := range strings.Fields(value) {
+			if !slices.Contains(result, word) {
+				result = append(result, word)
+			}
+		}
+	}
+	return result
 }
 
 func validateOIDC(cfg model.OIDCConfig, allowAutomaticRedirect bool) error {
-	if !cfg.Enabled {
+	if cfg.MCPOAuth.Enabled {
+		// Refusing at save time beats a silently inert switch: the token check
+		// needs the issuer, and the metadata document needs a resource it can
+		// name, so both are demanded before the setting is accepted.
+		if cfg.IssuerURL == "" || cfg.ClientID == "" {
+			return errors.New("MCP SSO(OAuth)를 켜려면 issuerUrl과 clientId가 필요합니다")
+		}
+		if err := validateMCPOAuth(cfg.MCPOAuth, cfg.AllowInsecureHTTP); err != nil {
+			return err
+		}
+	}
+	if !cfg.Enabled && !cfg.MCPOAuth.Enabled {
 		return nil
 	}
 	return validateConfiguredOIDC(cfg, allowAutomaticRedirect)
+}
+
+func validateMCPOAuth(cfg model.MCPOAuthConfig, allowHTTP bool) error {
+	if cfg.Resource != "" {
+		if err := validateServiceURL(cfg.Resource, allowHTTP); err != nil {
+			return fmt.Errorf("mcpOauth.resource: %w", err)
+		}
+	}
+	if len(cfg.Audience) > 20 || len(cfg.Scopes) > 32 {
+		return errors.New("mcpOauth: 허용 대상은 20개, 범위는 32개까지입니다")
+	}
+	for _, audience := range cfg.Audience {
+		if len(audience) > 255 || strings.ContainsAny(audience, "\"\\\x00") {
+			return errors.New("mcpOauth.audience: 클라이언트 ID 또는 URL을 공백으로 구분해 적어 주세요")
+		}
+	}
+	for _, scope := range cfg.Scopes {
+		if !permissionPattern.MatchString(scope) {
+			return fmt.Errorf("mcpOauth.scopes: %q는 posts:read 같은 권한 이름이어야 합니다", scope)
+		}
+	}
+	return nil
 }
 
 func validateConfiguredOIDC(cfg model.OIDCConfig, allowAutomaticRedirect bool) error {
