@@ -185,7 +185,8 @@ paths:
       summary: 내 Moin 수정
       parameters: [{$ref: '#/components/parameters/CSRF'}]
       requestBody: {$ref: '#/components/requestBodies/UpdatePost'}
-      responses: {'200': {$ref: '#/components/responses/Post'}, '403': {$ref: '#/components/responses/Error'}}
+      description: 본인의 공개 Moin(Remoin 제외)만 고칠 수 있으며 그 밖에는 409 not_editable. 저장 오류는 다른 경로처럼 500 storage_error.
+      responses: {'200': {$ref: '#/components/responses/Post'}, '400': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
     delete:
       tags: [Posts]
       summary: 내 Moin 삭제

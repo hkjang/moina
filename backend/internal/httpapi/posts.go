@@ -829,7 +829,11 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	tag, err := tx.Exec(r.Context(), `UPDATE posts SET content=$3,updated_at=now() WHERE id=$1 AND author_id=$2 AND status='published' AND kind<>'remoin'`, id, p.User.ID, input.Content)
-	if err != nil || tag.RowsAffected() == 0 {
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
+		return
+	}
+	if tag.RowsAffected() == 0 {
 		writeError(w, http.StatusConflict, "not_editable", "본인의 공개 Moin만 수정할 수 있습니다")
 		return
 	}
