@@ -603,6 +603,11 @@ func (s *Server) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	// Keep only a small prefix in memory. net/http transparently spills larger
 	// file parts to a temporary file, which is then streamed into PostgreSQL.
 	if err := r.ParseMultipartForm(64 << 10); err != nil {
+		var maxBytes *http.MaxBytesError
+		if errors.As(err, &maxBytes) {
+			writeError(w, http.StatusRequestEntityTooLarge, "media_too_large", "파일이 비어 있거나 업로드 한도를 넘었습니다")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_media", "업로드 파일을 읽을 수 없습니다")
 		return
 	}
