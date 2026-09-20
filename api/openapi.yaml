@@ -1361,7 +1361,7 @@ components:
       properties:
         id: {type: string}
         ownerId: {type: string}
-        filename: {type: string}
+        filename: {type: string, description: 업로드 때 보낸 이름에서 경로·제어 문자를 걷어 내고 확장자를 서버가 판정한 형식(mimeType)에 맞춘 이름입니다. 이름이 비면 image.jpg·video.mp4처럼 종류와 확장자로 짓습니다.}
         altText: {type: string, maxLength: 500, description: Moin 응답에서는 post_media 관계의 문맥 대체 텍스트이고 upload 응답에서는 새 연결의 기본값입니다.}
         mimeType: {type: string, examples: [image/webp, video/mp4]}
         type: {type: string, enum: [image, video]}

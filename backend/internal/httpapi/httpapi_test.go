@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -493,6 +494,45 @@ func TestDetectMediaTypeByMagic(t *testing.T) {
 	webm := append([]byte{0x1a, 0x45, 0xdf, 0xa3}, []byte("webm")...)
 	if got := detectMediaType(webm); got != "video/webm" {
 		t.Fatalf("webm=%q", got)
+	}
+}
+
+// 저장·다운로드 이름의 확장자는 브라우저가 보낸 이름이 아니라 서버가 판정한 MIME을
+// 따라야 합니다. photo.png라고 보낸 JPEG을 그 이름대로 저장하면 사용자가 내려받은
+// 파일의 확장자와 내용이 어긋납니다.
+func TestSafeFilenameMatchesDetectedMIME(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		filename string
+		mimeType string
+		want     string
+	}{
+		{name: "일치하면 그대로", filename: "capture.png", mimeType: "image/png", want: "capture.png"},
+		{name: "대소문자 무시", filename: "사진.JPG", mimeType: "image/jpeg", want: "사진.JPG"},
+		{name: "jpeg도 JPEG으로 인정", filename: "photo.jpeg", mimeType: "image/jpeg", want: "photo.jpeg"},
+		{name: "불일치는 교체", filename: "photo.png", mimeType: "image/jpeg", want: "photo.jpg"},
+		{name: "HTML로 위장한 PNG", filename: "x.html", mimeType: "image/png", want: "x.png"},
+		{name: "동영상 확장자 교체", filename: "clip.mov", mimeType: "video/mp4", want: "clip.mp4"},
+		{name: "WebM", filename: "clip.mp4", mimeType: "video/webm", want: "clip.webm"},
+		{name: "GIF", filename: "anim", mimeType: "image/gif", want: "anim.gif"},
+		{name: "WebP", filename: "still.PNG", mimeType: "image/webp", want: "still.webp"},
+		{name: "확장자 없음", filename: "notes", mimeType: "image/jpeg", want: "notes.jpg"},
+		{name: "공백 이름", filename: "여름 휴가.jpeg", mimeType: "image/jpeg", want: "여름 휴가.jpeg"},
+		{name: "빈 이름은 종류별 기본 이름", filename: "", mimeType: "image/jpeg", want: "image.jpg"},
+		{name: "빈 이름의 동영상", filename: "", mimeType: "video/mp4", want: "video.mp4"},
+		{name: "점 하나", filename: ".", mimeType: "image/png", want: "image.png"},
+		{name: "점 둘", filename: "..", mimeType: "video/webm", want: "video.webm"},
+		{name: "경로 제거", filename: "../../etc/photo.png", mimeType: "image/png", want: "photo.png"},
+		{name: "역슬래시와 제어 문자 제거", filename: "dir\\pho\x00to.gif", mimeType: "image/gif", want: "dirphoto.gif"},
+		{name: "200자 절단 뒤에도 확장자 유지", filename: strings.Repeat("가", 250) + ".png", mimeType: "image/png", want: strings.Repeat("가", 200) + ".png"},
+		{name: "절단 뒤 교체한 확장자 유지", filename: strings.Repeat("a", 250) + ".mov", mimeType: "video/mp4", want: strings.Repeat("a", 200) + ".mp4"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := safeFilename(&multipart.FileHeader{Filename: testCase.filename}, testCase.mimeType)
+			if got != testCase.want {
+				t.Fatalf("safeFilename(%q, %s)=%q, want=%q", testCase.filename, testCase.mimeType, got, testCase.want)
+			}
+		})
 	}
 }
 
