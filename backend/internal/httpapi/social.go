@@ -652,7 +652,7 @@ func (s *Server) uploadMedia(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(mimeType, "video/") {
 		mediaType = "video"
 	}
-	media := model.Media{ID: secure.NewID("media"), OwnerID: getPrincipal(r).User.ID, Filename: safeFilename(header), AltText: altText, MIMEType: mimeType, Type: mediaType, Size: header.Size, Width: width, Height: height, CreatedAt: time.Now().UTC()}
+	media := model.Media{ID: secure.NewID("media"), OwnerID: getPrincipal(r).User.ID, Filename: safeFilename(header, mimeType), AltText: altText, MIMEType: mimeType, Type: mediaType, Size: header.Size, Width: width, Height: height, CreatedAt: time.Now().UTC()}
 	media.URL = "/api/v1/media/" + media.ID
 	_, err = s.media.Put(r.Context(), mediastore.PutObject{Metadata: mediastore.Metadata{
 		ID: media.ID, OwnerID: media.OwnerID, Filename: media.Filename, AltText: media.AltText, MIMEType: media.MIMEType,
@@ -729,7 +729,26 @@ func unsupportedMediaMessage(data []byte) string {
 	return supportedMediaFormats
 }
 
-func safeFilename(header *multipart.FileHeader) string {
+// mediaFilenameExtensions는 판정한 MIME마다 저장 이름에 붙일 확장자와, 브라우저가
+// 보낸 이름의 확장자를 그대로 인정할 값(소문자)입니다. 첫 값이 붙일 확장자입니다.
+// 키는 uploadMedia가 허용하는 여섯 형식(detectMediaType의 결과)과 1:1입니다.
+var mediaFilenameExtensions = map[string][]string{
+	"image/jpeg": {".jpg", ".jpeg"},
+	"image/png":  {".png"},
+	"image/gif":  {".gif"},
+	"image/webp": {".webp"},
+	"video/mp4":  {".mp4"},
+	"video/webm": {".webm"},
+}
+
+// safeFilename은 브라우저가 보낸 이름에서 경로·제어 문자를 걷어 내고 확장자를 판정한
+// MIME에 맞춥니다. photo.png라고 보낸 JPEG을 그 이름대로 저장하면 Content-Disposition으로
+// 그대로 내려가 사용자가 저장한 파일의 확장자와 내용이 어긋나므로, 서버가 이미 판정한
+// MIME을 이름의 단일 출처로 삼습니다. 이름의 확장자가 그 MIME의 것이면(대소문자 무시)
+// 그대로 두고, 다르거나 없으면 떼어 내고 붙이며, 이름이 비거나 "."·".."이면 종류별
+// 기본 이름을 씁니다. 200 rune 절단은 확장자를 붙이기 전 줄기에만 적용해 절단 뒤에도
+// 확장자가 남습니다.
+func safeFilename(header *multipart.FileHeader, mimeType string) string {
 	name := filepath.Base(strings.TrimSpace(header.Filename))
 	name = strings.Map(func(character rune) rune {
 		if unicode.IsControl(character) || character == '/' || character == '\\' {
@@ -737,13 +756,28 @@ func safeFilename(header *multipart.FileHeader) string {
 		}
 		return character
 	}, name)
-	if name == "" {
-		return "image"
+	if name == "." || name == ".." {
+		name = ""
 	}
-	if len([]rune(name)) > 200 {
-		name = string([]rune(name)[:200])
+	stem, extension := name, ""
+	if allowed, ok := mediaFilenameExtensions[mimeType]; ok {
+		extension = allowed[0]
+		current := filepath.Ext(name)
+		stem = strings.TrimSuffix(name, current)
+		if slicesContains(allowed, strings.ToLower(current)) {
+			extension = current
+		}
 	}
-	return name
+	if stem == "" {
+		stem = "image"
+		if strings.HasPrefix(mimeType, "video/") {
+			stem = "video"
+		}
+	}
+	if len([]rune(stem)) > 200 {
+		stem = string([]rune(stem)[:200])
+	}
+	return stem + extension
 }
 
 // attrChars는 RFC 8187 ext-value에서 percent-encoding 없이 쓸 수 있는 문자입니다.
