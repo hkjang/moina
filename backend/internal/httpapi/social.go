@@ -566,7 +566,7 @@ func (s *Server) joinMoim(w http.ResponseWriter, r *http.Request) {
 	slug := strings.ToLower(chi.URLParam(r, "slug"))
 	tag, err := s.repo.Pool().Exec(r.Context(), `INSERT INTO moim_members(moim_id,user_id,role) SELECT id,$2,'member' FROM moims WHERE slug=$1 AND visibility='public' ON CONFLICT DO NOTHING`, slug, getPrincipal(r).User.ID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "가입할 수 있는 공개 Moim을 찾을 수 없습니다")
+		writeError(w, http.StatusInternalServerError, "storage_error", "Moim에 가입할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {
