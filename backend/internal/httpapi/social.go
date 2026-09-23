@@ -581,14 +581,39 @@ func (s *Server) joinMoim(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) leaveMoim(w http.ResponseWriter, r *http.Request) {
-	tag, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM moim_members mm USING moims m WHERE mm.moim_id=m.id AND m.slug=$1 AND mm.user_id=$2 AND mm.role<>'owner'`, strings.ToLower(chi.URLParam(r, "slug")), getPrincipal(r).User.ID)
+	slug := strings.ToLower(chi.URLParam(r, "slug"))
+	viewer := getPrincipal(r).User.ID
+	tag, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM moim_members mm USING moims m WHERE mm.moim_id=m.id AND m.slug=$1 AND mm.user_id=$2 AND mm.role<>'owner'`, slug, viewer)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "Moim에서 나갈 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		writeError(w, http.StatusConflict, "owner_cannot_leave", "Moim 소유자는 나갈 수 없습니다")
-		return
+		// Deleting no row means the caller owns the Moim, the slug does not exist, or
+		// the caller was not a member. Reporting all three as owner_cannot_leave tells a
+		// member who pressed 나가기 twice that they own the Moim, so one query tells them
+		// apart. It runs only on the path that already failed to delete anything.
+		var visibility string
+		var owner bool
+		err := s.repo.Pool().QueryRow(r.Context(), `SELECT m.visibility,EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$2 AND role='owner') FROM moims m WHERE m.slug=$1`, slug, viewer).Scan(&visibility, &owner)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			writeError(w, http.StatusNotFound, "not_found", "Moim을 찾을 수 없습니다")
+			return
+		case err != nil:
+			writeError(w, http.StatusInternalServerError, "storage_error", "Moim에서 나갈 수 없습니다")
+			return
+		case owner:
+			writeError(w, http.StatusConflict, "owner_cannot_leave", "Moim 소유자는 나갈 수 없습니다")
+			return
+		case visibility != "public":
+			// Leaving a private Moim the caller is not in must not confirm it exists,
+			// which is the same judgement getMoim already makes.
+			writeError(w, http.StatusNotFound, "not_found", "Moim을 찾을 수 없습니다")
+			return
+		}
+		// A non-member of a public Moim is already where they asked to be, which mirrors
+		// joining twice staying 200.
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

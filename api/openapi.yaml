@@ -473,6 +473,7 @@ paths:
     delete:
       tags: [Moims]
       summary: Moim 나가기
+      description: 이미 나갔거나 가입한 적 없는 공개 Moim에 요청해도 `204`입니다. 소유자는 `409 owner_cannot_leave`, 없는 slug와 비공개 Moim의 비회원은 `404 not_found`, 탈퇴 기록 저장이 실패하면 `500 storage_error`입니다.
       parameters: [{$ref: '#/components/parameters/Slug'}, {$ref: '#/components/parameters/CSRF'}]
       responses: {'204': {$ref: '#/components/responses/NoContent'}}
   /api/v1/moims/{slug}/members:
@@ -485,6 +486,7 @@ paths:
     delete:
       tags: [Moims]
       summary: Moim 나가기 alias
+      description: 이미 나갔거나 가입한 적 없는 공개 Moim에 요청해도 `204`입니다. 소유자는 `409 owner_cannot_leave`, 없는 slug와 비공개 Moim의 비회원은 `404 not_found`, 탈퇴 기록 저장이 실패하면 `500 storage_error`입니다.
       parameters: [{$ref: '#/components/parameters/Slug'}, {$ref: '#/components/parameters/CSRF'}]
       responses: {'204': {$ref: '#/components/responses/NoContent'}}
   /api/v1/media:
