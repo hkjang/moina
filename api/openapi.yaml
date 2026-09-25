@@ -392,6 +392,7 @@ paths:
     post:
       tags: [Discovery]
       summary: Topic Link
+      description: 가중치는 1~100이며 생략하면 50입니다. 없는 Topic은 404 not_found, 저장 실패는 500 storage_error로 구분해 답합니다.
       parameters: [{$ref: '#/components/parameters/Slug'}, {$ref: '#/components/parameters/CSRF'}]
       requestBody: {$ref: '#/components/requestBodies/OptionalObject'}
       responses: {'200': {$ref: '#/components/responses/Data'}}
