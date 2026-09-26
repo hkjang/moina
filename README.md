@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.37`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.38`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.37`은 Moim 나가기(`DELETE /api/v1/moims/{slug}/join`과 `members` alias)의 응답을 원인별로 나눕니다. 지금까지는 지워진 행이 없으면 없는 slug도, 이미 나간 회원도, 애초에 가입하지 않은 사용자도 모두 `409 owner_cannot_leave`로 답해, 목록의 오래된 상태로 나가기를 한 번 더 누른 회원에게 "Moim 소유자는 나갈 수 없습니다"라는 사실과 다른 문구가 그대로 보였습니다. 이제 행이 지워지지 않은 경로에서만 판별 조회를 한 번 더 실행해 없는 slug와 비공개 Moim의 비회원은 `404 not_found`("Moim을 찾을 수 없습니다"), 공개 Moim의 비회원은 가입 멱등성과 대칭으로 `204`, 소유자는 기존 `409 owner_cannot_leave`와 기존 문구, 판별 조회 실패는 `500 storage_error`로 보고합니다. 성공 경로의 쿼리 수는 그대로이며 소유자 보호·비공개 Moim 은폐 정책도 바뀌지 않았습니다. 이 동작은 실제 PostgreSQL과 세션 cookie·CSRF를 지나는 integration 테스트 9케이스로 고정했고, OpenAPI의 나가기 경로 설명도 보강했습니다. `v0.1.36`의 Moim 참여 저장 실패 `500 storage_error` 분리, `v0.1.35`의 미디어 업로드 multipart 본문 크기 초과 `413 media_too_large` 분리, `v0.1.34`의 업로드 파일 이름 확장자 정규화, `v0.1.33`의 Moin 수정 저장 오류(`500 storage_error`)와 `409 not_editable` 분리, `v0.1.32`의 MCP SSO(OAuth) 리소스 서버(`mcpOauth`), `v0.1.31`의 계정 보안 알림, `v0.1.30`의 SSO 자동 로그인(`autoLogin`)과 방문 추적 스니펫, `v0.1.29`의 시각 회귀 베이스라인 화면 단위 부분 갱신(`MOINA_VISUAL_ONLY`), `v0.1.28`의 EXIF orientation 표시 크기 보고와 사용자·관리자 가이드, `v0.1.27`의 첨부 이미지 로드 전 자리 예약, `v0.1.26`의 업로드 API HEIC 거절 안내, `v0.1.25`의 아이폰 HEIC 첨부·프로필 이미지 JPEG 전환 안내, `v0.1.24`의 미디어 응답 `private, no-cache`와 SHA-256 강한 `ETag` 재검증, `v0.1.23`의 화면 밖 Flow 카드 style·layout 비용 제거와 `type=all` 검색 병렬 실행, `v0.1.21`의 MCP `tools/call` 인자 스키마 검증과 본문 주소 안 `#fragment`·`@handle`을 뺀 Topic·멘션 추출, `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
+`v0.1.38`은 본문이 선택인 handler가 chunked 요청의 JSON 본문을 버리던 문제를 바로잡습니다. Topic 팔로우(`POST /api/v1/topics/{slug}/follow`), 승인 검토(`POST /api/v1/approvals/{approvalID}/approve`·`reject`), 신고 처리 alias(`POST /api/v1/admin/reports/{reportID}/resolve`·`reject`)는 "본문은 선택"을 `Content-Length > 0` 조건으로 구현해, `Content-Length`가 없는 chunked 전송(과 길이를 알리지 않는 HTTP/2) 요청에서 클라이언트가 실제로 보낸 본문을 조용히 무시했습니다. 그래서 팔로우는 `{"weight":80}`을 받고도 기본값 `50`을 저장한 뒤 `200`을 돌려줘 사실과 다른 데이터를 남겼고, 승인 반려와 신고 처리는 사유를 함께 보냈는데도 `400`으로 거절했습니다. 이제 본문이 선택인 계약 전용 해석기를 따로 두고 이 세 경로만 그것을 쓰며, 본문을 반드시 받아야 하는 나머지 handler의 동작은 그대로입니다. 본문 없음으로 넘기는 관용도 길이가 알려지지 않은 요청에만 적용해, 길이가 `0`으로 명시된 빈 본문과 공백 본문은 기존 `400 invalid_json`을 유지합니다. 이 동작은 실제 PostgreSQL과 세션 cookie·CSRF를 지나 실제 HTTP 전선으로 보내는 integration 테스트 18케이스로 고정했고, 같은 바이트를 `Content-Length`로 보내는 대조군을 모든 chunked 케이스에 붙여 두 전송 방식이 같은 값을 읽는지 함께 확인합니다. 이미 문서화된 계약을 지키게 하는 수정이므로 OpenAPI 계약과 팔로우 가중치·승인 권한·신고 처리 정책은 바뀌지 않았습니다. `v0.1.37`의 Moim 나가기 응답 원인별 분리, `v0.1.36`의 Moim 참여 저장 실패 `500 storage_error` 분리, `v0.1.35`의 미디어 업로드 multipart 본문 크기 초과 `413 media_too_large` 분리, `v0.1.34`의 업로드 파일 이름 확장자 정규화, `v0.1.33`의 Moin 수정 저장 오류(`500 storage_error`)와 `409 not_editable` 분리, `v0.1.32`의 MCP SSO(OAuth) 리소스 서버(`mcpOauth`), `v0.1.31`의 계정 보안 알림, `v0.1.30`의 SSO 자동 로그인(`autoLogin`)과 방문 추적 스니펫, `v0.1.29`의 시각 회귀 베이스라인 화면 단위 부분 갱신(`MOINA_VISUAL_ONLY`), `v0.1.28`의 EXIF orientation 표시 크기 보고와 사용자·관리자 가이드, `v0.1.27`의 첨부 이미지 로드 전 자리 예약, `v0.1.26`의 업로드 API HEIC 거절 안내, `v0.1.25`의 아이폰 HEIC 첨부·프로필 이미지 JPEG 전환 안내, `v0.1.24`의 미디어 응답 `private, no-cache`와 SHA-256 강한 `ETag` 재검증, `v0.1.23`의 화면 밖 Flow 카드 style·layout 비용 제거와 `type=all` 검색 병렬 실행, `v0.1.21`의 MCP `tools/call` 인자 스키마 검증과 본문 주소 안 `#fragment`·`@handle`을 뺀 Topic·멘션 추출, `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
 
 ## 주요 기능
 
@@ -102,7 +102,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.37
+moina:v0.1.38
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -120,20 +120,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.37.tar.gz
-dist/moina-v0.1.37.tar.gz.sha256
+dist/moina-v0.1.38.tar.gz
+dist/moina-v0.1.38.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.37.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.38.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.37.tar.gz
-gzip -dc moina-v0.1.37.tar.gz | docker image load
-docker image inspect moina:v0.1.37
+sha256sum moina-v0.1.38.tar.gz
+gzip -dc moina-v0.1.38.tar.gz | docker image load
+docker image inspect moina:v0.1.38
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -182,15 +182,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.37 -m "moina v0.1.37"
-git push origin v0.1.37
+git tag -a v0.1.38 -m "moina v0.1.38"
+git push origin v0.1.38
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.37
-file:  moina-v버전.tar.gz  예: moina-v0.1.37.tar.gz
+image: moina:v버전          예: moina:v0.1.38
+file:  moina-v버전.tar.gz  예: moina-v0.1.38.tar.gz
 ```
 
 ## 라이선스
