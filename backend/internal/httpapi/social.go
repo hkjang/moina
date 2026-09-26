@@ -279,7 +279,14 @@ func (s *Server) followTopic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tag, err := s.repo.Pool().Exec(r.Context(), `INSERT INTO user_topic_follows(user_id,topic_id,weight) SELECT $1,id,$3 FROM topics WHERE slug=$2 ON CONFLICT(user_id,topic_id) DO UPDATE SET weight=EXCLUDED.weight`, getPrincipal(r).User.ID, strings.ToLower(chi.URLParam(r, "slug")), input.Weight)
-	if err != nil || tag.RowsAffected() == 0 {
+	// A refused write and a Topic that does not exist were reported together as 404,
+	// so a storage failure reached the caller as "없는 Topic" and the operator could
+	// not tell the two apart. The unfollow path below already separates them.
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "Topic을 Link할 수 없습니다")
+		return
+	}
+	if tag.RowsAffected() == 0 {
 		writeError(w, http.StatusNotFound, "not_found", "Topic을 찾을 수 없습니다")
 		return
 	}
