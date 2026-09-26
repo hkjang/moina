@@ -718,6 +718,38 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
 	return true
 }
 
+// decodeOptionalJSON reads a body the endpoint's contract marks optional. Gating
+// the decode on r.ContentLength > 0 threw the body away instead: net/http reports
+// -1 for a chunked request and for HTTP/2 without a content-length, so a client
+// that had sent JSON was answered as though it had sent nothing — following a
+// Topic stored the default weight while echoing 200, and the reject paths refused
+// a reason they had been handed. Callers whose body is required keep decodeJSON,
+// which still answers 400 for an empty one.
+func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, destination any) bool {
+	if r.ContentLength == 0 || r.Body == nil || r.Body == http.NoBody {
+		return true
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		// Only an unknown length leaves "no body" and "empty body" indistinguishable
+		// until the read happens, so only then is EOF an absent body. A declared
+		// length means the client meant to send something, and an empty or
+		// whitespace-only body under it stays the client's mistake.
+		if errors.Is(err, io.EOF) && r.ContentLength < 0 {
+			return true
+		}
+		writeError(w, http.StatusBadRequest, "invalid_json", "요청 형식이 올바르지 않습니다")
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid_json", "JSON 값은 하나만 허용됩니다")
+		return false
+	}
+	return true
+}
+
 // pagination reads the documented limit·offset contract and answers 400 when a
 // value falls outside it. Silently substituting the default hid the mistake and
 // answered 200 with the first page: a client following the offset nextCursor

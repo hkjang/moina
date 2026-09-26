@@ -107,7 +107,7 @@ func (s *Server) reviewApproval(w http.ResponseWriter, r *http.Request, approved
 	var input struct {
 		Comment string `json:"comment"`
 	}
-	if r.ContentLength > 0 && !decodeJSON(w, r, &input) {
+	if !decodeOptionalJSON(w, r, &input) {
 		return
 	}
 	input.Comment = strings.TrimSpace(input.Comment)
