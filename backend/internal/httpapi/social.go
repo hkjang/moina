@@ -268,7 +268,7 @@ func (s *Server) followTopic(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Weight int `json:"weight"`
 	}
-	if r.ContentLength > 0 && !decodeJSON(w, r, &input) {
+	if !decodeOptionalJSON(w, r, &input) {
 		return
 	}
 	if input.Weight == 0 {

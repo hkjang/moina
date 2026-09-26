@@ -364,7 +364,7 @@ func (s *Server) adminResolveReportAlias(w http.ResponseWriter, r *http.Request)
 	var input struct {
 		Resolution string `json:"resolution"`
 	}
-	if r.ContentLength > 0 && !decodeJSON(w, r, &input) {
+	if !decodeOptionalJSON(w, r, &input) {
 		return
 	}
 	s.resolveReport(w, r, status, input.Resolution)
