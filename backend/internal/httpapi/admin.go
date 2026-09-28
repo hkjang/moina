@@ -378,13 +378,34 @@ func (s *Server) resolveReport(w http.ResponseWriter, r *http.Request, status, r
 	}
 	id := chi.URLParam(r, "reportID")
 	resolved := status == "resolved" || status == "dismissed"
-	tag, err := s.repo.Pool().Exec(r.Context(), `UPDATE reports SET status=$2,resolution=$3,moderator_id=$4,resolved_at=CASE WHEN $5 THEN now() ELSE NULL END WHERE id=$1`, id, status, resolution, getPrincipal(r).User.ID, resolved)
-	if err != nil || tag.RowsAffected() == 0 {
+	// The moderation action is the only record of who sanctioned what, so it
+	// shares a transaction with the resolution the way softDeletePost pairs its
+	// two writes: a report marked resolved with no action row would leave the
+	// sanction untraceable.
+	tx, err := s.repo.Pool().Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "신고를 처리할 수 없습니다")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	tag, err := tx.Exec(r.Context(), `UPDATE reports SET status=$2,resolution=$3,moderator_id=$4,resolved_at=CASE WHEN $5 THEN now() ELSE NULL END WHERE id=$1`, id, status, resolution, getPrincipal(r).User.ID, resolved)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "신고를 처리할 수 없습니다")
+		return
+	}
+	if tag.RowsAffected() == 0 {
 		writeError(w, http.StatusNotFound, "not_found", "신고를 찾을 수 없습니다")
 		return
 	}
 	if resolved {
-		_, _ = s.repo.Pool().Exec(r.Context(), `INSERT INTO moderation_actions(id,report_id,moderator_id,action,target_type,target_id,reason) SELECT $1,id,$2,$3,target_type,target_id,$4 FROM reports WHERE id=$5`, secure.NewID("mod"), getPrincipal(r).User.ID, status, resolution, id)
+		if _, err := tx.Exec(r.Context(), `INSERT INTO moderation_actions(id,report_id,moderator_id,action,target_type,target_id,reason) SELECT $1,id,$2,$3,target_type,target_id,$4 FROM reports WHERE id=$5`, secure.NewID("mod"), getPrincipal(r).User.ID, status, resolution, id); err != nil {
+			writeError(w, http.StatusInternalServerError, "storage_error", "신고를 처리할 수 없습니다")
+			return
+		}
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_error", "신고를 처리할 수 없습니다")
+		return
 	}
 	s.audit(r, "admin.report."+status, "report", id, true, map[string]string{"resolution": resolution})
 	writeData(w, http.StatusOK, map[string]string{"id": id, "status": status, "resolution": resolution})

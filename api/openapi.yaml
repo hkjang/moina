@@ -638,6 +638,7 @@ paths:
     patch:
       tags: [Admin]
       summary: 신고 처리·제재
+      description: 상태는 `reviewing`·`resolved`·`dismissed`만 허용하고 그 밖에는 `400 invalid_resolution`입니다. 없는 신고는 `404 not_found`, 신고 상태 저장이나 제재 기록 저장이 실패하면 `500 storage_error`이며 이때 신고는 처리되지 않은 채로 남습니다.
       parameters: [{$ref: '#/components/parameters/ReportID'}, {$ref: '#/components/parameters/CSRF'}]
       requestBody: {$ref: '#/components/requestBodies/Object'}
       responses: {'200': {$ref: '#/components/responses/Data'}}
@@ -645,6 +646,7 @@ paths:
     post:
       tags: [Admin]
       summary: 신고 승인·처리 alias
+      description: 검토 메모가 없으면 `400 invalid_resolution`, 없는 신고는 `404 not_found`, 신고 상태 저장이나 제재 기록 저장이 실패하면 `500 storage_error`이며 이때 신고는 처리되지 않은 채로 남습니다.
       parameters: [{$ref: '#/components/parameters/ReportID'}, {$ref: '#/components/parameters/CSRF'}]
       requestBody: {$ref: '#/components/requestBodies/OptionalObject'}
       responses: {'200': {$ref: '#/components/responses/Data'}}
@@ -652,6 +654,7 @@ paths:
     post:
       tags: [Admin]
       summary: 신고 반려 alias
+      description: 검토 메모가 없으면 `400 invalid_resolution`, 없는 신고는 `404 not_found`, 신고 상태 저장이나 제재 기록 저장이 실패하면 `500 storage_error`이며 이때 신고는 처리되지 않은 채로 남습니다.
       parameters: [{$ref: '#/components/parameters/ReportID'}, {$ref: '#/components/parameters/CSRF'}]
       requestBody: {$ref: '#/components/requestBodies/OptionalObject'}
       responses: {'200': {$ref: '#/components/responses/Data'}}
