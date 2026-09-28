@@ -12,6 +12,30 @@ import (
 	"github.com/hkjang/moina/backend/internal/store"
 )
 
+// waitForSettingListener blocks until a backend other than this one is listening
+// on the setting-change channel that NotifySettingChange writes to. The channel
+// name is store's unexported settingChangeChannel; pg_stat_activity keeps the
+// LISTEN as the connection's last query for as long as it sits waiting for
+// notifications, which is what makes this observable from outside the session.
+func waitForSettingListener(t *testing.T, repository *store.Store) {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		var listeners int
+		if err := repository.Pool().QueryRow(t.Context(), `SELECT count(*) FROM pg_stat_activity
+			WHERE datname=current_database() AND pid<>pg_backend_pid() AND query='LISTEN moina_settings'`).Scan(&listeners); err != nil {
+			t.Fatal(err)
+		}
+		if listeners > 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("설정 변경 LISTEN이 준비되지 않았습니다")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // Two Server values over one database stand in for two instances behind a load
 // balancer: the cache is only safe if a change on one reaches the other without
 // waiting out the TTL.
@@ -35,6 +59,14 @@ func TestPostgreSQLSettingChangeReachesAnotherInstance(t *testing.T) {
 	listening, stopListening := context.WithCancel(t.Context())
 	defer stopListening()
 	go func() { _ = reader.runSettingCacheWorker(listening) }()
+	// The worker reaches its LISTEN asynchronously — a pool connection has to be
+	// acquired first — and PostgreSQL delivers a notification only to sessions
+	// that are already listening, so a NOTIFY sent before that is lost for good
+	// and the reader then waits out the 30s TTL instead. Wait for the listening
+	// backend to exist before touching the setting. It also means the opening
+	// invalidateAll of the worker loop has already run, so it cannot drop the
+	// cached copy the "reader must still see 4" assertion below depends on.
+	waitForSettingListener(t, repository)
 
 	store := func(maxPerPost int) {
 		t.Helper()
