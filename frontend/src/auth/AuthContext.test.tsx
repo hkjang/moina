@@ -68,9 +68,15 @@ describe('AuthProvider의 silent SSO 시작', () => {
 
   it('스스로 로그아웃한 뒤에는 시도하지 않고, 세션이 다시 생기면 억제가 풀린다', async () => {
     const assign = stubLocation('/flow');
+    // Arriving with an earlier suppression recorded makes the lift observable,
+    // which matters below: the lift is an effect, so it lands *after* the text
+    // it follows. Waiting for it is both the assertion and the barrier that
+    // stops a late lift from wiping the sign-out recorded right after it.
+    markSignedOut();
     answer({ me: session, status: { enabled: true, autoLogin: true } });
     render(<AuthProvider><Probe/></AuthProvider>);
     await screen.findByText('user:mina');
+    await waitFor(() => expect(silentSsoAttempted()).toBe(false));
     await act(async () => { screen.getByRole('button', { name: '로그아웃' }).click(); });
     await screen.findByText('anonymous');
     expect(assign).not.toHaveBeenCalled();
@@ -89,6 +95,6 @@ describe('AuthProvider의 silent SSO 시작', () => {
     answer({ me: session });
     render(<AuthProvider><Probe/></AuthProvider>);
     await screen.findByText('user:mina');
-    expect(silentSsoAttempted()).toBe(false);
+    await waitFor(() => expect(silentSsoAttempted()).toBe(false));
   });
 });
