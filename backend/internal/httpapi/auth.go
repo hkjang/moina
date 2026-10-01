@@ -318,11 +318,13 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "password_error", "비밀번호를 처리할 수 없습니다")
 		return
 	}
-	if err := s.repo.UpdatePassword(r.Context(), p.User.ID, string(hash)); err != nil {
+	// The notice below promises every login session ended, so the hash and the
+	// sessions commit together. A discarded revocation error used to answer 204
+	// with that promise while every other device kept a working session.
+	if err := s.repo.UpdatePasswordAndRevokeSessions(r.Context(), p.User.ID, string(hash)); err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "비밀번호를 변경할 수 없습니다")
 		return
 	}
-	_ = s.repo.DeleteUserSessions(r.Context(), p.User.ID)
 	clearAuthCookies(w, r)
 	s.audit(r, "profile.password.update", "user", p.User.ID, true, nil)
 	s.notifySecurity(r, p.User.ID, securityEventPasswordChanged, securityNoticeBody(r, "비밀번호를 변경해 모든 로그인 세션을 종료했습니다."))
