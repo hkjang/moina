@@ -223,12 +223,29 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context) error {
 	return err
 }
 
-func (s *Store) UpdatePassword(ctx context.Context, userID, passwordHash string) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE users SET password_hash=$2,updated_at=now() WHERE id=$1 AND provider='local'`, userID, passwordHash)
-	if err == nil && tag.RowsAffected() == 0 {
+// UpdatePasswordAndRevokeSessions writes the new hash and ends the owner's
+// sessions in one transaction. A session is not tied to the password hash, so
+// the two have to commit together: both callers tell the owner every login
+// session ended, and a refused DELETE must undo the new password rather than
+// leave that promise false. A user without a local password is still
+// pgx.ErrNoRows, which the caller answers as a conflict.
+func (s *Store) UpdatePasswordAndRevokeSessions(ctx context.Context, userID, passwordHash string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `UPDATE users SET password_hash=$2,updated_at=now() WHERE id=$1 AND provider='local'`, userID, passwordHash)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
 		return pgx.ErrNoRows
 	}
-	return err
+	if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, userID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) GetSetting(ctx context.Context, key string) (model.SettingRecord, error) {

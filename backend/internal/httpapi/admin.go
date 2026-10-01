@@ -214,14 +214,16 @@ func (s *Server) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "userID")
-	if err := s.repo.UpdatePassword(r.Context(), id, string(hash)); store.IsNotFound(err) {
+	// The notice below promises every login session ended, so the hash and the
+	// sessions commit together. A discarded revocation error used to answer 204
+	// with that promise while the owner's devices kept working sessions.
+	if err := s.repo.UpdatePasswordAndRevokeSessions(r.Context(), id, string(hash)); store.IsNotFound(err) {
 		writeError(w, http.StatusConflict, "not_local_user", "로컬 사용자만 비밀번호를 초기화할 수 있습니다")
 		return
 	} else if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_error", "비밀번호를 초기화할 수 없습니다")
 		return
 	}
-	_ = s.repo.DeleteUserSessions(r.Context(), id)
 	s.audit(r, "admin.user.password.reset", "user", id, true, nil)
 	// The administrator's address is theirs, not the owner's, so no request IP.
 	s.notifySecurity(r, id, securityEventPasswordReset, "관리자가 비밀번호를 재설정해 모든 로그인 세션을 종료했습니다.")
