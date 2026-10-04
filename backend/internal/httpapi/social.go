@@ -283,7 +283,7 @@ func (s *Server) followTopic(w http.ResponseWriter, r *http.Request) {
 	// so a storage failure reached the caller as "없는 Topic" and the operator could
 	// not tell the two apart. The unfollow path below already separates them.
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Topic을 Link할 수 없습니다")
+		writeStorageError(w, r, "followTopic", err, "Topic을 Link할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {

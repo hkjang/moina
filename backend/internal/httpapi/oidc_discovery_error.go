@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 
@@ -114,14 +113,5 @@ func writeAdminOIDCDiscoveryError(w http.ResponseWriter, r *http.Request, err er
 }
 
 func deepestOIDCDiscoveryErrorType(err error) string {
-	if err == nil {
-		return "<nil>"
-	}
-	for {
-		next := errors.Unwrap(err)
-		if next == nil {
-			return fmt.Sprintf("%T", err)
-		}
-		err = next
-	}
+	return deepestErrorType(err)
 }
