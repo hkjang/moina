@@ -322,7 +322,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	// sessions commit together. A discarded revocation error used to answer 204
 	// with that promise while every other device kept a working session.
 	if err := s.repo.UpdatePasswordAndRevokeSessions(r.Context(), p.User.ID, string(hash)); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "비밀번호를 변경할 수 없습니다")
+		writeStorageError(w, r, "changePassword", err, "비밀번호를 변경할 수 없습니다")
 		return
 	}
 	clearAuthCookies(w, r)

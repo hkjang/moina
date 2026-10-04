@@ -221,7 +221,7 @@ func (s *Server) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "not_local_user", "로컬 사용자만 비밀번호를 초기화할 수 있습니다")
 		return
 	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "비밀번호를 초기화할 수 없습니다")
+		writeStorageError(w, r, "adminResetPassword", err, "비밀번호를 초기화할 수 없습니다")
 		return
 	}
 	s.audit(r, "admin.user.password.reset", "user", id, true, nil)
@@ -386,13 +386,13 @@ func (s *Server) resolveReport(w http.ResponseWriter, r *http.Request, status, r
 	// sanction untraceable.
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "신고를 처리할 수 없습니다")
+		writeStorageError(w, r, "resolveReport", err, "신고를 처리할 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
 	tag, err := tx.Exec(r.Context(), `UPDATE reports SET status=$2,resolution=$3,moderator_id=$4,resolved_at=CASE WHEN $5 THEN now() ELSE NULL END WHERE id=$1`, id, status, resolution, getPrincipal(r).User.ID, resolved)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "신고를 처리할 수 없습니다")
+		writeStorageError(w, r, "resolveReport", err, "신고를 처리할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -401,12 +401,12 @@ func (s *Server) resolveReport(w http.ResponseWriter, r *http.Request, status, r
 	}
 	if resolved {
 		if _, err := tx.Exec(r.Context(), `INSERT INTO moderation_actions(id,report_id,moderator_id,action,target_type,target_id,reason) SELECT $1,id,$2,$3,target_type,target_id,$4 FROM reports WHERE id=$5`, secure.NewID("mod"), getPrincipal(r).User.ID, status, resolution, id); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "신고를 처리할 수 없습니다")
+			writeStorageError(w, r, "resolveReport", err, "신고를 처리할 수 없습니다")
 			return
 		}
 	}
 	if err := tx.Commit(r.Context()); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "신고를 처리할 수 없습니다")
+		writeStorageError(w, r, "resolveReport", err, "신고를 처리할 수 없습니다")
 		return
 	}
 	s.audit(r, "admin.report."+status, "report", id, true, map[string]string{"resolution": resolution})

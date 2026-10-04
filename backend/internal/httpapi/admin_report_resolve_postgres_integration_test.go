@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -117,6 +118,15 @@ func TestPostgreSQLAdminResolveReportSeparatesStorageFailureFromMissingReport(t 
 		t.Fatal(err)
 	}
 
+	// Handler() captures slog.Default() for the request-scoped logger, so this
+	// is what lets the storage failures below be read back as the operator
+	// would see them. Nothing in this package runs in parallel, and the writer
+	// is guarded because the access log line is written from the same chain.
+	logs := &lockedBuffer{}
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
 	server := New(repository, secrets, "v0.1.38-test")
 	handler := server.Handler()
 	type apiError struct {
@@ -125,6 +135,7 @@ func TestPostgreSQLAdminResolveReportSeparatesStorageFailureFromMissingReport(t 
 	}
 	patch := func(t *testing.T, reportID, body string) (int, []byte) {
 		t.Helper()
+		logs.reset()
 		request := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/reports/"+reportID, strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-CSRF-Token", csrf)
@@ -162,6 +173,9 @@ func TestPostgreSQLAdminResolveReportSeparatesStorageFailureFromMissingReport(t 
 		wantResolution string
 		wantResolvedAt bool
 		wantActions    int
+		// The SQLSTATE the operator log must carry for a refused write. The
+		// test triggers below use a bare RAISE EXCEPTION, which is P0001.
+		wantPgCode string
 	}{
 		{
 			name: "resolving a report records the moderation action", reportID: resolvedReportID,
@@ -189,6 +203,7 @@ func TestPostgreSQLAdminResolveReportSeparatesStorageFailureFromMissingReport(t 
 			name: "a failed report update is a storage error, not a missing report", reportID: updatePoisonReportID,
 			body: `{"status":"resolved","resolution":"제재 완료"}`, wantStatus: http.StatusInternalServerError,
 			wantCode: "storage_error", wantRowStatus: "open", wantResolution: "", wantActions: 0,
+			wantPgCode: "P0001",
 		},
 		{
 			// Without the moderation action there is no record of who
@@ -196,6 +211,7 @@ func TestPostgreSQLAdminResolveReportSeparatesStorageFailureFromMissingReport(t 
 			name: "a failed moderation action leaves the report unresolved", reportID: actionPoisonReportID,
 			body: `{"status":"resolved","resolution":"제재 완료"}`, wantStatus: http.StatusInternalServerError,
 			wantCode: "storage_error", wantRowStatus: "open", wantResolution: "", wantActions: 0,
+			wantPgCode: "P0001",
 		},
 	}
 	for _, testCase := range cases {
@@ -214,6 +230,28 @@ func TestPostgreSQLAdminResolveReportSeparatesStorageFailureFromMissingReport(t 
 				}
 				if testCase.wantMessage != "" && failure.Message != testCase.wantMessage {
 					t.Fatalf("message=%q 기대=%q", failure.Message, testCase.wantMessage)
+				}
+			}
+			// A 500 with no cause in the log leaves the operator with the
+			// user's complaint as the only clue, so the refused write has to
+			// name itself and its SQLSTATE next to the request id.
+			if testCase.wantPgCode != "" {
+				written := logs.String()
+				for _, field := range []string{
+					`"error_code":"storage_error"`,
+					`"handler":"resolveReport"`,
+					`"cause_type":"*pgconn.PgError"`,
+					fmt.Sprintf(`"pg_code":%q`, testCase.wantPgCode),
+				} {
+					if !strings.Contains(written, field) {
+						t.Errorf("운영자 로그에 %s가 없습니다: %s", field, written)
+					}
+				}
+				if !strings.Contains(written, `"request_id":"`) || strings.Contains(written, `"request_id":""`) {
+					t.Errorf("운영자 로그에 request_id가 없습니다: %s", written)
+				}
+				if strings.Contains(written, "moina test: storage refused") {
+					t.Errorf("pg 메시지 전문이 로그에 노출되었습니다: %s", written)
 				}
 			}
 			if testCase.reportID == missingReportID {
