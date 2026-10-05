@@ -99,7 +99,7 @@ func (s *Server) createPost(w http.ResponseWriter, r *http.Request) {
 	}
 	post, err := s.createPostRecord(r, input, "")
 	if err != nil {
-		writePostError(w, err)
+		writePostError(w, r, "createPost", err)
 		return
 	}
 	s.audit(r, "post.create", "post", post.ID, true, map[string]any{"kind": post.Kind, "status": post.Status})
@@ -114,13 +114,16 @@ type publicError struct {
 
 func (e *publicError) Error() string { return e.Message }
 
-func writePostError(w http.ResponseWriter, err error) {
+// writePostError takes the handler name because the storage fallback below is
+// shared by three routes, so without it an operator reading that one message
+// cannot tell a refused create from a refused Remoin.
+func writePostError(w http.ResponseWriter, r *http.Request, handler string, err error) {
 	var public *publicError
 	if errors.As(err, &public) {
 		writeError(w, public.Status, public.Code, public.Message)
 		return
 	}
-	writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 저장할 수 없습니다")
+	writeStorageError(w, r, handler, err, "Moin을 저장할 수 없습니다")
 }
 
 func (s *Server) createPostRecord(r *http.Request, input postInput, forcedKind string) (model.Moin, error) {
@@ -394,7 +397,7 @@ func (s *Server) getPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 불러올 수 없습니다")
+		writeStorageError(w, r, "getPost", err, "Moin을 불러올 수 없습니다")
 		return
 	}
 	writeData(w, http.StatusOK, post)
@@ -466,7 +469,7 @@ func (s *Server) listPosts(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := s.queryPosts(r.Context(), where, args, "COALESCE(p.published_at,p.created_at) DESC,p.id DESC", limit, offset, viewer)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin 목록을 불러올 수 없습니다")
+		writeStorageError(w, r, "listPosts", err, "Moin 목록을 불러올 수 없습니다")
 		return
 	}
 	writeData(w, http.StatusOK, listEnvelope(items, limit, offset))
@@ -528,7 +531,7 @@ func (s *Server) writeFollowingFeed(w http.ResponseWriter, r *http.Request, wher
 	}
 	page, err := feedservice.QueryPublishedPosts(r.Context(), s.repo.Pool(), where, args, limit+1, legacyOffset, viewer)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Flow를 불러올 수 없습니다")
+		writeStorageError(w, r, "writeFollowingFeed", err, "Flow를 불러올 수 없습니다")
 		return
 	}
 	hasMore := len(page) > limit
@@ -579,7 +582,7 @@ func (s *Server) writeForMeFeed(w http.ResponseWriter, r *http.Request, where []
 		}
 		preferenceJSON, marshalErr := json.Marshal(prefs)
 		if marshalErr != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 추천 설정을 처리할 수 없습니다")
+			writeStorageError(w, r, "writeForMeFeed", marshalErr, "Flow 추천 설정을 처리할 수 없습니다")
 			return
 		}
 		preferenceDigest := sha256.Sum256(preferenceJSON)
@@ -601,18 +604,18 @@ func (s *Server) writeForMeFeed(w http.ResponseWriter, r *http.Request, where []
 				writeError(w, http.StatusTooManyRequests, "feed_snapshot_busy", "다른 Flow 새로고침을 처리 중입니다. 잠시 후 다시 시도해 주세요")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 스냅샷을 만들 수 없습니다")
+			writeStorageError(w, r, "writeForMeFeed", err, "Flow 스냅샷을 만들 수 없습니다")
 			return
 		}
 		snapshotID, rankingAsOf = metadata.ID, metadata.AsOf
 		if err := json.Unmarshal(metadata.Preferences, &prefs); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 스냅샷 설정을 읽을 수 없습니다")
+			writeStorageError(w, r, "writeForMeFeed", err, "Flow 스냅샷 설정을 읽을 수 없습니다")
 			return
 		}
 	} else {
 		metadata, available, err := feedservice.Snapshot(r.Context(), s.repo.Pool(), snapshotID, viewer, feedservice.RankingVersion)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 스냅샷을 확인할 수 없습니다")
+			writeStorageError(w, r, "writeForMeFeed", err, "Flow 스냅샷을 확인할 수 없습니다")
 			return
 		}
 		if !available {
@@ -625,7 +628,7 @@ func (s *Server) writeForMeFeed(w http.ResponseWriter, r *http.Request, where []
 		}
 		rankingAsOf = metadata.AsOf
 		if err := json.Unmarshal(metadata.Preferences, &prefs); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Flow 스냅샷 설정을 읽을 수 없습니다")
+			writeStorageError(w, r, "writeForMeFeed", err, "Flow 스냅샷 설정을 읽을 수 없습니다")
 			return
 		}
 	}
@@ -636,7 +639,7 @@ func (s *Server) writeForMeFeed(w http.ResponseWriter, r *http.Request, where []
 			writeError(w, http.StatusBadRequest, "feed_snapshot_expired", "Flow Cursor가 만료되어 처음부터 다시 불러와야 합니다")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "storage_error", "Flow를 불러올 수 없습니다")
+		writeStorageError(w, r, "writeForMeFeed", err, "Flow를 불러올 수 없습니다")
 		return
 	}
 	items := make([]model.Moin, len(ranked))
@@ -791,7 +794,7 @@ func (s *Server) listReplies(w http.ResponseWriter, r *http.Request) {
 	viewer := getPrincipal(r).User.ID
 	items, err := s.queryPosts(r.Context(), append(visibility.PublishedAndVisible("p", "$1"), "p.reply_to_id=$2"), []any{viewer, parentID}, "p.created_at ASC,p.id ASC", limit, offset, viewer)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Echo 목록을 불러올 수 없습니다")
+		writeStorageError(w, r, "listReplies", err, "Echo 목록을 불러올 수 없습니다")
 		return
 	}
 	writeData(w, http.StatusOK, listEnvelope(items, limit, offset))
@@ -813,7 +816,7 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	if input.MediaIDs != nil {
 		mediaCfg, err := s.mediaSettings(r)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "미디어 설정을 확인할 수 없습니다")
+			writeStorageError(w, r, "updatePost", err, "미디어 설정을 확인할 수 없습니다")
 			return
 		}
 		maxPerPost = mediaCfg.MaxPerPost
@@ -824,13 +827,13 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
+		writeStorageError(w, r, "updatePost", err, "Moin을 변경할 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
 	tag, err := tx.Exec(r.Context(), `UPDATE posts SET content=$3,updated_at=now() WHERE id=$1 AND author_id=$2 AND status='published' AND kind<>'remoin'`, id, p.User.ID, input.Content)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
+		writeStorageError(w, r, "updatePost", err, "Moin을 변경할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -841,14 +844,14 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	existingAltTexts := make(map[string]string)
 	rows, err := tx.Query(r.Context(), `SELECT media_id,alt_text FROM post_media WHERE post_id=$1 ORDER BY position,media_id`, id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "첨부 미디어를 확인할 수 없습니다")
+		writeStorageError(w, r, "updatePost", err, "첨부 미디어를 확인할 수 없습니다")
 		return
 	}
 	for rows.Next() {
 		var mediaID, altText string
 		if err := rows.Scan(&mediaID, &altText); err != nil {
 			rows.Close()
-			writeError(w, http.StatusInternalServerError, "storage_error", "첨부 미디어를 확인할 수 없습니다")
+			writeStorageError(w, r, "updatePost", err, "첨부 미디어를 확인할 수 없습니다")
 			return
 		}
 		existingMediaIDs = append(existingMediaIDs, mediaID)
@@ -857,7 +860,7 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	rowsErr := rows.Err()
 	rows.Close()
 	if rowsErr != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "첨부 미디어를 확인할 수 없습니다")
+		writeStorageError(w, r, "updatePost", rowsErr, "첨부 미디어를 확인할 수 없습니다")
 		return
 	}
 
@@ -872,14 +875,14 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 		if len(effectiveMediaIDs) > 0 {
 			rows, queryErr := tx.Query(r.Context(), `SELECT id,alt_text FROM media_assets WHERE id=ANY($1) AND owner_id=$2`, effectiveMediaIDs, p.User.ID)
 			if queryErr != nil {
-				writeError(w, http.StatusInternalServerError, "storage_error", "첨부 미디어를 확인할 수 없습니다")
+				writeStorageError(w, r, "updatePost", queryErr, "첨부 미디어를 확인할 수 없습니다")
 				return
 			}
 			for rows.Next() {
 				var mediaID, altText string
 				if scanErr := rows.Scan(&mediaID, &altText); scanErr != nil {
 					rows.Close()
-					writeError(w, http.StatusInternalServerError, "storage_error", "첨부 미디어를 확인할 수 없습니다")
+					writeStorageError(w, r, "updatePost", scanErr, "첨부 미디어를 확인할 수 없습니다")
 					return
 				}
 				defaultAltTexts[mediaID] = altText
@@ -887,7 +890,7 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 			rowsErr := rows.Err()
 			rows.Close()
 			if rowsErr != nil {
-				writeError(w, http.StatusInternalServerError, "storage_error", "첨부 미디어를 확인할 수 없습니다")
+				writeStorageError(w, r, "updatePost", rowsErr, "첨부 미디어를 확인할 수 없습니다")
 				return
 			}
 			if len(defaultAltTexts) != len(effectiveMediaIDs) {
@@ -898,18 +901,18 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	resolvedAltTexts, public := resolvePostMediaAltTexts(effectiveMediaIDs, input.MediaAltTexts, existingAltTexts, defaultAltTexts)
 	if public != nil {
-		writePostError(w, public)
+		writePostError(w, r, "updatePost", public)
 		return
 	}
 
 	if input.MediaIDs != nil {
 		if _, err := tx.Exec(r.Context(), `DELETE FROM post_media WHERE post_id=$1`, id); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "첨부 미디어를 변경할 수 없습니다")
+			writeStorageError(w, r, "updatePost", err, "첨부 미디어를 변경할 수 없습니다")
 			return
 		}
 		for position, mediaID := range effectiveMediaIDs {
 			if _, err := tx.Exec(r.Context(), `INSERT INTO post_media(post_id,media_id,position,alt_text) VALUES($1,$2,$3,$4)`, id, mediaID, position, resolvedAltTexts[mediaID]); err != nil {
-				writeError(w, http.StatusInternalServerError, "storage_error", "첨부 미디어를 변경할 수 없습니다")
+				writeStorageError(w, r, "updatePost", err, "첨부 미디어를 변경할 수 없습니다")
 				return
 			}
 		}
@@ -921,31 +924,31 @@ func (s *Server) updatePost(w http.ResponseWriter, r *http.Request) {
 			altTexts = append(altTexts, resolvedAltTexts[mediaID])
 		}
 		if _, updateErr := tx.Exec(r.Context(), `UPDATE post_media pm SET alt_text=v.alt_text FROM unnest($1::text[],$2::text[]) AS v(id,alt_text) WHERE pm.post_id=$3 AND pm.media_id=v.id`, mediaIDs, altTexts, id); updateErr != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "미디어 대체 텍스트를 변경할 수 없습니다")
+			writeStorageError(w, r, "updatePost", updateErr, "미디어 대체 텍스트를 변경할 수 없습니다")
 			return
 		}
 	}
 	if _, err := tx.Exec(r.Context(), `DELETE FROM post_topics WHERE post_id=$1 AND source='hashtag'`, id); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
+		writeStorageError(w, r, "updatePost", err, "Moin을 변경할 수 없습니다")
 		return
 	}
 	if err := attachHashtags(r.Context(), tx, id, input.Content); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
+		writeStorageError(w, r, "updatePost", err, "Moin을 변경할 수 없습니다")
 		return
 	}
 	// The post-scoped idempotency key means edits notify only newly added
 	// mentions. Existing recipients are not spammed on every correction.
 	if err := s.enqueueMentionNotifications(r.Context(), tx, p.User.ID, id, input.Content); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "멘션 알림을 저장할 수 없습니다")
+		writeStorageError(w, r, "updatePost", err, "멘션 알림을 저장할 수 없습니다")
 		return
 	}
 	if err := tx.Commit(r.Context()); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 변경할 수 없습니다")
+		writeStorageError(w, r, "updatePost", err, "Moin을 변경할 수 없습니다")
 		return
 	}
 	post, err := s.loadMoin(r.Context(), id, p.User.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "변경된 Moin을 불러올 수 없습니다")
+		writeStorageError(w, r, "updatePost", err, "변경된 Moin을 불러올 수 없습니다")
 		return
 	}
 	s.audit(r, "post.update", "post", id, true, nil)
@@ -957,17 +960,24 @@ func (s *Server) deletePost(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "postID")
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 삭제할 수 없습니다")
+		writeStorageError(w, r, "deletePost", err, "Moin을 삭제할 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
 	tag, err := tx.Exec(r.Context(), `UPDATE posts SET status='deleted',content='',deleted_at=now(),updated_at=now() WHERE id=$1 AND (author_id=$2 OR $3) AND status<>'deleted'`, id, p.User.ID, hasPermission(p.Permissions, "posts:manage"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 삭제할 수 없습니다")
+		writeStorageError(w, r, "deletePost", err, "Moin을 삭제할 수 없습니다")
 		return
 	}
-	if _, err := tx.Exec(r.Context(), `UPDATE approval_requests SET status='cancelled',reviewed_at=now(),comment='Moin 삭제로 자동 취소' WHERE target_type='post' AND target_id=$1 AND status='pending'`, id); err != nil || tx.Commit(r.Context()) != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moin을 삭제할 수 없습니다")
+	// The cancel and the commit were one condition; they are split only so the
+	// log names which of the two was refused. Short-circuiting kept the commit
+	// from running after a failed cancel, and the early return keeps that.
+	if _, cancelErr := tx.Exec(r.Context(), `UPDATE approval_requests SET status='cancelled',reviewed_at=now(),comment='Moin 삭제로 자동 취소' WHERE target_type='post' AND target_id=$1 AND status='pending'`, id); cancelErr != nil {
+		writeStorageError(w, r, "deletePost", cancelErr, "Moin을 삭제할 수 없습니다")
+		return
+	}
+	if commitErr := tx.Commit(r.Context()); commitErr != nil {
+		writeStorageError(w, r, "deletePost", commitErr, "Moin을 삭제할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -1001,25 +1011,25 @@ func (s *Server) putReaction(w http.ResponseWriter, r *http.Request) {
 	}
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 저장할 수 없습니다")
+		writeStorageError(w, r, "putReaction", err, "Signal을 저장할 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
 	tag, err := tx.Exec(r.Context(), `INSERT INTO reactions(user_id,post_id,kind) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, p.User.ID, postID, input.Type)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 저장할 수 없습니다")
+		writeStorageError(w, r, "putReaction", err, "Signal을 저장할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() > 0 && post.AuthorID != p.User.ID {
 		if err := s.enqueueNotification(r.Context(), tx, post.AuthorID, p.User.ID, "reaction", postID,
 			map[string]string{"postId": postID, "signal": input.Type},
 			"notification:reaction:"+secure.NewID("op")); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 저장할 수 없습니다")
+			writeStorageError(w, r, "putReaction", err, "Signal을 저장할 수 없습니다")
 			return
 		}
 	}
 	if err := tx.Commit(r.Context()); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 저장할 수 없습니다")
+		writeStorageError(w, r, "putReaction", err, "Signal을 저장할 수 없습니다")
 		return
 	}
 	post, _ = s.loadMoin(r.Context(), postID, p.User.ID)
@@ -1044,7 +1054,7 @@ func (s *Server) deleteReaction(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM reactions WHERE user_id=$1 AND post_id=$2 AND kind=$3`, p.User.ID, chi.URLParam(r, "postID"), kind)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Signal을 삭제할 수 없습니다")
+		writeStorageError(w, r, "deleteReaction", err, "Signal을 삭제할 수 없습니다")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1058,7 +1068,7 @@ func (s *Server) putBookmark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.repo.Pool().Exec(r.Context(), `INSERT INTO bookmarks(user_id,post_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, p.User.ID, postID); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Pocket에 저장할 수 없습니다")
+		writeStorageError(w, r, "putBookmark", err, "Pocket에 저장할 수 없습니다")
 		return
 	}
 	writeData(w, http.StatusOK, map[string]bool{"bookmarked": true})
@@ -1067,7 +1077,7 @@ func (s *Server) putBookmark(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteBookmark(w http.ResponseWriter, r *http.Request) {
 	_, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM bookmarks WHERE user_id=$1 AND post_id=$2`, getPrincipal(r).User.ID, chi.URLParam(r, "postID"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Pocket에서 삭제할 수 없습니다")
+		writeStorageError(w, r, "deleteBookmark", err, "Pocket에서 삭제할 수 없습니다")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1077,7 +1087,7 @@ func (s *Server) remoinPost(w http.ResponseWriter, r *http.Request) {
 	target := chi.URLParam(r, "postID")
 	post, err := s.createPostRecord(r, postInput{QuoteID: target, Visibility: "public"}, "remoin")
 	if err != nil {
-		writePostError(w, err)
+		writePostError(w, r, "remoinPost", err)
 		return
 	}
 	s.audit(r, "post.remoin", "post", post.ID, true, map[string]string{"sourcePostId": target})
@@ -1089,7 +1099,7 @@ func (s *Server) deleteRemoin(w http.ResponseWriter, r *http.Request) {
 	target := chi.URLParam(r, "postID")
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Remoin을 취소할 수 없습니다")
+		writeStorageError(w, r, "deleteRemoin", err, "Remoin을 취소할 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
@@ -1099,12 +1109,18 @@ func (s *Server) deleteRemoin(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "not_found", "취소할 Remoin이 없습니다")
 		} else {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Remoin을 취소할 수 없습니다")
+			writeStorageError(w, r, "deleteRemoin", err, "Remoin을 취소할 수 없습니다")
 		}
 		return
 	}
-	if _, err := tx.Exec(r.Context(), `UPDATE approval_requests SET status='cancelled',reviewed_at=now(),comment='Remoin 취소로 자동 취소' WHERE target_type='post' AND target_id=$1 AND status='pending'`, remoinID); err != nil || tx.Commit(r.Context()) != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Remoin을 취소할 수 없습니다")
+	// Split for the same reason as deletePost: one condition could not say
+	// whether the cancel or the commit gave way.
+	if _, cancelErr := tx.Exec(r.Context(), `UPDATE approval_requests SET status='cancelled',reviewed_at=now(),comment='Remoin 취소로 자동 취소' WHERE target_type='post' AND target_id=$1 AND status='pending'`, remoinID); cancelErr != nil {
+		writeStorageError(w, r, "deleteRemoin", cancelErr, "Remoin을 취소할 수 없습니다")
+		return
+	}
+	if commitErr := tx.Commit(r.Context()); commitErr != nil {
+		writeStorageError(w, r, "deleteRemoin", commitErr, "Remoin을 취소할 수 없습니다")
 		return
 	}
 	s.audit(r, "post.remoin.delete", "post", target, true, nil)

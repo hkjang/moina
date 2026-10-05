@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -101,6 +102,15 @@ func TestPostgreSQLUpdatePostSeparatesStorageErrorFromNotEditable(t *testing.T) 
 		t.Fatal(err)
 	}
 
+	// Handler() captures slog.Default() for the request-scoped logger, so this
+	// is what lets the storage failure below be read back as the operator would
+	// see it. Nothing in this package runs in parallel, and the writer is
+	// guarded because the access log line is written from the same chain.
+	logs := &lockedBuffer{}
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
 	server := New(repository, secrets, "v0.1.32-test")
 	handler := server.Handler()
 	type apiError struct {
@@ -157,6 +167,27 @@ func TestPostgreSQLUpdatePostSeparatesStorageErrorFromNotEditable(t *testing.T) 
 		}
 		if got := contentOf(ownPostID); got != "내 Moin" {
 			t.Fatalf("실패한 수정이 남았습니다: %q", got)
+		}
+		// "Moin을 변경할 수 없습니다" is written at five different exits of this
+		// handler, so a 500 with no cause in the log leaves the operator unable
+		// to tell which query was refused. The refused write has to name itself
+		// and its SQLSTATE next to the request id.
+		written := logs.String()
+		for _, field := range []string{
+			`"error_code":"storage_error"`,
+			`"handler":"updatePost"`,
+			`"cause_type":"*pgconn.PgError"`,
+			`"pg_code":"P0001"`,
+		} {
+			if !strings.Contains(written, field) {
+				t.Errorf("운영자 로그에 %s가 없습니다: %s", field, written)
+			}
+		}
+		if !strings.Contains(written, `"request_id":"`) || strings.Contains(written, `"request_id":""`) {
+			t.Errorf("운영자 로그에 request_id가 없습니다: %s", written)
+		}
+		if strings.Contains(written, "moina test: storage refused") {
+			t.Errorf("pg 메시지 전문이 로그에 노출되었습니다: %s", written)
 		}
 	})
 
