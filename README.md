@@ -4,9 +4,9 @@
 
 MOINA는 짧은 생각인 **Moin**, 답글 **Echo**, 재공유 **Remoin**, 관심사 공간 **Moim**, 개인화 피드 **Flow**를 중심으로 한 한국어 우선 SNS입니다. Go 모듈러 모놀리스와 React/TypeScript 웹 앱을 하나의 컨테이너로 제공하며, 외부 PostgreSQL만 준비하면 폐쇄망에서도 운영할 수 있습니다.
 
-현재 서비스 버전은 `v0.1.42`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
+현재 서비스 버전은 `v0.1.43`입니다. 로그인 화면과 프로필 컨텍스트 메뉴에서도 같은 버전을 확인할 수 있습니다.
 
-`v0.1.42`는 저장 실패를 알리는 `500 storage_error` 응답이 그 원인을 운영자 로그에 전혀 남기지 않던 문제를 바로잡습니다. 지금까지는 쓰기가 거절되면 `writeError(w, 500, "storage_error", message)`로 답하면서 손에 든 `err`를 그대로 버렸기 때문에, 운영자는 "신고를 처리할 수 없습니다" 같은 문구만 보고 connection 고갈인지 제약 위반인지 디스크 부족인지 구분할 수 없었습니다. 같은 패키지의 `oidc_discovery_error.go`는 이미 실패 원인을 `error_code`·`cause_type`과 함께 기록하고 있어, 한 패키지 안에서 관측성 관례가 어긋나 있던 자리입니다. 이제 그 관례를 그대로 옮긴 `writeStorageError`가 응답은 기존 `writeError`와 status·`code`·`message`·Content-Type까지 바이트 단위로 동일하게 내보내고, 추가로 `error_code=storage_error`·`handler`·`cause_type`·`pg_code`(PostgreSQL SQLSTATE)를 기존 `request_id`와 함께 한 줄 남깁니다. pg 오류의 message 전문과 `Detail`·`Hint`는 제약을 위반한 행의 값(이메일·토큰 해시)을 담으므로 기록하지 않습니다. 적용한 곳은 최근 네 회차가 만든 일곱 출구 — 신고 처리(`resolveReport`)의 transaction 시작·UPDATE·제재 INSERT·commit, 관리자 비밀번호 초기화, 비밀번호 변경, Topic Link — 이고, 그 사이의 `404 not_found`와 `409 not_local_user` 분기, message 문구, status, `code`는 한 글자도 바뀌지 않았습니다. 응답이 그대로이므로 OpenAPI의 120개 route 계약과 프런트의 `readableError` 경로도 바뀌지 않았습니다. 이 동작은 두 층위에서 먼저 실패를 재현한 뒤 고정했습니다. 헬퍼를 로그 없는 passthrough로 둔 채 돌리면 DB 없이 도는 단위 테스트 3케이스가 `"error_code":"storage_error"`·`"handler"`·`"cause_type"`·`"pg_code"` 누락으로 실패하고 응답 비교는 그때도 통과해, 원인이 응답이 아니라 없는 관측성임이 출력으로 갈라집니다. 실제 PostgreSQL과 세션 cookie·CSRF·pgx를 지나는 `resolveReport` integration 6케이스에서는 저장 실패 2케이스만 `"pg_code":"P0001"` 누락으로 실패하고 성공·`reviewing`·`400`·`404` 4케이스는 통과했으며, 네 출구를 옮긴 뒤 6케이스 모두 통과합니다. 나머지 약 150개 `storage_error` 출구는 파일 단위로 옮기는 후속 과제로 남겼습니다. `v0.1.41`의 Topic Link 저장 실패 `500 storage_error` 분리, `v0.1.40`의 비밀번호 변경·초기화와 세션 종료의 transaction 결합, `v0.1.39`의 신고 처리 저장 실패와 제재 기록의 transaction 결합, `v0.1.38`의 본문이 선택인 handler의 chunked 요청 JSON 본문 보존, `v0.1.37`의 Moim 나가기 응답 원인별 분리, `v0.1.36`의 Moim 참여 저장 실패 `500 storage_error` 분리, `v0.1.35`의 미디어 업로드 multipart 본문 크기 초과 `413 media_too_large` 분리, `v0.1.34`의 업로드 파일 이름 확장자 정규화, `v0.1.33`의 Moin 수정 저장 오류(`500 storage_error`)와 `409 not_editable` 분리, `v0.1.32`의 MCP SSO(OAuth) 리소스 서버(`mcpOauth`), `v0.1.31`의 계정 보안 알림, `v0.1.30`의 SSO 자동 로그인(`autoLogin`)과 방문 추적 스니펫, `v0.1.29`의 시각 회귀 베이스라인 화면 단위 부분 갱신(`MOINA_VISUAL_ONLY`), `v0.1.28`의 EXIF orientation 표시 크기 보고와 사용자·관리자 가이드, `v0.1.27`의 첨부 이미지 로드 전 자리 예약, `v0.1.26`의 업로드 API HEIC 거절 안내, `v0.1.25`의 아이폰 HEIC 첨부·프로필 이미지 JPEG 전환 안내, `v0.1.24`의 미디어 응답 `private, no-cache`와 SHA-256 강한 `ETag` 재검증, `v0.1.23`의 화면 밖 Flow 카드 style·layout 비용 제거와 `type=all` 검색 병렬 실행, `v0.1.21`의 MCP `tools/call` 인자 스키마 검증과 본문 주소 안 `#fragment`·`@handle`을 뺀 Topic·멘션 추출, `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
+`v0.1.43`는 `posts.go`의 저장 실패 `500 storage_error` 출구 41곳이 거절 원인을 운영자 로그에 남기지 않던 문제를 바로잡습니다. `posts.go`는 `httpapi`에서 `storage_error` 500 출구가 가장 많은 파일인데 41곳 전부가 손에 든 `err`를 버렸고, 같은 문구가 여러 출구에 겹쳐 쓰이고 있었습니다 — "Moin을 변경할 수 없습니다" 5곳, "첨부 미디어를 확인할 수 없습니다" 6곳, "Signal을 저장할 수 없습니다" 4곳. 그래서 운영자는 500을 보고도 어느 쿼리가 거절됐는지 구분할 수 없었습니다. 이제 `v0.1.42`가 들여온 `writeStorageError`로 41곳을 모두 옮겨 `handler`·`cause_type`·`pg_code`(PostgreSQL SQLSTATE)를 기존 `request_id`와 함께 한 줄 남깁니다. 응답은 바뀌지 않았습니다 — status, `code`, message를 그대로 두었고, 수정 전 파일과 현재 파일의 한글 문자열 리터럴을 대조해 사라지거나 바뀐 message가 없음을 확인했습니다. 로그의 `handler` 값은 손으로 적지 않고 함수 경계에서 감싼 함수 이름을 기계적으로 유도해 채운 뒤 같은 방법으로 43개 호출 전부를 재검증했습니다. 공용 fallback인 `writePostError`는 세 라우트(`createPost`·`updatePost`·`remoinPost`)가 나눠 쓰므로 요청을 함께 받는 서명으로 바꿨습니다. `deletePost`와 `deleteRemoin`의 `Exec` 실패와 `tx.Commit()` 실패를 한 조건으로 묶고 있던 자리는 두 분기로 나눴습니다 — 그대로 두면 commit이 거절된 경우 `err`가 비어 있어 원인 없는 500을 다시 기록하게 되기 때문이며, 평가 순서와 응답·문구는 그대로입니다. `Flow` 커서 생성 실패의 `500 cursor_error` 둘, 바뀐 행이 없는 경우의 `404 not_found`, `store.IsNotFound`·`IsConflict` 분기는 손대지 않았습니다. 이 동작은 고치기 전에 먼저 실패를 재현해 고정했습니다. 실제 PostgreSQL과 세션 cookie·CSRF·pgx를 지나는 `updatePost` integration 테스트에 로그 단언만 먼저 넣으면 `"error_code":"storage_error"`·`"handler":"updatePost"`·`"cause_type"`·`"pg_code":"P0001"` 누락으로 4건이 실패하고, 500과 `storage_error`와 본문을 확인하는 응답 단언은 그때도 통과해 원인이 응답이 아니라 없는 관측성임이 출력으로 갈라집니다. 41곳을 옮긴 뒤 4케이스 모두 통과하며, OpenAPI의 120개 route 계약과 프런트의 `readableError` 경로도 그대로입니다. 다른 파일에 남은 95개 `storage_error` 출구는 파일 단위로 옮기는 후속 과제로 남겼습니다. `v0.1.42`의 저장 실패 `500 storage_error` 원인을 운영자 로그에 남기는 `writeStorageError` 도입, `v0.1.41`의 Topic Link 저장 실패 `500 storage_error` 분리, `v0.1.40`의 비밀번호 변경·초기화와 세션 종료의 transaction 결합, `v0.1.39`의 신고 처리 저장 실패와 제재 기록의 transaction 결합, `v0.1.38`의 본문이 선택인 handler의 chunked 요청 JSON 본문 보존, `v0.1.37`의 Moim 나가기 응답 원인별 분리, `v0.1.36`의 Moim 참여 저장 실패 `500 storage_error` 분리, `v0.1.35`의 미디어 업로드 multipart 본문 크기 초과 `413 media_too_large` 분리, `v0.1.34`의 업로드 파일 이름 확장자 정규화, `v0.1.33`의 Moin 수정 저장 오류(`500 storage_error`)와 `409 not_editable` 분리, `v0.1.32`의 MCP SSO(OAuth) 리소스 서버(`mcpOauth`), `v0.1.31`의 계정 보안 알림, `v0.1.30`의 SSO 자동 로그인(`autoLogin`)과 방문 추적 스니펫, `v0.1.29`의 시각 회귀 베이스라인 화면 단위 부분 갱신(`MOINA_VISUAL_ONLY`), `v0.1.28`의 EXIF orientation 표시 크기 보고와 사용자·관리자 가이드, `v0.1.27`의 첨부 이미지 로드 전 자리 예약, `v0.1.26`의 업로드 API HEIC 거절 안내, `v0.1.25`의 아이폰 HEIC 첨부·프로필 이미지 JPEG 전환 안내, `v0.1.24`의 미디어 응답 `private, no-cache`와 SHA-256 강한 `ETag` 재검증, `v0.1.23`의 화면 밖 Flow 카드 style·layout 비용 제거와 `type=all` 검색 병렬 실행, `v0.1.21`의 MCP `tools/call` 인자 스키마 검증과 본문 주소 안 `#fragment`·`@handle`을 뺀 Topic·멘션 추출, `v0.1.20`의 목록 API `limit`·`offset` 범위 거절과 상한을 넘는 `nextCursor` 중단, `v0.1.19`의 Moin 본문 http·https 주소 링크, `v0.1.18`의 수정됨 표시와 정확한 시각 tooltip, `v0.1.17`의 상대 시각 연도 표기, `v0.1.16`의 반복된 전달 header 줄 단일 chain 결합, `v0.1.15`의 staticcheck·ESLint 정적 분석과 govulncheck·npm audit 의존성 검사, `v0.1.14`의 설정·권한 캐시와 검색 개선은 그대로 유지합니다. `v0.1.12`의 `Ctrl/⌘+K` 전역 빠른 이동 팔레트, 키보드 결과 탐색, 최근 방문 복귀와 `G` 연속 화면 단축키는 그대로 제공합니다. 화면·설정·관리 메뉴는 현재 권한에 맞게 노출되고, 입력한 문장은 통합 검색으로 바로 이어집니다. `C`를 누르면 입력 중이거나 다른 Dialog를 사용 중이지 않을 때 새 Moin 작성을 즉시 시작합니다.
 
 ## 주요 기능
 
@@ -102,7 +102,7 @@ make image
 Docker build는 frontend test/build와 backend test/vet/build를 함께 실행하고 다음 이미지를 만듭니다.
 
 ```text
-moina:v0.1.42
+moina:v0.1.43
 ```
 
 브라우저 E2E는 임시 PostgreSQL과 테스트 전용 계정으로 실행합니다. 자세한 명령은 [E2E 안내](e2e/README.md)를 참고하세요.
@@ -120,20 +120,20 @@ make verify-package
 산출물은 다음과 같습니다.
 
 ```text
-dist/moina-v0.1.42.tar.gz
-dist/moina-v0.1.42.tar.gz.sha256
+dist/moina-v0.1.43.tar.gz
+dist/moina-v0.1.43.tar.gz.sha256
 ```
 
-`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.42.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
+`.sha256`은 로컬 반입 검증용입니다. GitHub Release에는 사용자 요구에 따라 서비스 이미지 `moina-v0.1.43.tar.gz` 하나만 올리고 SHA256 값은 릴리스 본문에 기록합니다.
 
 ## 폐쇄망 배포
 
 PostgreSQL 서버는 이미지에 포함하지 않습니다. 기관 표준 PostgreSQL을 먼저 준비하고 migration 권한이 있는 전용 계정의 DSN을 사용하세요.
 
 ```bash
-sha256sum moina-v0.1.42.tar.gz
-gzip -dc moina-v0.1.42.tar.gz | docker image load
-docker image inspect moina:v0.1.42
+sha256sum moina-v0.1.43.tar.gz
+gzip -dc moina-v0.1.43.tar.gz | docker image load
+docker image inspect moina:v0.1.43
 docker compose --env-file .env \
   -f deploy/docker-compose.offline.yml \
   up -d --pull never
@@ -182,15 +182,15 @@ curl --fail http://127.0.0.1:8080/metrics
 ```bash
 git push origin main
 # GitHub Actions의 해당 commit CI 성공 확인
-git tag -a v0.1.42 -m "moina v0.1.42"
-git push origin v0.1.42
+git tag -a v0.1.43 -m "moina v0.1.43"
+git push origin v0.1.43
 ```
 
 고정 규칙:
 
 ```text
-image: moina:v버전          예: moina:v0.1.42
-file:  moina-v버전.tar.gz  예: moina-v0.1.42.tar.gz
+image: moina:v버전          예: moina:v0.1.43
+file:  moina-v버전.tar.gz  예: moina-v0.1.43.tar.gz
 ```
 
 ## 라이선스
