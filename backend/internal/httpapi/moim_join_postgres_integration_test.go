@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -107,6 +109,15 @@ func TestPostgreSQLJoinMoimSeparatesStorageErrorFromNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Handler() captures slog.Default() for the request-scoped logger, so this
+	// is what lets the storage failure below be read back as the operator would
+	// see it. Nothing in this package runs in parallel, and the writer is
+	// guarded because the access log line is written from the same chain.
+	logs := &lockedBuffer{}
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
 	server := New(repository, secrets, "v0.1.35-test")
 	handler := server.Handler()
 	type apiError struct {
@@ -191,12 +202,34 @@ func TestPostgreSQLJoinMoimSeparatesStorageErrorFromNotFound(t *testing.T) {
 	})
 
 	t.Run("failed INSERT is 500 storage_error", func(t *testing.T) {
+		logs.reset()
 		code, apiErr, _ := join("/api/v1/moims/"+publicSlug+"/join", poisonID)
 		if code != http.StatusInternalServerError || apiErr.Code != "storage_error" {
 			t.Fatalf("저장 오류가 감춰졌습니다: %d %+v", code, apiErr)
 		}
 		if got := memberCount(publicMoimID, poisonID); got != 0 {
 			t.Fatalf("실패한 가입이 남았습니다: %d", got)
+		}
+		// social.go repeats the same message at several exits of neighbouring
+		// handlers, so a 500 with no cause in the log leaves the operator
+		// unable to tell which query was refused. The refused write has to
+		// name itself and its SQLSTATE next to the request id.
+		written := logs.String()
+		for _, field := range []string{
+			`"error_code":"storage_error"`,
+			`"handler":"joinMoim"`,
+			`"cause_type":"*pgconn.PgError"`,
+			`"pg_code":"P0001"`,
+		} {
+			if !strings.Contains(written, field) {
+				t.Errorf("운영자 로그에 %s가 없습니다: %s", field, written)
+			}
+		}
+		if !strings.Contains(written, `"request_id":"`) || strings.Contains(written, `"request_id":""`) {
+			t.Errorf("운영자 로그에 request_id가 없습니다: %s", written)
+		}
+		if strings.Contains(written, "moina test: storage refused") {
+			t.Errorf("pg 메시지 전문이 로그에 노출되었습니다: %s", written)
 		}
 	})
 

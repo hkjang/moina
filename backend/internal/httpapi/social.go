@@ -57,7 +57,7 @@ func (s *Server) writeProfile(w http.ResponseWriter, r *http.Request, userID str
 		EXISTS(SELECT 1 FROM blocks WHERE blocker_id=$2 AND blocked_id=$1),
 		EXISTS(SELECT 1 FROM mutes WHERE muter_id=$2 AND muted_id=$1)`, userID, viewer).Scan(&followers, &following, &posts, &signals, &followed, &blocked, &muted)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "프로필을 불러올 수 없습니다")
+		writeStorageError(w, r, "writeProfile", err, "프로필을 불러올 수 없습니다")
 		return
 	}
 	avatarURL := ""
@@ -88,24 +88,24 @@ func (s *Server) followUser(w http.ResponseWriter, r *http.Request) {
 	}
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Link를 저장할 수 없습니다")
+		writeStorageError(w, r, "followUser", err, "Link를 저장할 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
 	tag, err := tx.Exec(r.Context(), `INSERT INTO follows(follower_id,followee_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, p.User.ID, targetID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Link를 저장할 수 없습니다")
+		writeStorageError(w, r, "followUser", err, "Link를 저장할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() > 0 {
 		if err := s.enqueueNotification(r.Context(), tx, targetID, p.User.ID, "follow", p.User.ID,
 			map[string]string{"userId": p.User.ID}, "notification:follow:"+secure.NewID("op")); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Link를 저장할 수 없습니다")
+			writeStorageError(w, r, "followUser", err, "Link를 저장할 수 없습니다")
 			return
 		}
 	}
 	if err := tx.Commit(r.Context()); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Link를 저장할 수 없습니다")
+		writeStorageError(w, r, "followUser", err, "Link를 저장할 수 없습니다")
 		return
 	}
 	s.audit(r, "social.follow", "user", targetID, true, nil)
@@ -115,7 +115,7 @@ func (s *Server) followUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) unfollowUser(w http.ResponseWriter, r *http.Request) {
 	_, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM follows WHERE follower_id=$1 AND followee_id=$2`, getPrincipal(r).User.ID, chi.URLParam(r, "userID"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Link를 해제할 수 없습니다")
+		writeStorageError(w, r, "unfollowUser", err, "Link를 해제할 수 없습니다")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -130,16 +130,24 @@ func (s *Server) blockUser(w http.ResponseWriter, r *http.Request) {
 	}
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "사용자를 차단할 수 없습니다")
+		writeStorageError(w, r, "blockUser", err, "사용자를 차단할 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
 	if _, err := tx.Exec(r.Context(), `INSERT INTO blocks(blocker_id,blocked_id) SELECT $1,id FROM users WHERE id=$2 AND active ON CONFLICT DO NOTHING`, p.User.ID, target); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "사용자를 차단할 수 없습니다")
+		writeStorageError(w, r, "blockUser", err, "사용자를 차단할 수 없습니다")
 		return
 	}
-	if _, err := tx.Exec(r.Context(), `DELETE FROM follows WHERE (follower_id=$1 AND followee_id=$2) OR (follower_id=$2 AND followee_id=$1)`, p.User.ID, target); err != nil || tx.Commit(r.Context()) != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "사용자를 차단할 수 없습니다")
+	// Exec and Commit were one condition, where err is the Exec error and so is
+	// nil when it is Commit that was refused — logging that leaves the operator
+	// the "<nil>" cause this helper exists to remove. Split, each failure names
+	// itself; short-circuiting still means a failed Exec never reaches Commit.
+	if _, err := tx.Exec(r.Context(), `DELETE FROM follows WHERE (follower_id=$1 AND followee_id=$2) OR (follower_id=$2 AND followee_id=$1)`, p.User.ID, target); err != nil {
+		writeStorageError(w, r, "blockUser", err, "사용자를 차단할 수 없습니다")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeStorageError(w, r, "blockUser", err, "사용자를 차단할 수 없습니다")
 		return
 	}
 	s.audit(r, "social.block", "user", target, true, nil)
@@ -149,7 +157,7 @@ func (s *Server) blockUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) unblockUser(w http.ResponseWriter, r *http.Request) {
 	_, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM blocks WHERE blocker_id=$1 AND blocked_id=$2`, getPrincipal(r).User.ID, chi.URLParam(r, "userID"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "차단을 해제할 수 없습니다")
+		writeStorageError(w, r, "unblockUser", err, "차단을 해제할 수 없습니다")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -164,7 +172,7 @@ func (s *Server) muteUser(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := s.repo.Pool().Exec(r.Context(), `INSERT INTO mutes(muter_id,muted_id) SELECT $1,id FROM users WHERE id=$2 AND active ON CONFLICT DO NOTHING`, p.User.ID, target)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "사용자를 숨길 수 없습니다")
+		writeStorageError(w, r, "muteUser", err, "사용자를 숨길 수 없습니다")
 		return
 	}
 	writeData(w, http.StatusOK, map[string]bool{"muted": true})
@@ -173,7 +181,7 @@ func (s *Server) muteUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) unmuteUser(w http.ResponseWriter, r *http.Request) {
 	_, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM mutes WHERE muter_id=$1 AND muted_id=$2`, getPrincipal(r).User.ID, chi.URLParam(r, "userID"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "숨김을 해제할 수 없습니다")
+		writeStorageError(w, r, "unmuteUser", err, "숨김을 해제할 수 없습니다")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -236,7 +244,7 @@ func (s *Server) listTopics(w http.ResponseWriter, r *http.Request) {
 		follower_count DESC,lower(name),id
 	LIMIT $4 OFFSET $5`, viewer, query, pattern, limit, offset, sort)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Topic을 불러올 수 없습니다")
+		writeStorageError(w, r, "listTopics", err, "Topic을 불러올 수 없습니다")
 		return
 	}
 	defer rows.Close()
@@ -244,7 +252,7 @@ func (s *Server) listTopics(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var topic model.Topic
 		if err := rows.Scan(&topic.ID, &topic.Slug, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.FollowerCount, &topic.MoinCount, &topic.Following, &topic.TrendScore); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Topic을 불러올 수 없습니다")
+			writeStorageError(w, r, "listTopics", err, "Topic을 불러올 수 없습니다")
 			return
 		}
 		items = append(items, topic)
@@ -296,7 +304,7 @@ func (s *Server) followTopic(w http.ResponseWriter, r *http.Request) {
 func (s *Server) unfollowTopic(w http.ResponseWriter, r *http.Request) {
 	_, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM user_topic_follows WHERE user_id=$1 AND topic_id=(SELECT id FROM topics WHERE slug=$2)`, getPrincipal(r).User.ID, strings.ToLower(chi.URLParam(r, "slug")))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Topic Link를 해제할 수 없습니다")
+		writeStorageError(w, r, "unfollowTopic", err, "Topic Link를 해제할 수 없습니다")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -362,7 +370,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 	// Each lookup writes its own result variable and reads none of the others,
 	// so running them together needs no further synchronisation.
 	if err := runSearches(r.Context(), lookups); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "검색할 수 없습니다")
+		writeStorageError(w, r, "search", err, "검색할 수 없습니다")
 		return
 	}
 	writeData(w, http.StatusOK, map[string]any{"query": query.Raw, "limit": limit, "offset": offset, "users": users, "posts": posts, "topics": topics, "moims": moims})
@@ -395,7 +403,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT id,user_id,COALESCE(actor_id,''),type,target_id,payload,in_app,read_at,created_at FROM notifications WHERE user_id=$1 AND in_app AND ($4='all' OR type=$4) ORDER BY created_at DESC LIMIT $2 OFFSET $3`, getPrincipal(r).User.ID, limit, offset, storedType)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "알림을 불러올 수 없습니다")
+		writeStorageError(w, r, "listNotifications", err, "알림을 불러올 수 없습니다")
 		return
 	}
 	defer rows.Close()
@@ -403,7 +411,7 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item model.Notification
 		if err := rows.Scan(&item.ID, &item.UserID, &item.ActorID, &item.Type, &item.TargetID, &item.Payload, &item.InApp, &item.ReadAt, &item.CreatedAt); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "알림을 불러올 수 없습니다")
+			writeStorageError(w, r, "listNotifications", err, "알림을 불러올 수 없습니다")
 			return
 		}
 		s.decorateNotification(r.Context(), &item)
@@ -483,7 +491,7 @@ func (s *Server) readNotifications(w http.ResponseWriter, r *http.Request) {
 		_, err = s.repo.Pool().Exec(r.Context(), `UPDATE notifications SET read_at=COALESCE(read_at,now()) WHERE user_id=$1 AND in_app AND id=ANY($2)`, getPrincipal(r).User.ID, input.IDs)
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "알림을 읽음 처리할 수 없습니다")
+		writeStorageError(w, r, "readNotifications", err, "알림을 읽음 처리할 수 없습니다")
 		return
 	}
 	writeData(w, http.StatusOK, map[string]bool{"updated": true})
@@ -513,7 +521,7 @@ func (s *Server) createMoim(w http.ResponseWriter, r *http.Request) {
 	moim := model.Moim{ID: secure.NewID("moim"), Slug: input.Slug, Name: input.Name, Description: input.Description, OwnerID: p.User.ID, Visibility: input.Visibility, MemberCount: 1, Joined: true, CreatedAt: time.Now().UTC()}
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moim을 만들 수 없습니다")
+		writeStorageError(w, r, "createMoim", err, "Moim을 만들 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
@@ -521,12 +529,22 @@ func (s *Server) createMoim(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		_, err = tx.Exec(r.Context(), `INSERT INTO moim_members(moim_id,user_id,role) VALUES($1,$2,'owner')`, moim.ID, p.User.ID)
 	}
-	if err != nil || tx.Commit(r.Context()) != nil {
+	// Exec and Commit were one condition, where err is the Exec error and so is
+	// nil when it is Commit that was refused — logging that leaves the operator
+	// the "<nil>" cause this helper exists to remove. Split, each failure names
+	// itself; short-circuiting still means a failed Exec never reaches Commit,
+	// and slug_taken stays bound to the Exec error exactly as IsConflict(nil)
+	// already kept a refused Commit at 500.
+	if err != nil {
 		if store.IsConflict(err) {
 			writeError(w, http.StatusConflict, "slug_taken", "이미 사용 중인 Moim slug입니다")
 		} else {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Moim을 만들 수 없습니다")
+			writeStorageError(w, r, "createMoim", err, "Moim을 만들 수 없습니다")
 		}
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeStorageError(w, r, "createMoim", err, "Moim을 만들 수 없습니다")
 		return
 	}
 	s.audit(r, "moim.create", "moim", moim.ID, true, nil)
@@ -541,7 +559,7 @@ func (s *Server) listMoims(w http.ResponseWriter, r *http.Request) {
 	viewer := getPrincipal(r).User.ID
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT m.id,m.slug,m.name,m.description,m.owner_id,m.visibility,m.created_at,(SELECT count(*) FROM moim_members WHERE moim_id=m.id),(SELECT count(*) FROM posts WHERE moim_id=m.id AND status='published'),EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$1) FROM moims m WHERE m.visibility='public' OR EXISTS(SELECT 1 FROM moim_members WHERE moim_id=m.id AND user_id=$1) ORDER BY m.created_at DESC LIMIT $2 OFFSET $3`, viewer, limit, offset)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moim 목록을 불러올 수 없습니다")
+		writeStorageError(w, r, "listMoims", err, "Moim 목록을 불러올 수 없습니다")
 		return
 	}
 	defer rows.Close()
@@ -549,7 +567,7 @@ func (s *Server) listMoims(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var item model.Moim
 		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.OwnerID, &item.Visibility, &item.CreatedAt, &item.MemberCount, &item.MoinCount, &item.Joined); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "Moim 목록을 불러올 수 없습니다")
+			writeStorageError(w, r, "listMoims", err, "Moim 목록을 불러올 수 없습니다")
 			return
 		}
 		items = append(items, item)
@@ -573,7 +591,7 @@ func (s *Server) joinMoim(w http.ResponseWriter, r *http.Request) {
 	slug := strings.ToLower(chi.URLParam(r, "slug"))
 	tag, err := s.repo.Pool().Exec(r.Context(), `INSERT INTO moim_members(moim_id,user_id,role) SELECT id,$2,'member' FROM moims WHERE slug=$1 AND visibility='public' ON CONFLICT DO NOTHING`, slug, getPrincipal(r).User.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moim에 가입할 수 없습니다")
+		writeStorageError(w, r, "joinMoim", err, "Moim에 가입할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -592,7 +610,7 @@ func (s *Server) leaveMoim(w http.ResponseWriter, r *http.Request) {
 	viewer := getPrincipal(r).User.ID
 	tag, err := s.repo.Pool().Exec(r.Context(), `DELETE FROM moim_members mm USING moims m WHERE mm.moim_id=m.id AND m.slug=$1 AND mm.user_id=$2 AND mm.role<>'owner'`, slug, viewer)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "Moim에서 나갈 수 없습니다")
+		writeStorageError(w, r, "leaveMoim", err, "Moim에서 나갈 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -608,7 +626,7 @@ func (s *Server) leaveMoim(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "not_found", "Moim을 찾을 수 없습니다")
 			return
 		case err != nil:
-			writeError(w, http.StatusInternalServerError, "storage_error", "Moim에서 나갈 수 없습니다")
+			writeStorageError(w, r, "leaveMoim", err, "Moim에서 나갈 수 없습니다")
 			return
 		case owner:
 			writeError(w, http.StatusConflict, "owner_cannot_leave", "Moim 소유자는 나갈 수 없습니다")
@@ -708,7 +726,7 @@ func (s *Server) uploadMedia(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusRequestEntityTooLarge, "media_too_large", "파일이 비어 있거나 업로드 한도를 넘었습니다")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "storage_error", "미디어를 저장할 수 없습니다")
+		writeStorageError(w, r, "uploadMedia", err, "미디어를 저장할 수 없습니다")
 		return
 	}
 	s.audit(r, "media.upload", "media", media.ID, true, map[string]any{"mimeType": media.MIMEType, "size": media.Size})
@@ -1062,7 +1080,7 @@ func (s *Server) deleteMedia(w http.ResponseWriter, r *http.Request) {
 		AND NOT EXISTS(SELECT 1 FROM post_media linked WHERE linked.media_id=asset.id)
 		AND NOT EXISTS(SELECT 1 FROM users avatar_user WHERE avatar_user.avatar_id=asset.id)`, mediaID, ownerID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "미디어를 삭제할 수 없습니다")
+		writeStorageError(w, r, "deleteMedia", err, "미디어를 삭제할 수 없습니다")
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -1105,7 +1123,7 @@ func (s *Server) createReport(w http.ResponseWriter, r *http.Request) {
 	report := model.Report{ID: secure.NewID("report"), ReporterID: p.User.ID, TargetType: input.TargetType, TargetID: input.TargetID, Reason: input.Reason, Detail: input.Detail, Status: "open", CreatedAt: time.Now().UTC()}
 	_, err := s.repo.Pool().Exec(r.Context(), `INSERT INTO reports(id,reporter_id,target_type,target_id,reason,detail,status,created_at) VALUES($1,$2,$3,$4,$5,$6,'open',$7)`, report.ID, report.ReporterID, report.TargetType, report.TargetID, report.Reason, report.Detail, report.CreatedAt)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "신고를 접수할 수 없습니다")
+		writeStorageError(w, r, "createReport", err, "신고를 접수할 수 없습니다")
 		return
 	}
 	s.audit(r, "report.create", report.TargetType, report.TargetID, true, map[string]string{"reportId": report.ID, "reason": report.Reason})
