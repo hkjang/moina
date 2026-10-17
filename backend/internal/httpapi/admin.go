@@ -35,7 +35,7 @@ func (s *Server) adminStats(w http.ResponseWriter, r *http.Request) {
 		(SELECT count(*) FROM reports WHERE status IN ('open','reviewing')),
 		(SELECT count(*) FROM approval_requests WHERE status='pending')`).Scan(&users, &todayPosts, &pendingReports, &pendingApprovals)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "관리 통계를 불러올 수 없습니다")
+		writeStorageError(w, r, "adminStats", err, "관리 통계를 불러올 수 없습니다")
 		return
 	}
 	ai, _ := s.aiConfig(r)
@@ -52,7 +52,7 @@ func (s *Server) adminListUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT `+userSelectColumns+` FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "사용자 목록을 불러올 수 없습니다")
+		writeStorageError(w, r, "adminListUsers", err, "사용자 목록을 불러올 수 없습니다")
 		return
 	}
 	defer rows.Close()
@@ -60,7 +60,7 @@ func (s *Server) adminListUsers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		user, scanErr := scanUserRow(rows)
 		if scanErr != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "사용자 목록을 불러올 수 없습니다")
+			writeStorageError(w, r, "adminListUsers", scanErr, "사용자 목록을 불러올 수 없습니다")
 			return
 		}
 		items = append(items, user)
@@ -105,7 +105,7 @@ func (s *Server) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "사용자를 추가할 수 없습니다")
+		writeStorageError(w, r, "adminCreateUser", err, "사용자를 추가할 수 없습니다")
 		return
 	}
 	s.audit(r, "admin.user.create", "user", user.ID, true, map[string]any{"roles": user.Roles})
@@ -171,7 +171,7 @@ func (s *Server) adminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := scanUserRow(s.repo.Pool().QueryRow(r.Context(), `UPDATE users SET display_name=COALESCE($2,display_name),email=COALESCE($3,email),roles=COALESCE($4,roles),active=COALESCE($5,active),updated_at=now() WHERE id=$1 RETURNING `+userSelectColumns, targetID, input.DisplayName, input.Email, nullableStrings(input.Roles), input.Active))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "사용자를 변경할 수 없습니다")
+		writeStorageError(w, r, "adminUpdateUser", err, "사용자를 변경할 수 없습니다")
 		return
 	}
 	if input.Active != nil && !*input.Active {
@@ -237,7 +237,7 @@ func (s *Server) adminListPosts(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT p.id,p.content,p.kind,p.visibility,p.status,p.author_id,u.username,p.created_at,p.updated_at,(SELECT count(*) FROM reports WHERE target_type='post' AND target_id=p.id) FROM posts p JOIN users u ON u.id=p.author_id ORDER BY p.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "콘텐츠 목록을 불러올 수 없습니다")
+		writeStorageError(w, r, "adminListPosts", err, "콘텐츠 목록을 불러올 수 없습니다")
 		return
 	}
 	defer rows.Close()
@@ -246,8 +246,8 @@ func (s *Server) adminListPosts(w http.ResponseWriter, r *http.Request) {
 		var id, content, kind, visibility, status, authorID, authorUsername string
 		var createdAt, updatedAt time.Time
 		var reportCount int64
-		if rows.Scan(&id, &content, &kind, &visibility, &status, &authorID, &authorUsername, &createdAt, &updatedAt, &reportCount) != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "콘텐츠 목록을 불러올 수 없습니다")
+		if scanErr := rows.Scan(&id, &content, &kind, &visibility, &status, &authorID, &authorUsername, &createdAt, &updatedAt, &reportCount); scanErr != nil {
+			writeStorageError(w, r, "adminListPosts", scanErr, "콘텐츠 목록을 불러올 수 없습니다")
 			return
 		}
 		items = append(items, map[string]any{"id": id, "content": content, "kind": kind, "visibility": visibility, "status": status, "authorId": authorID, "authorUsername": authorUsername, "reportCount": reportCount, "createdAt": createdAt, "updatedAt": updatedAt})
@@ -270,7 +270,7 @@ func (s *Server) adminUpdatePost(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "postID")
 	affected, err := s.softDeletePost(r.Context(), id, false)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "콘텐츠를 삭제할 수 없습니다")
+		writeStorageError(w, r, "adminUpdatePost", err, "콘텐츠를 삭제할 수 없습니다")
 		return
 	}
 	if affected == 0 {
@@ -289,7 +289,7 @@ func (s *Server) adminDeletePost(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "postID")
 	affected, err := s.softDeletePost(r.Context(), id, true)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "콘텐츠를 삭제할 수 없습니다")
+		writeStorageError(w, r, "adminDeletePost", err, "콘텐츠를 삭제할 수 없습니다")
 		return
 	}
 	if affected == 0 {
@@ -330,7 +330,7 @@ func (s *Server) adminListReports(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT r.id,r.reporter_id,u.username,r.target_type,r.target_id,r.reason,r.detail,r.status,r.resolution,COALESCE(r.moderator_id,''),r.created_at,r.resolved_at FROM reports r JOIN users u ON u.id=r.reporter_id ORDER BY CASE WHEN r.status IN ('open','reviewing') THEN 0 ELSE 1 END,r.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "신고 목록을 불러올 수 없습니다")
+		writeStorageError(w, r, "adminListReports", err, "신고 목록을 불러올 수 없습니다")
 		return
 	}
 	defer rows.Close()
@@ -338,8 +338,8 @@ func (s *Server) adminListReports(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var report model.Report
 		var username string
-		if rows.Scan(&report.ID, &report.ReporterID, &username, &report.TargetType, &report.TargetID, &report.Reason, &report.Detail, &report.Status, &report.Resolution, &report.ModeratorID, &report.CreatedAt, &report.ResolvedAt) != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "신고 목록을 불러올 수 없습니다")
+		if scanErr := rows.Scan(&report.ID, &report.ReporterID, &username, &report.TargetType, &report.TargetID, &report.Reason, &report.Detail, &report.Status, &report.Resolution, &report.ModeratorID, &report.CreatedAt, &report.ResolvedAt); scanErr != nil {
+			writeStorageError(w, r, "adminListReports", scanErr, "신고 목록을 불러올 수 없습니다")
 			return
 		}
 		items = append(items, map[string]any{"id": report.ID, "reporterId": report.ReporterID, "reporterUsername": username, "targetType": report.TargetType, "targetId": report.TargetID, "target": report.TargetType + ":" + report.TargetID, "reason": report.Reason, "detail": report.Detail, "status": report.Status, "resolution": report.Resolution, "moderatorId": report.ModeratorID, "createdAt": report.CreatedAt, "resolvedAt": report.ResolvedAt})
@@ -416,7 +416,7 @@ func (s *Server) resolveReport(w http.ResponseWriter, r *http.Request, status, r
 func (s *Server) adminListRoles(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT r.name,r.description,r.system,COALESCE(array_agg(rp.permission ORDER BY rp.permission) FILTER (WHERE rp.permission IS NOT NULL),ARRAY[]::text[]) FROM roles r LEFT JOIN role_permissions rp ON rp.role_name=r.name GROUP BY r.name ORDER BY r.system DESC,r.name`)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "역할 정책을 불러올 수 없습니다")
+		writeStorageError(w, r, "adminListRoles", err, "역할 정책을 불러올 수 없습니다")
 		return
 	}
 	defer rows.Close()
@@ -425,8 +425,8 @@ func (s *Server) adminListRoles(w http.ResponseWriter, r *http.Request) {
 		var name, description string
 		var system bool
 		var permissions []string
-		if rows.Scan(&name, &description, &system, &permissions) != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "역할 정책을 불러올 수 없습니다")
+		if scanErr := rows.Scan(&name, &description, &system, &permissions); scanErr != nil {
+			writeStorageError(w, r, "adminListRoles", scanErr, "역할 정책을 불러올 수 없습니다")
 			return
 		}
 		items = append(items, map[string]any{"name": name, "description": description, "system": system, "permissions": permissions})
@@ -480,30 +480,30 @@ func (s *Server) adminPutRoles(w http.ResponseWriter, r *http.Request) {
 	}
 	tx, err := s.repo.Pool().Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "역할 정책을 저장할 수 없습니다")
+		writeStorageError(w, r, "adminPutRoles", err, "역할 정책을 저장할 수 없습니다")
 		return
 	}
 	defer tx.Rollback(r.Context())
 	for _, role := range input.Roles {
 		if _, err := tx.Exec(r.Context(), `INSERT INTO roles(name,description,system) VALUES($1,$2,false) ON CONFLICT(name) DO UPDATE SET description=EXCLUDED.description,updated_at=now()`, role.Name, role.Description); err != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "역할 정책을 저장할 수 없습니다")
+			writeStorageError(w, r, "adminPutRoles", err, "역할 정책을 저장할 수 없습니다")
 			return
 		}
 		if role.Name != model.RoleSuperAdmin {
 			if _, err := tx.Exec(r.Context(), `DELETE FROM role_permissions WHERE role_name=$1`, role.Name); err != nil {
-				writeError(w, http.StatusInternalServerError, "storage_error", "역할 정책을 저장할 수 없습니다")
+				writeStorageError(w, r, "adminPutRoles", err, "역할 정책을 저장할 수 없습니다")
 				return
 			}
 			for _, permission := range role.Permissions {
 				if _, err := tx.Exec(r.Context(), `INSERT INTO role_permissions(role_name,permission) VALUES($1,$2)`, role.Name, permission); err != nil {
-					writeError(w, http.StatusInternalServerError, "storage_error", "역할 정책을 저장할 수 없습니다")
+					writeStorageError(w, r, "adminPutRoles", err, "역할 정책을 저장할 수 없습니다")
 					return
 				}
 			}
 		}
 	}
 	if err := tx.Commit(r.Context()); err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "역할 정책을 저장할 수 없습니다")
+		writeStorageError(w, r, "adminPutRoles", err, "역할 정책을 저장할 수 없습니다")
 		return
 	}
 	s.invalidateRolePermissions(r.Context())
@@ -520,7 +520,7 @@ func (s *Server) adminListAudit(w http.ResponseWriter, r *http.Request) {
 	pattern := "%" + escapeLike(strings.ToLower(query)) + "%"
 	rows, err := s.repo.Pool().Query(r.Context(), `SELECT a.id,a.actor_id,COALESCE(u.username,''),a.action,a.target_type,a.target_id,a.success,a.ip,a.user_agent,a.detail,a.created_at FROM audit_events a LEFT JOIN users u ON u.id=a.actor_id WHERE $1='' OR lower(COALESCE(u.username,'')) LIKE $2 ESCAPE E'\\' OR lower(a.action) LIKE $2 ESCAPE E'\\' OR lower(a.target_type||':'||a.target_id) LIKE $2 ESCAPE E'\\' ORDER BY a.created_at DESC LIMIT $3 OFFSET $4`, query, pattern, limit, offset)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "감사 로그를 불러올 수 없습니다")
+		writeStorageError(w, r, "adminListAudit", err, "감사 로그를 불러올 수 없습니다")
 		return
 	}
 	defer rows.Close()
@@ -530,8 +530,8 @@ func (s *Server) adminListAudit(w http.ResponseWriter, r *http.Request) {
 		var success bool
 		var detail json.RawMessage
 		var createdAt time.Time
-		if rows.Scan(&id, &actorID, &actorUsername, &action, &targetType, &targetID, &success, &ip, &userAgent, &detail, &createdAt) != nil {
-			writeError(w, http.StatusInternalServerError, "storage_error", "감사 로그를 불러올 수 없습니다")
+		if scanErr := rows.Scan(&id, &actorID, &actorUsername, &action, &targetType, &targetID, &success, &ip, &userAgent, &detail, &createdAt); scanErr != nil {
+			writeStorageError(w, r, "adminListAudit", scanErr, "감사 로그를 불러올 수 없습니다")
 			return
 		}
 		items = append(items, map[string]any{"id": id, "actorId": actorID, "actorUsername": actorUsername, "action": action, "targetType": targetType, "targetId": targetID, "target": targetType + ":" + targetID, "success": success, "ip": ip, "userAgent": userAgent, "detail": detail, "createdAt": createdAt})
@@ -542,7 +542,7 @@ func (s *Server) adminListAudit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) adminListKeys(w http.ResponseWriter, r *http.Request) {
 	items, err := s.repo.ListAPIKeys(r.Context(), "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "API 키 목록을 불러올 수 없습니다")
+		writeStorageError(w, r, "adminListKeys", err, "API 키 목록을 불러올 수 없습니다")
 		return
 	}
 	result := make([]map[string]any, 0, len(items))
@@ -561,7 +561,7 @@ func (s *Server) adminUpdateKey(w http.ResponseWriter, r *http.Request) {
 	}
 	all, err := s.repo.ListAPIKeys(r.Context(), "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "키를 불러올 수 없습니다")
+		writeStorageError(w, r, "adminUpdateKey", err, "키를 불러올 수 없습니다")
 		return
 	}
 	var existing *model.APIKey
@@ -582,7 +582,7 @@ func (s *Server) adminUpdateKey(w http.ResponseWriter, r *http.Request) {
 	}
 	ownerPermissions, err := s.repo.PermissionsForRoles(r.Context(), owner.Roles)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "키 권한을 확인할 수 없습니다")
+		writeStorageError(w, r, "adminUpdateKey", err, "키 권한을 확인할 수 없습니다")
 		return
 	}
 	permissions := uniqueStrings(input.Permissions)
@@ -601,7 +601,7 @@ func (s *Server) adminUpdateKey(w http.ResponseWriter, r *http.Request) {
 	}
 	key, err := s.repo.UpdateAPIKey(r.Context(), existing.ID, "", name, permissions)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "키를 변경할 수 없습니다")
+		writeStorageError(w, r, "adminUpdateKey", err, "키를 변경할 수 없습니다")
 		return
 	}
 	key.TokenHash = ""
@@ -615,7 +615,7 @@ func (s *Server) adminRevokeKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "활성 키를 찾을 수 없습니다")
 		return
 	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, "storage_error", "키를 폐기할 수 없습니다")
+		writeStorageError(w, r, "adminRevokeKey", err, "키를 폐기할 수 없습니다")
 		return
 	}
 	s.audit(r, "admin.key.revoke", "api_key", id, true, nil)
