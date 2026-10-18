@@ -163,6 +163,13 @@ jobs:
           make package
           make verify-package
 
+      # 실패한 e2e 단계는 check-run에 "exit code 1"만 남기므로, 어느 화면·route가
+      # 깨졌는지 보려면 artifact를 내려받아야 했습니다. 실패 항목만 job summary에
+      # 적어 진단을 앞당기되, 통과 조건은 바꾸지 않습니다.
+      - name: Summarize e2e failures
+        if: failure()
+        run: node scripts/e2e-failure-summary.mjs >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
